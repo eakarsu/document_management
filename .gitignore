@@ -1,0 +1,433 @@
+# Richmond Document Management System - .gitignore
+# Generated files and directories to exclude from version control
+
+# ============================================================================
+# Node.js Dependencies
+# ============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# ============================================================================
+# Build Outputs and Compiled Assets
+# ============================================================================
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+public/build/
+
+# TypeScript compilation
+*.tsbuildinfo
+
+# Webpack bundles
+*.bundle.js
+*.chunk.js
+
+# ============================================================================
+# Environment and Configuration Files
+# ============================================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging
+
+# Local environment overrides (keep .env.example)
+.env.local
+.env.*.local
+
+# Configuration files with sensitive data
+config/local.json
+config/production.json
+config/development.json
+
+# ============================================================================
+# Database Files
+# ============================================================================
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+
+# PostgreSQL dumps
+*.sql
+*.dump
+
+# Database migration logs
+migrations/*.log
+
+# Prisma generated files (regenerated on build)
+# Keep schema.prisma but ignore generated client
+backend/prisma/generated/
+
+# ============================================================================
+# Logs and Temporary Files
+# ============================================================================
+logs/
+*.log
+*.log.*
+backend.log
+frontend.log
+error.log
+combined.log
+access.log
+debug.log
+server.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Process ID files
+.backend.pid
+.frontend.pid
+*.pid
+
+# ============================================================================
+# File Uploads and Storage
+# ============================================================================
+uploads/
+storage/
+files/
+documents/
+temp-uploads/
+user-uploads/
+
+# MinIO/S3 local storage
+minio-data/
+s3-local/
+
+# ============================================================================
+# IDE and Editor Files
+# ============================================================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (IntelliJ, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*.swn
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Atom
+.vscode/
+
+# ============================================================================
+# Operating System Files
+# ============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================================================
+# Testing and Coverage
+# ============================================================================
+# Test results
+/test-results/
+/coverage/
+/.nyc_output/
+
+# Jest
+jest-coverage/
+*.spec.js.snap
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+# ============================================================================
+# Package Managers
+# ============================================================================
+# npm
+package-lock.json
+npm-shrinkwrap.json
+
+# Yarn
+yarn.lock
+.yarn/
+.yarnrc.yml
+
+# pnpm
+pnpm-lock.yaml
+.pnpm-store/
+
+# ============================================================================
+# Docker
+# ============================================================================
+# Docker volumes and data
+docker-compose.override.yml
+docker-data/
+postgres-data/
+redis-data/
+elasticsearch-data/
+minio-data/
+
+# ============================================================================
+# Next.js Specific
+# ============================================================================
+.next/
+.next/cache/
+.next/server/
+.next/static/
+.swc/
+
+# Next.js build outputs
+out/
+build/
+
+# Vercel deployment
+.vercel/
+
+# ============================================================================
+# Backend/API Specific
+# ============================================================================
+# Express session storage
+sessions/
+
+# File uploads temporary directory
+backend/uploads/
+backend/temp/
+backend/storage/
+
+# Generated API documentation
+backend/docs/generated/
+api-docs/
+
+# SSL certificates (keep .example files)
+ssl/
+certs/
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# ============================================================================
+# Frontend Specific
+# ============================================================================
+# Static build assets
+frontend/build/
+frontend/dist/
+frontend/out/
+frontend/.next/
+
+# Storybook
+storybook-static/
+
+# ============================================================================
+# Development and Debugging
+# ============================================================================
+# Debug files
+*.heapsnapshot
+*.cpuprofile
+
+# Chrome debugging
+.chrome/
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettiercache
+
+# Stylelint cache
+.stylelintcache
+
+# ============================================================================
+# Monitoring and Analytics
+# ============================================================================
+# Performance monitoring
+newrelic.js
+newrelic_agent.log
+
+# Application monitoring
+*.monitoring
+
+# ============================================================================
+# Security and Keys
+# ============================================================================
+# SSH keys
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+
+# GPG keys
+*.gpg
+*.asc
+
+# API keys and secrets (keep .example files)
+secrets/
+.secrets/
+private/
+*.key
+*.secret
+
+# JWT tokens
+*.jwt
+
+# ============================================================================
+# Backup Files
+# ============================================================================
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*~
+
+# Database backups
+*.dump
+*.backup.sql
+
+# ============================================================================
+# Deployment and Production
+# ============================================================================
+# PM2 ecosystem files
+ecosystem.config.js
+pm2.json
+
+# Deployment scripts with credentials
+deploy.sh
+deploy-prod.sh
+
+# Production builds
+prod/
+production/
+
+# ============================================================================
+# Third-party Services
+# ============================================================================
+# Elasticsearch
+elasticsearch-data/
+
+# Redis
+redis-data/
+dump.rdb
+
+# MinIO
+.minio/
+minio-data/
+
+# ============================================================================
+# Custom Project Files
+# ============================================================================
+# Temporary development files
+scratch/
+playground/
+experiments/
+
+# Local configuration overrides
+local/
+dev-config/
+
+# User-specific files
+user-data/
+personal/
+
+# ============================================================================
+# AI and Machine Learning
+# ============================================================================
+# Model files
+*.model
+*.pkl
+*.h5
+*.pb
+
+# Training data
+training-data/
+datasets/
+
+# ============================================================================
+# Documentation Build
+# ============================================================================
+# Generated documentation
+docs/build/
+docs/dist/
+site/
+
+# ============================================================================
+# End of .gitignore
+# ============================================================================
+
+# Note: Keep .env.example, package.json, and other template files
+# This .gitignore is comprehensive for a full-stack Node.js/TypeScript project

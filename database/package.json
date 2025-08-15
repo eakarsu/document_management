@@ -1,0 +1,27 @@
+{
+  "name": "dms-database",
+  "version": "1.0.0",
+  "description": "Database management for Document Management System",
+  "private": true,
+  "scripts": {
+    "migrate": "npx prisma migrate deploy",
+    "migrate:dev": "npx prisma migrate dev",
+    "migrate:reset": "npx prisma migrate reset --force",
+    "generate": "npx prisma generate",
+    "seed": "node seed.js",
+    "reset": "npm run migrate:reset && npm run seed",
+    "studio": "npx prisma studio"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@prisma/client": "^5.7.1",
+    "bcryptjs": "^2.4.3",
+    "prisma": "^5.7.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/ws": "^8.18.1",
+    "graphql-ws": "^6.0.6",
+    "ws": "^8.18.3"
+  }
+}

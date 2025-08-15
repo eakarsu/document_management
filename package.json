@@ -1,0 +1,33 @@
+{
+  "name": "document-management-system",
+  "version": "1.0.0",
+  "description": "Enterprise-grade Document Management System with AI capabilities",
+  "private": true,
+  "scripts": {
+    "start": "./start.sh",
+    "stop": "./start.sh --stop",
+    "restart": "npm run stop && npm run start",
+    "help": "./start.sh --help",
+    "logs:backend": "tail -f backend.log",
+    "logs:frontend": "tail -f frontend.log"
+  },
+  "keywords": [
+    "document-management",
+    "enterprise",
+    "ai-powered",
+    "react",
+    "nodejs",
+    "graphql",
+    "typescript"
+  ],
+  "author": "Erol Akarsu",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "database"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

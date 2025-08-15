@@ -1,0 +1,189 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for metadata
+  postgres:
+    image: postgres:15-alpine
+    container_name: dms_postgres
+    environment:
+      POSTGRES_DB: dms_metadata
+      POSTGRES_USER: dms_user
+      POSTGRES_PASSWORD: dms_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - dms_network
+
+  # MongoDB for document storage
+  mongodb:
+    image: mongo:7.0
+    container_name: dms_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dms_user
+      MONGO_INITDB_ROOT_PASSWORD: dms_password
+      MONGO_INITDB_DATABASE: dms_documents
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./database/mongodb/init:/docker-entrypoint-initdb.d
+    networks:
+      - dms_network
+
+  # Redis for caching
+  redis:
+    image: redis:7.2-alpine
+    container_name: dms_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - dms_network
+    command: redis-server --appendonly yes
+
+  # Elasticsearch for search
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: dms_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - dms_network
+
+  # RabbitMQ for message queuing
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: dms_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: dms_user
+      RABBITMQ_DEFAULT_PASS: dms_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - dms_network
+
+  # MinIO for S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    container_name: dms_minio
+    environment:
+      MINIO_ROOT_USER: dms_user
+      MINIO_ROOT_PASSWORD: dms_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - dms_network
+    command: server /data --console-address ":9001"
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dms_backend
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://dms_user:dms_password@postgres:5432/dms_metadata
+      MONGODB_URL: mongodb://dms_user:dms_password@mongodb:27017/dms_documents
+      REDIS_URL: redis://redis:6379
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      RABBITMQ_URL: amqp://dms_user:dms_password@rabbitmq:5672
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: dms_user
+      MINIO_SECRET_KEY: dms_password
+      JWT_SECRET: your_jwt_secret_key_here
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - dms_network
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - elasticsearch
+      - rabbitmq
+      - minio
+    restart: unless-stopped
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dms_frontend
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_WS_URL: ws://localhost:4000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - dms_network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # AI Services
+  ai-services:
+    build:
+      context: ./ai-services
+      dockerfile: Dockerfile
+    container_name: dms_ai_services
+    environment:
+      PYTHONPATH: /app
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql://dms_user:dms_password@postgres:5432/dms_metadata
+      MONGODB_URL: mongodb://dms_user:dms_password@mongodb:27017/dms_documents
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: dms_user
+      MINIO_SECRET_KEY: dms_password
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai-services:/app
+    networks:
+      - dms_network
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - minio
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+  elasticsearch_data:
+  rabbitmq_data:
+  minio_data:
+
+networks:
+  dms_network:
+    driver: bridge

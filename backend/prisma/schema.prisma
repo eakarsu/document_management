@@ -1,0 +1,480 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users and Authentication
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  username          String?  @unique
+  firstName         String
+  lastName          String
+  passwordHash      String
+  avatar            String?
+  isActive          Boolean  @default(true)
+  emailVerified     Boolean  @default(false)
+  lastLogin         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Multi-factor authentication
+  mfaEnabled        Boolean  @default(false)
+  mfaSecret         String?
+  backupCodes       String[]
+
+  // Profile information
+  department        String?
+  jobTitle          String?
+  phone             String?
+  timezone          String   @default("UTC")
+  language          String   @default("en")
+
+  // Relationships
+  role              Role     @relation(fields: [roleId], references: [id])
+  roleId            String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  organizationId    String
+  
+  // Document relationships
+  createdDocuments  Document[] @relation("DocumentCreator")
+  modifiedDocuments DocumentVersion[] @relation("DocumentModifier")
+  documentPermissions DocumentPermission[]
+  folderPermissions FolderPermission[]
+  
+  // Activity and audit
+  auditLogs         AuditLog[]
+  sessions          UserSession[]
+  
+  // Workflow relationships
+  assignedTasks     WorkflowTask[] @relation("TaskAssignee")
+  createdTasks      WorkflowTask[] @relation("TaskCreator")
+  comments          Comment[]
+
+  @@map("users")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String   @unique
+  settings    Json     @default("{}")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  users       User[]
+  roles       Role[]
+  documents   Document[]
+  folders     Folder[]
+  workflows   Workflow[]
+
+  @@map("organizations")
+}
+
+model Role {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  permissions  String[] // Array of permission strings
+  isSystem     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relationships
+  organization Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  users        User[]
+
+  @@unique([name, organizationId])
+  @@map("roles")
+}
+
+model UserSession {
+  id          String   @id @default(cuid())
+  sessionId   String   @unique
+  userId      String
+  ipAddress   String
+  userAgent   String
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+// Document Management
+model Document {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  fileName        String
+  originalName    String
+  mimeType        String
+  fileSize        Int
+  checksum        String   @unique
+  
+  // Storage information
+  storagePath     String
+  storageProvider String   @default("minio") // minio, s3, etc.
+  
+  // Document metadata
+  status          DocumentStatus @default(DRAFT)
+  category        String?
+  tags            String[]
+  customFields    Json     @default("{}")
+  
+  // QR Code and identifiers
+  qrCode          String?
+  documentNumber  String?  @unique
+  
+  // Relationships
+  createdBy       User     @relation("DocumentCreator", fields: [createdById], references: [id])
+  createdById     String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  folder          Folder?  @relation(fields: [folderId], references: [id])
+  folderId        String?
+  
+  // Document hierarchy
+  parentDocument  Document? @relation("DocumentHierarchy", fields: [parentDocumentId], references: [id])
+  parentDocumentId String?
+  childDocuments  Document[] @relation("DocumentHierarchy")
+  
+  // Versioning
+  currentVersion  Int      @default(1)
+  versions        DocumentVersion[]
+  
+  // Access control
+  permissions     DocumentPermission[]
+  
+  // Workflow and collaboration
+  workflows       DocumentWorkflow[]
+  comments        Comment[]
+  
+  // AI and processing
+  ocrProcessed    Boolean  @default(false)
+  ocrText         String?
+  aiClassification String?
+  aiTags          String[]
+  aiConfidence    Float?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastAccessedAt  DateTime?
+
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id              String   @id @default(cuid())
+  versionNumber   Int
+  title           String
+  description     String?
+  fileName        String
+  fileSize        Int
+  checksum        String
+  storagePath     String
+  
+  // Change information
+  changeType      VersionChangeType @default(MINOR)
+  changeNotes     String?
+  
+  // Binary diff information
+  diffPath        String?  // Path to binary diff file
+  diffSize        Int?     // Size of diff file in bytes
+  compressionRatio Float?  // How much space saved (0-1)
+  patchAlgorithm  String?  // Algorithm used (bsdiff, xdelta, etc.)
+  
+  // Change analysis
+  bytesChanged    Int?     // Total bytes modified
+  percentChanged  Float?   // Percentage of file changed
+  changeCategory  String?  // MINOR, MAJOR, STRUCTURAL
+  similarity      Float?   // Similarity to previous version (0-100)
+  
+  // Relationships
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId      String
+  createdBy       User     @relation("DocumentModifier", fields: [createdById], references: [id])
+  createdById     String
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+
+  @@unique([documentId, versionNumber])
+  @@map("document_versions")
+}
+
+model Folder {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  color           String?
+  icon            String?
+  
+  // Hierarchy
+  parentFolder    Folder?  @relation("FolderHierarchy", fields: [parentFolderId], references: [id])
+  parentFolderId  String?
+  subFolders      Folder[] @relation("FolderHierarchy")
+  
+  // Path for efficient queries
+  fullPath        String
+  depth           Int      @default(0)
+  
+  // Relationships
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  documents       Document[]
+  permissions     FolderPermission[]
+  
+  // Metadata
+  customFields    Json     @default("{}")
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([name, parentFolderId, organizationId])
+  @@map("folders")
+}
+
+// Permissions and Access Control
+model DocumentPermission {
+  id          String   @id @default(cuid())
+  permission  PermissionType
+  
+  // Relationships
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId  String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  
+  // Grant information
+  grantedAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  @@unique([documentId, userId])
+  @@map("document_permissions")
+}
+
+model FolderPermission {
+  id          String   @id @default(cuid())
+  permission  PermissionType
+  
+  // Relationships
+  folder      Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  folderId    String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  
+  // Grant information
+  grantedAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  @@unique([folderId, userId])
+  @@map("folder_permissions")
+}
+
+// Workflow Management
+model Workflow {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  definition      Json     // Workflow definition in JSON format
+  isActive        Boolean  @default(true)
+  
+  // Relationships
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  
+  // Document workflows
+  documentWorkflows DocumentWorkflow[]
+  tasks           WorkflowTask[]
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("workflows")
+}
+
+model DocumentWorkflow {
+  id              String   @id @default(cuid())
+  status          WorkflowStatus @default(PENDING)
+  currentStep     Int      @default(1)
+  totalSteps      Int
+  
+  // Relationships
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId      String
+  workflow        Workflow @relation(fields: [workflowId], references: [id])
+  workflowId      String
+  
+  // Timestamps
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+
+  @@map("document_workflows")
+}
+
+model WorkflowTask {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  status          TaskStatus @default(PENDING)
+  priority        TaskPriority @default(MEDIUM)
+  stepNumber      Int
+  
+  // Task data
+  formData        Json     @default("{}")
+  
+  // Relationships
+  workflow        Workflow @relation(fields: [workflowId], references: [id])
+  workflowId      String
+  assignedTo      User     @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedToId    String
+  createdBy       User     @relation("TaskCreator", fields: [createdById], references: [id])
+  createdById     String
+  
+  // Timestamps
+  dueDate         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+
+  @@map("workflow_tasks")
+}
+
+// Comments and Collaboration
+model Comment {
+  id          String   @id @default(cuid())
+  content     String
+  isResolved  Boolean  @default(false)
+  
+  // Position in document (for annotations)
+  pageNumber  Int?
+  positionX   Float?
+  positionY   Float?
+  
+  // Relationships
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId  String
+  author      User     @relation(fields: [authorId], references: [id])
+  authorId    String
+  
+  // Threading
+  parentComment Comment? @relation("CommentThread", fields: [parentCommentId], references: [id])
+  parentCommentId String?
+  replies     Comment[] @relation("CommentThread")
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("comments")
+}
+
+// Audit and Logging
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String   // CREATE, UPDATE, DELETE, VIEW, DOWNLOAD, etc.
+  resource    String   // DOCUMENT, FOLDER, USER, etc.
+  resourceId  String
+  oldValues   Json?
+  newValues   Json?
+  ipAddress   String
+  userAgent   String
+  
+  // Relationships
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+
+  @@index([resource, resourceId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// Search and Indexing
+model SearchIndex {
+  id          String   @id @default(cuid())
+  documentId  String   @unique
+  content     String   // Full-text content for search
+  metadata    Json     // Searchable metadata
+  lastIndexed DateTime @default(now())
+
+  @@map("search_index")
+}
+
+// System Configuration
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  isEncrypted Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+// Enums
+enum DocumentStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+  DELETED
+}
+
+enum VersionChangeType {
+  MAJOR
+  MINOR
+  PATCH
+}
+
+enum PermissionType {
+  READ
+  WRITE
+  DELETE
+  SHARE
+  ADMIN
+}
+
+enum WorkflowStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  OVERDUE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
