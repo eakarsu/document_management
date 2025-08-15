@@ -1,0 +1,35 @@
+# Version 3 - Major Changes
+
+This is a significantly modified version of the original document for comprehensive binary diff testing.
+
+## Introduction
+This document has been substantially updated to demonstrate how the binary diff algorithm handles major changes between document versions. We've added extensive new content and reorganized existing sections.
+
+## Enhanced Content Sections
+- Section A: Initial content (completely rewritten)
+- Section B: Basic information (expanded with details)
+- Section C: Standard formatting (updated with new structure)
+- Section D: New additional section for testing
+
+## Extended Data Points
+1. First data point (expanded explanation)
+2. Second data point (with additional context)
+3. Third data point (completely revised)
+4. Fourth data point (detailed information)
+5. Fifth data point (new comprehensive entry)
+6. Sixth data point (another new addition)
+
+## New Analysis Section
+The binary diff system will now analyze these substantial changes and provide detailed metrics including:
+- Change categorization
+- Percentage modifications
+- Similarity calculations
+- Compression ratio analysis
+
+## Performance Metrics
+This version contains approximately 150 words, representing a significant increase from the original 75 words.
+
+## Additional Testing Data
+Extra content added to ensure this qualifies as a MAJOR change in the binary diff analysis system.
+
+Total word count: approximately 150 words (100% increase).
