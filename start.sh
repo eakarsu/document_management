@@ -372,8 +372,9 @@ main() {
     
     # Run database migrations
     print_info "Running database migrations..."
-    npx prisma migrate dev --name auto >/dev/null 2>&1 || {
-        print_warning "Migration failed, trying db push..."
+    # Use migrate deploy for non-interactive environments, fallback to db push
+    npx prisma migrate deploy >/dev/null 2>&1 || {
+        print_warning "Deploy migration failed, trying db push..."
         npx prisma db push >/dev/null 2>&1 || {
             print_warning "DB push failed, showing output"
             npx prisma db push

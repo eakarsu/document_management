@@ -23,6 +23,7 @@ import { authMiddleware, graphqlAuthMiddleware } from './middleware/auth';
 import { errorHandler } from './middleware/errorHandler';
 import { healthRouter } from './routes/health';
 import { documentsRouter } from './routes/documents';
+import { publishingRouter } from './routes/publishing';
 import { DocumentService } from './services/DocumentService';
 import { AuthService } from './services/AuthService';
 import { SearchService } from './services/SearchService';
@@ -90,6 +91,7 @@ const upload = multer({
     }
   }
 });
+
 
 // JWT authentication middleware
 const authenticateToken = async (req: any, res: any, next: any) => {
@@ -207,6 +209,9 @@ async function startServer() {
     
     // Document routes
     app.use('/api/documents', documentsRouter);
+    
+    // Publishing routes
+    app.use('/api/publishing', publishingRouter);
 
     // ===== AUTHENTICATION ENDPOINTS =====
     
@@ -263,7 +268,7 @@ async function startServer() {
             type: 'access'
           },
           JWT_SECRET,
-          { expiresIn: '15m' }
+          { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h' } as jwt.SignOptions
         );
 
         const refreshToken = jwt.sign(
@@ -272,7 +277,7 @@ async function startServer() {
             type: 'refresh'
           },
           JWT_REFRESH_SECRET,
-          { expiresIn: '7d' }
+          { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' } as jwt.SignOptions
         );
 
         // Return user data and tokens
@@ -412,7 +417,7 @@ async function startServer() {
             type: 'refresh'
           },
           JWT_REFRESH_SECRET,
-          { expiresIn: '7d' }
+          { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' } as jwt.SignOptions
         );
 
         res.status(201).json({
@@ -542,435 +547,7 @@ async function startServer() {
       }
     });
 
-    // ===== COLLABORATIVE WORKFLOW ENDPOINTS =====
-
-    // Document version upload endpoint (for collaborative editing)
-    app.post('/api/documents/:id/versions', authenticateToken, (req: any, res: any, next: any) => {
-      upload.single('document')(req, res, (err: any) => {
-        if (err) {
-          console.error('Multer error:', err.message);
-          return res.status(400).json({ 
-            success: false,
-            error: err.message || 'File upload error' 
-          });
-        }
-        next();
-      });
-    }, async (req: any, res) => {
-      try {
-        const documentId = req.params.id;
-        
-        if (!req.file) {
-          return res.status(400).json({ error: 'No file uploaded' });
-        }
-
-        const { changeNotes, changeType = 'MINOR' } = req.body;
-        const file = req.file;
-
-        // Find the original document
-        const originalDoc = await prisma.document.findUnique({
-          where: { id: documentId },
-          include: { versions: true }
-        });
-
-        if (!originalDoc) {
-          // Clean up uploaded file
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-          return res.status(404).json({ error: 'Document not found' });
-        }
-
-        // Check permissions - user must have WRITE access
-        const hasWriteAccess = originalDoc.createdById === req.user.id ||
-                              req.user.permissions?.includes('documents:write') ||
-                              req.user.permissions?.includes('*');
-
-        if (!hasWriteAccess) {
-          // Clean up uploaded file
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-          return res.status(403).json({ error: 'Access denied. You do not have permission to modify this document.' });
-        }
-
-        // Generate checksum for change detection
-        const fileBuffer = fs.readFileSync(file.path);
-        const checksum = require('crypto').createHash('md5').update(fileBuffer).digest('hex');
-
-        // Check if this version already exists
-        const existingVersion = await prisma.documentVersion.findFirst({
-          where: { 
-            documentId,
-            checksum 
-          }
-        });
-
-        if (existingVersion) {
-          // Clean up uploaded file
-          fs.unlinkSync(file.path);
-          return res.status(409).json({ 
-            error: 'This version already exists',
-            existingVersion
-          });
-        }
-
-        // Get next version number
-        const nextVersion = Math.max(...originalDoc.versions.map(v => v.versionNumber), originalDoc.currentVersion) + 1;
-
-        // Create new document version
-        const newVersion = await prisma.documentVersion.create({
-          data: {
-            versionNumber: nextVersion,
-            title: originalDoc.title,
-            description: originalDoc.description,
-            fileName: file.filename,
-            fileSize: file.size,
-            checksum,
-            storagePath: file.path,
-            changeType: changeType,
-            changeNotes: changeNotes || `Version ${nextVersion} updated by ${req.user.name || req.user.email}`,
-            documentId,
-            createdById: req.user.id
-          },
-          include: {
-            createdBy: {
-              select: { firstName: true, lastName: true, email: true }
-            }
-          }
-        });
-
-        // Update document status to IN_REVIEW for collaborative workflow
-        await prisma.document.update({
-          where: { id: documentId },
-          data: { 
-            status: 'IN_REVIEW',
-            updatedAt: new Date()
-          }
-        });
-
-        // Note: Simplified workflow - in production you'd create proper workflow tasks
-        if (originalDoc.createdById !== req.user.id) {
-          console.log(`Workflow notification: ${req.user.firstName} ${req.user.lastName} uploaded new version of "${originalDoc.title}"`);
-        }
-
-        res.json({
-          success: true,
-          version: {
-            ...newVersion,
-            downloadUrl: `/api/documents/${documentId}/versions/${newVersion.id}/download`
-          },
-          message: `Version ${nextVersion} created successfully. Document is now in review.`
-        });
-
-      } catch (error) {
-        console.error('Document version upload error:', error);
-        
-        // Clean up uploaded file on error
-        if (req.file && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-        }
-        
-        res.status(500).json({ 
-          error: 'Version upload failed',
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        });
-      }
-    });
-
-    // Get document versions
-    app.get('/api/documents/:id/versions', authenticateToken, async (req: any, res) => {
-      try {
-        const documentId = req.params.id;
-
-        // Check if document exists and user has access
-        const document = await prisma.document.findUnique({
-          where: { id: documentId },
-          include: {
-            versions: {
-              include: {
-                createdBy: {
-                  select: { firstName: true, lastName: true, email: true }
-                }
-              },
-              orderBy: { versionNumber: 'desc' }
-            }
-          }
-        });
-
-        if (!document) {
-          return res.status(404).json({ error: 'Document not found' });
-        }
-
-        // Check permissions
-        const hasAccess = document.createdById === req.user.id ||
-                         req.user.permissions?.includes('documents:read') ||
-                         req.user.permissions?.includes('*');
-
-        if (!hasAccess) {
-          return res.status(403).json({ error: 'Access denied' });
-        }
-
-        res.json({
-          success: true,
-          versions: document.versions.map(version => ({
-            ...version,
-            downloadUrl: `/api/documents/${documentId}/versions/${version.id}/download`
-          }))
-        });
-
-      } catch (error) {
-        console.error('Get versions error:', error);
-        res.status(500).json({ 
-          error: 'Failed to fetch versions',
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        });
-      }
-    });
-
-    // Download specific version
-    app.get('/api/documents/:id/versions/:versionId/download', authenticateToken, async (req: any, res) => {
-      try {
-        const { id: documentId, versionId } = req.params;
-
-        const version = await prisma.documentVersion.findUnique({
-          where: { id: versionId },
-          include: {
-            document: true,
-            createdBy: true
-          }
-        });
-
-        if (!version || version.documentId !== documentId) {
-          return res.status(404).json({ error: 'Version not found' });
-        }
-
-        // Check permissions
-        const hasAccess = version.document.createdById === req.user.id ||
-                         req.user.permissions?.includes('documents:read') ||
-                         req.user.permissions?.includes('*');
-
-        if (!hasAccess) {
-          return res.status(403).json({ error: 'Access denied' });
-        }
-
-        // Check if file exists
-        if (!fs.existsSync(version.storagePath)) {
-          return res.status(404).json({ error: 'Version file not found on disk' });
-        }
-
-        // Send file
-        const fileName = `${version.title}-v${version.versionNumber}${path.extname(version.fileName)}`;
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        res.setHeader('Content-Type', version.document.mimeType || 'application/octet-stream');
-        res.sendFile(path.resolve(version.storagePath));
-
-      } catch (error) {
-        console.error('Version download error:', error);
-        res.status(500).json({ 
-          error: 'Download failed',
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        });
-      }
-    });
-
-    // Approve/Reject document version
-    app.post('/api/documents/:id/versions/:versionId/approve', authenticateToken, async (req: any, res) => {
-      try {
-        const { id: documentId, versionId } = req.params;
-        const { action, comments } = req.body; // action: 'approve' or 'reject'
-
-        if (!['approve', 'reject'].includes(action)) {
-          return res.status(400).json({ error: 'Invalid action. Must be "approve" or "reject"' });
-        }
-
-        const version = await prisma.documentVersion.findUnique({
-          where: { id: versionId },
-          include: {
-            document: true,
-            createdBy: true
-          }
-        });
-
-        if (!version || version.documentId !== documentId) {
-          return res.status(404).json({ error: 'Version not found' });
-        }
-
-        // Check if user has permission to approve (document creator or admin)
-        const hasApprovalAccess = version.document.createdById === req.user.id ||
-                                 req.user.permissions?.includes('documents:approve') ||
-                                 req.user.permissions?.includes('*');
-
-        if (!hasApprovalAccess) {
-          return res.status(403).json({ error: 'Access denied. You do not have permission to approve/reject this document.' });
-        }
-
-        if (action === 'approve') {
-          // Update document to use this version and mark as approved
-          await prisma.document.update({
-            where: { id: documentId },
-            data: {
-              currentVersion: version.versionNumber,
-              status: 'APPROVED',
-              updatedAt: new Date()
-            }
-          });
-
-          // Note: Simplified workflow - would update workflow tasks in production
-          console.log(`Document ${documentId} version approved`);
-
-        } else {
-          // Reject - update document status back to draft
-          await prisma.document.update({
-            where: { id: documentId },
-            data: {
-              status: 'DRAFT',
-              updatedAt: new Date()
-            }
-          });
-
-          // Note: Simplified workflow - would cancel workflow tasks in production
-          console.log(`Document ${documentId} version rejected`);
-        }
-
-        res.json({
-          success: true,
-          message: `Version ${version.versionNumber} ${action}d successfully`,
-          document: {
-            id: documentId,
-            status: action === 'approve' ? 'APPROVED' : 'DRAFT',
-            currentVersion: action === 'approve' ? version.versionNumber : version.document.currentVersion
-          }
-        });
-
-      } catch (error) {
-        console.error('Approval error:', error);
-        res.status(500).json({ 
-          error: 'Approval failed',
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        });
-      }
-    });
-
-    // Publish approved document (merge all approved changes)
-    app.post('/api/documents/:id/publish', authenticateToken, async (req: any, res) => {
-      try {
-        const documentId = req.params.id;
-        const { publishNotes } = req.body;
-
-        const document = await prisma.document.findUnique({
-          where: { id: documentId },
-          include: {
-            versions: {
-              orderBy: { versionNumber: 'desc' },
-              take: 1
-            }
-          }
-        });
-
-        if (!document) {
-          return res.status(404).json({ error: 'Document not found' });
-        }
-
-        // Check if user has permission to publish
-        const hasPublishAccess = document.createdById === req.user.id ||
-                                req.user.permissions?.includes('documents:publish') ||
-                                req.user.permissions?.includes('*');
-
-        if (!hasPublishAccess) {
-          return res.status(403).json({ error: 'Access denied. You do not have permission to publish this document.' });
-        }
-
-        // Document must be approved before publishing
-        if (document.status !== 'APPROVED') {
-          return res.status(400).json({ error: 'Document must be approved before publishing' });
-        }
-
-        // Update document status to published
-        await prisma.document.update({
-          where: { id: documentId },
-          data: {
-            status: 'PUBLISHED',
-            updatedAt: new Date()
-          }
-        });
-
-        res.json({
-          success: true,
-          message: 'Document published successfully',
-          document: {
-            id: documentId,
-            status: 'PUBLISHED',
-            currentVersion: document.currentVersion
-          }
-        });
-
-      } catch (error) {
-        console.error('Publish error:', error);
-        res.status(500).json({ 
-          error: 'Publish failed',
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        });
-      }
-    });
-
-    // Get user's workflow tasks (pending approvals)
-    app.get('/api/workflow/tasks', authenticateToken, async (req: any, res) => {
-      try {
-        // Simplified workflow tasks - in production this would query workflowTask table
-        // Show all documents in review status within the user's organization that need approval
-        const documentsInReview = await prisma.document.findMany({
-          where: {
-            status: 'IN_REVIEW',
-            organizationId: req.user.organizationId  // Show all documents in organization that need review
-          },
-          include: {
-            createdBy: {
-              select: { firstName: true, lastName: true, email: true }
-            }
-          },
-          orderBy: { updatedAt: 'desc' }
-        });
-
-        // Convert documents to task format for frontend compatibility
-        const tasks = documentsInReview.map(doc => ({
-          id: `doc-${doc.id}`,
-          title: `Review document: ${doc.title}`,
-          description: `Document "${doc.title}" is pending review and approval`,
-          priority: 'MEDIUM',
-          stepNumber: 1,
-          formData: {
-            documentId: doc.id,
-            versionId: doc.currentVersion
-          },
-          document: {
-            id: doc.id,
-            title: doc.title,
-            status: doc.status,
-            currentVersion: doc.currentVersion
-          },
-          createdBy: {
-            firstName: doc.createdBy.firstName,
-            lastName: doc.createdBy.lastName,
-            email: doc.createdBy.email
-          },
-          createdAt: doc.updatedAt,
-          status: 'PENDING'
-        }));
-
-        res.json({
-          success: true,
-          tasks
-        });
-
-      } catch (error) {
-        console.error('Get workflow tasks error:', error);
-        res.status(500).json({ 
-          error: 'Failed to fetch workflow tasks',
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        });
-      }
-    });
+    // ===== BINARY DIFF DOCUMENT VERSIONING ENDPOINTS =====
 
     // Create new document version with binary diff tracking
     app.post('/api/documents/:id/versions', upload.single('file'), async (req: any, res) => {
@@ -986,9 +563,12 @@ async function startServer() {
 
         const { title, description, changeNotes, changeType } = req.body;
 
+        // Read file from disk since we're using disk storage
+        const fileBuffer = require('fs').readFileSync(req.file.path);
+
         const newVersion = await documentService.createDocumentVersion(
           documentId,
-          req.file.buffer,
+          fileBuffer,
           {
             title,
             description,
@@ -1273,7 +853,10 @@ async function startServer() {
       try {
         // Get dashboard statistics from database
         const documentCount = await prisma.document.count({
-          where: { organizationId: req.user.organizationId }
+          where: { 
+            organizationId: req.user.organizationId,
+            status: { not: 'DELETED' }
+          }
         });
         
         const userCount = await prisma.user.count({
@@ -1286,6 +869,7 @@ async function startServer() {
         const recentUploads = await prisma.document.count({
           where: { 
             organizationId: req.user.organizationId,
+            status: { not: 'DELETED' },
             createdAt: {
               gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
             }
@@ -1301,7 +885,10 @@ async function startServer() {
 
         // Calculate storage used (in bytes)
         const documentsWithSize = await prisma.document.findMany({
-          where: { organizationId: req.user.organizationId },
+          where: { 
+            organizationId: req.user.organizationId,
+            status: { not: 'DELETED' }
+          },
           select: { fileSize: true }
         });
         
@@ -1322,6 +909,57 @@ async function startServer() {
         console.error('Dashboard stats error:', error);
         res.status(500).json({ 
           error: 'Failed to fetch dashboard stats',
+          details: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
+    });
+
+    // Get user's workflow tasks (pending approvals)
+    app.get('/api/workflow/tasks', authenticateToken, async (req: any, res) => {
+      try {
+        // Simplified workflow tasks - in production this would query workflowTask table
+        // Show all documents in review status within the user's organization that need approval
+        const documentsInReview = await prisma.document.findMany({
+          where: {
+            organizationId: req.user.organizationId,
+            status: 'IN_REVIEW',
+            NOT: {
+              createdById: req.user.id // Don't show user's own documents for approval
+            }
+          },
+          include: {
+            createdBy: {
+              select: { firstName: true, lastName: true, email: true }
+            },
+            versions: {
+              orderBy: { versionNumber: 'desc' },
+              take: 1
+            }
+          }
+        });
+
+        const tasks = documentsInReview.map(doc => ({
+          id: doc.id,
+          title: doc.title,
+          description: doc.description,
+          status: doc.status,
+          createdBy: doc.createdBy,
+          updatedAt: doc.updatedAt,
+          currentVersion: doc.currentVersion,
+          latestVersion: doc.versions[0]?.versionNumber || 1,
+          taskType: 'APPROVAL_REQUIRED'
+        }));
+
+        res.json({
+          success: true,
+          tasks,
+          totalTasks: tasks.length
+        });
+
+      } catch (error) {
+        console.error('Workflow tasks error:', error);
+        res.status(500).json({ 
+          error: 'Failed to fetch workflow tasks',
           details: error instanceof Error ? error.message : 'Unknown error' 
         });
       }

@@ -58,6 +58,15 @@ model User {
   createdTasks      WorkflowTask[] @relation("TaskCreator")
   comments          Comment[]
 
+  // Publishing relationships
+  approvalStepUsers ApprovalStepUser[] @relation("ApprovalStepUsers")
+  publishingSubmissions DocumentPublishing[] @relation("PublishingSubmitter")
+  publishingPublications DocumentPublishing[] @relation("PublishingPublisher")
+  documentApprovals DocumentApproval[] @relation("DocumentApprover")
+  approvalDelegations DocumentApproval[] @relation("ApprovalDelegator")
+  notifications     PublishingNotification[] @relation("NotificationRecipient")
+  distributionInitiations DocumentDistribution[] @relation("DistributionInitiator")
+
   @@map("users")
 }
 
@@ -76,6 +85,8 @@ model Organization {
   documents   Document[]
   folders     Folder[]
   workflows   Workflow[]
+  publishingWorkflows PublishingWorkflow[]
+  publishingTemplates PublishingTemplate[]
 
   @@map("organizations")
 }
@@ -161,6 +172,9 @@ model Document {
   // Workflow and collaboration
   workflows       DocumentWorkflow[]
   comments        Comment[]
+  
+  // Publishing relationships
+  publishing      DocumentPublishing[] @relation("DocumentPublishing")
   
   // AI and processing
   ocrProcessed    Boolean  @default(false)
@@ -477,4 +491,391 @@ enum TaskPriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// Publishing System Models
+model PublishingWorkflow {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  workflowType      PublishingWorkflowType @default(DOCUMENT_APPROVAL)
+  isActive          Boolean  @default(true)
+  autoApprove       Boolean  @default(false)
+  
+  // Workflow configuration
+  approvalSteps     ApprovalStep[]
+  requiredApprovers Int      @default(1)
+  allowParallel     Boolean  @default(false)
+  timeoutHours      Int      @default(72)
+  
+  // Template and formatting
+  publishingTemplate PublishingTemplate? @relation(fields: [templateId], references: [id])
+  templateId        String?
+  
+  // Relationships
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  organizationId    String
+  documents         DocumentPublishing[]
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("publishing_workflows")
+}
+
+model ApprovalStep {
+  id                String   @id @default(cuid())
+  stepNumber        Int
+  stepName          String
+  description       String?
+  isRequired        Boolean  @default(true)
+  canSkip           Boolean  @default(false)
+  timeoutHours      Int      @default(24)
+  
+  // Approval requirements
+  requiredRole      String?  // Role name required for this step
+  requiredUsers     ApprovalStepUser[]
+  minApprovals      Int      @default(1)
+  allowDelegation   Boolean  @default(true)
+  
+  // Relationships
+  workflow          PublishingWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId        String
+  approvals         DocumentApproval[]
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([workflowId, stepNumber])
+  @@map("approval_steps")
+}
+
+model ApprovalStepUser {
+  id            String   @id @default(cuid())
+  
+  // Relationships
+  approvalStep  ApprovalStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  stepId        String
+  user          User     @relation("ApprovalStepUsers", fields: [userId], references: [id])
+  userId        String
+  
+  // Approval authority
+  canApprove    Boolean  @default(true)
+  canReject     Boolean  @default(true)
+  canDelegate   Boolean  @default(false)
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+
+  @@unique([stepId, userId])
+  @@map("approval_step_users")
+}
+
+model DocumentPublishing {
+  id                String   @id @default(cuid())
+  
+  // Document and workflow
+  document          Document @relation("DocumentPublishing", fields: [documentId], references: [id], onDelete: Cascade)
+  documentId        String
+  workflow          PublishingWorkflow @relation(fields: [workflowId], references: [id])
+  workflowId        String
+  
+  // Publishing details
+  publishingStatus  PublishingStatus @default(PENDING_APPROVAL)
+  currentStep       Int      @default(1)
+  totalSteps        Int
+  
+  // Scheduling
+  scheduledPublishAt DateTime?
+  publishedAt       DateTime?
+  expiresAt         DateTime?
+  
+  // Publishing destinations
+  destinations      PublishingDestination[]
+  
+  // Metadata
+  publishingNotes   String?
+  urgencyLevel      PublishingUrgency @default(NORMAL)
+  isEmergencyPublish Boolean @default(false)
+  
+  // Tracking
+  submittedBy       User     @relation("PublishingSubmitter", fields: [submittedById], references: [id])
+  submittedById     String
+  publishedBy       User?    @relation("PublishingPublisher", fields: [publishedById], references: [id])
+  publishedById     String?
+  
+  // Related records
+  approvals         DocumentApproval[]
+  notifications     PublishingNotification[]
+  distributions     DocumentDistribution[]
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("document_publishing")
+}
+
+model DocumentApproval {
+  id                String   @id @default(cuid())
+  
+  // Approval details
+  status            ApprovalStatus @default(PENDING)
+  decision          ApprovalDecision?
+  comments          String?
+  conditions        String?  // Conditional approval requirements
+  
+  // Approval step context
+  approvalStep      ApprovalStep @relation(fields: [stepId], references: [id])
+  stepId            String
+  documentPublishing DocumentPublishing @relation(fields: [publishingId], references: [id], onDelete: Cascade)
+  publishingId      String
+  
+  // Approver information
+  approver          User     @relation("DocumentApprover", fields: [approverId], references: [id])
+  approverId        String
+  delegatedFrom     User?    @relation("ApprovalDelegator", fields: [delegatedFromId], references: [id])
+  delegatedFromId   String?
+  
+  // Timing
+  dueDate           DateTime?
+  respondedAt       DateTime?
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([publishingId, stepId, approverId])
+  @@map("document_approvals")
+}
+
+model PublishingTemplate {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  templateType      TemplateType @default(STANDARD)
+  
+  // Template configuration
+  formatting        Json     @default("{}")  // CSS/formatting rules
+  layout            Json     @default("{}")  // Layout configuration
+  metadata          Json     @default("{}")  // Default metadata
+  
+  // Content rules
+  requiresCoverPage Boolean  @default(false)
+  requiresApprovalPage Boolean @default(false)
+  includeQRCode     Boolean  @default(true)
+  includeWatermark  Boolean  @default(false)
+  watermarkText     String?
+  
+  // Relationships
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  organizationId    String
+  workflows         PublishingWorkflow[]
+  
+  // Usage tracking
+  isActive          Boolean  @default(true)
+  usageCount        Int      @default(0)
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("publishing_templates")
+}
+
+model PublishingDestination {
+  id                String   @id @default(cuid())
+  
+  // Destination details
+  destinationType   DestinationType
+  destinationName   String
+  destinationConfig Json     @default("{}")  // Destination-specific config
+  
+  // Publishing context
+  documentPublishing DocumentPublishing @relation(fields: [publishingId], references: [id], onDelete: Cascade)
+  publishingId      String
+  
+  // Status tracking
+  status            DestinationStatus @default(PENDING)
+  publishedAt       DateTime?
+  publishedUrl      String?
+  errorMessage      String?
+  retryCount        Int      @default(0)
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("publishing_destinations")
+}
+
+model PublishingNotification {
+  id                String   @id @default(cuid())
+  
+  // Notification details
+  notificationType  NotificationType
+  title             String
+  message           String
+  isRead            Boolean  @default(false)
+  
+  // Delivery method
+  deliveryMethod    DeliveryMethod @default(IN_APP)
+  emailSent         Boolean  @default(false)
+  smsSent           Boolean   @default(false)
+  
+  // Relationships
+  documentPublishing DocumentPublishing @relation(fields: [publishingId], references: [id], onDelete: Cascade)
+  publishingId      String
+  recipient         User     @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  recipientId       String
+  
+  // Timestamps
+  sentAt            DateTime?
+  readAt            DateTime?
+  createdAt         DateTime @default(now())
+
+  @@map("publishing_notifications")
+}
+
+model DocumentDistribution {
+  id                String   @id @default(cuid())
+  
+  // Distribution details
+  distributionMethod DistributionMethod
+  recipientType     RecipientType
+  recipientList     Json     @default("[]")  // Array of recipient info
+  
+  // Content details
+  distributionFormat String  @default("PDF")
+  includeAttachments Boolean @default(true)
+  personalizedMessage String?
+  
+  // Relationships
+  documentPublishing DocumentPublishing @relation(fields: [publishingId], references: [id], onDelete: Cascade)
+  publishingId      String
+  initiatedBy       User     @relation("DistributionInitiator", fields: [initiatedById], references: [id])
+  initiatedById     String
+  
+  // Status tracking
+  status            DistributionStatus @default(PENDING)
+  distributedAt     DateTime?
+  deliveryStats     Json     @default("{}")  // Delivery statistics
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("document_distributions")
+}
+
+// Publishing Enums
+enum PublishingWorkflowType {
+  DOCUMENT_APPROVAL
+  EMERGENCY_PUBLISH
+  SCHEDULED_PUBLISH
+  COLLABORATIVE_REVIEW
+  COMPLIANCE_REVIEW
+}
+
+enum PublishingStatus {
+  PENDING_APPROVAL
+  IN_APPROVAL
+  APPROVED
+  REJECTED
+  PUBLISHED
+  EXPIRED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  DELEGATED
+}
+
+enum ApprovalDecision {
+  APPROVE
+  REJECT
+  APPROVE_WITH_CONDITIONS
+  REQUEST_CHANGES
+}
+
+enum PublishingUrgency {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+  EMERGENCY
+}
+
+enum TemplateType {
+  STANDARD
+  EXECUTIVE
+  TECHNICAL
+  MARKETING
+  LEGAL
+  COMPLIANCE
+}
+
+enum DestinationType {
+  WEB_PORTAL
+  EMAIL_DISTRIBUTION
+  PRINT_QUEUE
+  EXTERNAL_API
+  FILE_SHARE
+  SOCIAL_MEDIA
+}
+
+enum DestinationStatus {
+  PENDING
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  RETRYING
+}
+
+enum NotificationType {
+  APPROVAL_REQUEST
+  APPROVAL_RECEIVED
+  REJECTION_RECEIVED
+  PUBLICATION_SUCCESS
+  PUBLICATION_FAILED
+  DEADLINE_APPROACHING
+  WORKFLOW_COMPLETED
+}
+
+enum DeliveryMethod {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH_NOTIFICATION
+}
+
+enum DistributionMethod {
+  EMAIL
+  SECURE_LINK
+  DIRECT_DOWNLOAD
+  API_PUSH
+  PRINT_DISTRIBUTION
+}
+
+enum RecipientType {
+  INDIVIDUAL_USERS
+  USER_GROUPS
+  EXTERNAL_CONTACTS
+  PUBLIC_DISTRIBUTION
+  DEPARTMENT_WIDE
+}
+
+enum DistributionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  PARTIALLY_FAILED
+  FAILED
 }

@@ -41,8 +41,8 @@ const jsonScalar = new GraphQLScalarType({
   },
 });
 
-// Combine all resolvers
-export const resolvers = {
+// Combine all resolvers with explicit typing
+export const resolvers: any = {
   DateTime: dateScalar,
   JSON: jsonScalar,
   

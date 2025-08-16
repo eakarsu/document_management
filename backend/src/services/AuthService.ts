@@ -428,10 +428,10 @@ export class AuthService {
       },
       this.jwtSecret,
       { 
-        expiresIn: '15m',
+        expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h',
         issuer: 'dms-api',
         audience: 'dms-client'
-      }
+      } as jwt.SignOptions
     );
   }
 
@@ -443,10 +443,10 @@ export class AuthService {
       },
       this.jwtRefreshSecret,
       { 
-        expiresIn: '7d',
+        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
         issuer: 'dms-api',
         audience: 'dms-client'
-      }
+      } as jwt.SignOptions
     );
   }
 
@@ -454,7 +454,7 @@ export class AuthService {
     return jwt.sign(
       { userId, type: 'verification' },
       this.jwtSecret,
-      { expiresIn: '24h' }
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h' } as jwt.SignOptions
     );
   }
 

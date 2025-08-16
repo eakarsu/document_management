@@ -8,7 +8,8 @@ const GraphQLUpload = new GraphQLScalarType({
 import { DocumentService } from '../services/DocumentService';
 import { StorageService } from '../services/StorageService';
 
-interface Context {
+// Export Context interface explicitly
+export interface Context {
   user?: {
     id: string;
     email: string;
@@ -23,7 +24,8 @@ interface Context {
   };
 }
 
-export const documentResolvers = {
+// Use explicit typing to avoid export name issues
+export const documentResolvers: any = {
   Upload: GraphQLUpload,
 
   Query: {

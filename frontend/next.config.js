@@ -56,7 +56,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; connect-src 'self' http://localhost:4000 ws://localhost:* wss://localhost:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:*; font-src 'self' data:; frame-src 'self' http://localhost:4000 https://localhost:4000;",
+            value: "default-src 'self'; connect-src 'self' http://localhost:4000 ws://localhost:* wss://localhost:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:*; font-src 'self' data:; frame-src 'self' http://localhost:4000 https://localhost:4000 blob:;",
           },
         ],
       },

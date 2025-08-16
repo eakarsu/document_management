@@ -81,7 +81,7 @@ interface DocumentVersionsProps {
 
 const DocumentVersions: React.FC<DocumentVersionsProps> = ({
   documentId,
-  document,
+  document: documentData,
   currentUserId,
   onVersionUpdate
 }) => {
@@ -97,6 +97,7 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
   const [approvalComments, setApprovalComments] = useState('');
   const [publishNotes, setPublishNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const fetchVersions = async () => {
     try {
@@ -126,33 +127,64 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
 
     try {
       setLoading(true);
+      setError(null);
+      
+      console.log('Starting file upload...', {
+        documentId,
+        fileName: uploadFile.name,
+        fileSize: uploadFile.size,
+        changeType,
+        changeNotes
+      });
+
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('changeNotes', changeNotes);
       formData.append('changeType', changeType);
 
-      const response = await api.post(`/api/documents/${documentId}/versions`, formData, {
-        headers: {
-          // Don't set Content-Type for FormData - let browser set it with boundary
-        }
-      });
+      const response = await api.post(`/api/documents/${documentId}/versions`, formData);
+      
+      console.log('Upload response:', response.status, response.statusText);
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Upload successful:', data);
+        
+        // Close dialog and reset form
         setUploadDialogOpen(false);
         setUploadFile(null);
         setChangeNotes('');
         setChangeType('MINOR');
+        
+        // Show success message briefly
+        setSuccess('New version uploaded successfully! Binary diff analytics are being calculated...');
+        setTimeout(() => setSuccess(null), 5000);
+        
+        // Refresh data
         await fetchVersions();
         if (onVersionUpdate) onVersionUpdate();
+        
         setError(null);
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+        // Handle error response
+        let errorMessage = 'Upload failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (e) {
+          // If JSON parsing fails, use status text
+          errorMessage = `Upload failed (${response.status}): ${response.statusText}`;
+        }
+        console.error('Upload failed:', response.status, errorMessage);
+        throw new Error(errorMessage);
       }
     } catch (error) {
-      console.error('Upload failed:', error);
-      setError(error instanceof Error ? error.message : 'Upload failed');
+      console.error('Upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+      setError(errorMessage);
+      
+      // Don't close dialog on error, but stop loading
+      // User can see error and try again or cancel
     } finally {
       setLoading(false);
     }
@@ -190,15 +222,32 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
   const handlePublish = async () => {
     try {
       setLoading(true);
-      const response = await api.post(`/api/documents/${documentId}/publish`, {
-        publishNotes
-      });
+      
+      // Use the same working API that the publishing page uses
+      const publishData = {
+        documentId: documentId,
+        workflowId: 'cmeeihgpy0008x9uorr9oqsgf', // Standard Publishing Process workflow
+        publishingNotes: publishNotes || 'Quick publish from document page',
+        urgencyLevel: 'NORMAL',
+        isEmergencyPublish: false,
+        destinations: [
+          {
+            destinationType: 'WEB_PORTAL',
+            destinationName: 'Internal Portal',
+            destinationConfig: {}
+          }
+        ]
+      };
+      
+      const response = await api.post('/api/publishing/submit', publishData);
 
       if (response.ok) {
         setPublishDialogOpen(false);
         setPublishNotes('');
         if (onVersionUpdate) onVersionUpdate();
         setError(null);
+        // Show success message
+        alert('Document submitted for publishing successfully!');
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Publish failed');
@@ -221,15 +270,20 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
     }
   };
 
-  const canUploadVersion = document.status !== 'PUBLISHED';
-  const canApprove = document.status === 'IN_REVIEW' && (document.createdById === currentUserId);
-  const canPublish = document.status === 'APPROVED' && (document.createdById === currentUserId);
+  const canUploadVersion = documentData.status !== 'PUBLISHED';
+  const canApprove = documentData.status === 'IN_REVIEW' && (documentData.createdById === currentUserId);
+  const canPublish = documentData.status === 'APPROVED' && (documentData.createdById === currentUserId);
 
   return (
     <Box>
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
+          {success}
         </Alert>
       )}
 
@@ -239,8 +293,8 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
           <History sx={{ mr: 1 }} />
           Document Versions
           <Chip 
-            label={document.status} 
-            color={getStatusColor(document.status)} 
+            label={documentData.status} 
+            color={getStatusColor(documentData.status)} 
             size="small" 
             sx={{ ml: 2 }} 
           />
@@ -283,7 +337,7 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
             {versions.map((version, index) => (
               <React.Fragment key={version.id}>
                 <ListItem>
-                  <Avatar sx={{ mr: 2, bgcolor: version.versionNumber === document.currentVersion ? 'primary.main' : 'grey.400' }}>
+                  <Avatar sx={{ mr: 2, bgcolor: version.versionNumber === documentData.currentVersion ? 'primary.main' : 'grey.400' }}>
                     v{version.versionNumber}
                   </Avatar>
                   <ListItemText
@@ -298,82 +352,29 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
                           variant="outlined"
                           color={version.changeType === 'MAJOR' ? 'error' : version.changeType === 'MINOR' ? 'warning' : 'info'}
                         />
-                        {version.versionNumber === document.currentVersion && (
+                        {version.versionNumber === documentData.currentVersion && (
                           <Chip label="Current" size="small" color="primary" />
                         )}
                       </Box>
                     }
                     secondary={
-                      <Box>
-                        <Typography variant="body2" color="text.secondary">
+                      <React.Fragment>
+                        <span style={{ color: 'rgba(0, 0, 0, 0.6)', fontSize: '0.875rem' }}>
                           By {version.createdBy.firstName} {version.createdBy.lastName} • {new Date(version.createdAt).toLocaleDateString()}
-                        </Typography>
+                        </span>
                         
                         {version.changeNotes && (
-                          <Typography variant="body2" sx={{ fontStyle: 'italic', mt: 0.5 }}>
+                          <span style={{ 
+                            display: 'block', 
+                            fontStyle: 'italic', 
+                            marginTop: '4px',
+                            color: 'rgba(0, 0, 0, 0.6)',
+                            fontSize: '0.875rem'
+                          }}>
                             "{version.changeNotes}"
-                          </Typography>
+                          </span>
                         )}
-                        
-                        {/* Binary Diff Information */}
-                        {version.bytesChanged && version.versionNumber > 1 && (
-                          <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                            <Chip 
-                              size="small"
-                              icon={<Analytics />}
-                              label={`${version.changeCategory} changes`}
-                              color={
-                                version.changeCategory === 'MINOR' ? 'success' :
-                                version.changeCategory === 'MAJOR' ? 'warning' :
-                                'error'
-                              }
-                              variant="outlined"
-                            />
-                            <Chip
-                              size="small"
-                              icon={version.percentChanged && version.percentChanged < 10 ? <TrendingUp /> : <TrendingDown />}
-                              label={`${version.percentChanged?.toFixed(1)}% changed`}
-                              variant="outlined"
-                              color="default"
-                            />
-                            <Chip
-                              size="small"
-                              icon={<DataUsage />}
-                              label={`${(version.bytesChanged / 1024).toFixed(1)}KB diff`}
-                              variant="outlined"
-                              color="default"
-                            />
-                            {version.similarity && (
-                              <Chip
-                                size="small"
-                                label={`${version.similarity.toFixed(0)}% similar`}
-                                variant="outlined"
-                                color="info"
-                              />
-                            )}
-                            {version.compressionRatio && version.compressionRatio > 0.5 && (
-                              <Chip
-                                size="small"
-                                label={`${(version.compressionRatio * 100).toFixed(0)}% compressed`}
-                                variant="outlined"
-                                color="success"
-                              />
-                            )}
-                          </Box>
-                        )}
-                        
-                        {version.versionNumber === 1 && (
-                          <Box sx={{ mt: 1 }}>
-                            <Chip
-                              size="small"
-                              icon={<History />}
-                              label="Initial version"
-                              variant="outlined"
-                              color="info"
-                            />
-                          </Box>
-                        )}
-                      </Box>
+                      </React.Fragment>
                     }
                   />
                   <ListItemSecondaryAction>
@@ -424,7 +425,7 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
                         </Button>
                       )}
                       
-                      {canApprove && document.status === 'IN_REVIEW' && (
+                      {canApprove && documentData.status === 'IN_REVIEW' && (
                         <>
                           <Button
                             size="small"
@@ -473,6 +474,11 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
       <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Upload New Version</DialogTitle>
         <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
           <Box sx={{ mt: 2 }}>
             <TextField
               fullWidth

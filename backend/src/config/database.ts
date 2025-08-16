@@ -69,7 +69,8 @@ export const getPrismaClient = (): PrismaClient => {
 
     // Log database events in development
     if (process.env.NODE_ENV === 'development') {
-      prismaClient.$on('query', (e) => {
+      // Type assertion to fix TypeScript issues with Prisma events
+      (prismaClient as any).$on('query', (e: any) => {
         logger.info('Prisma Query:', {
           query: e.query,
           params: e.params,
@@ -78,15 +79,15 @@ export const getPrismaClient = (): PrismaClient => {
       });
     }
 
-    prismaClient.$on('error', (e) => {
+    (prismaClient as any).$on('error', (e: any) => {
       logger.error('Prisma Error:', e);
     });
 
-    prismaClient.$on('warn', (e) => {
+    (prismaClient as any).$on('warn', (e: any) => {
       logger.warn('Prisma Warning:', e);
     });
 
-    prismaClient.$on('info', (e) => {
+    (prismaClient as any).$on('info', (e: any) => {
       logger.info('Prisma Info:', e);
     });
   }

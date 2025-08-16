@@ -42,21 +42,41 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   React.useEffect(() => {
     if (viewMode === 'inline' && canViewInline(document.mimeType)) {
       const loadViewUrl = async () => {
-        const url = await getAuthenticatedUrl(`/api/documents/${documentId}/view`);
-        setViewUrl(url);
+        try {
+          setLoading(true);
+          setError(null);
+          
+          // Fetch the document content through our API
+          const response = await api.get(`/api/documents/${documentId}/view`);
+          
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            setViewUrl(url);
+          } else {
+            setError('Failed to load document for preview');
+          }
+        } catch (err) {
+          setError('Failed to load document for preview');
+        } finally {
+          setLoading(false);
+        }
       };
       loadViewUrl();
     }
+    
+    // Cleanup blob URL when component unmounts or URL changes
+    return () => {
+      if (viewUrl && viewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(viewUrl);
+      }
+    };
   }, [viewMode, documentId, document.mimeType]);
 
-  // Generate authenticated URLs for viewing
+  // Generate authenticated URLs for viewing - use frontend API proxy
   const getAuthenticatedUrl = async (endpoint: string): Promise<string> => {
-    const token = localStorage.getItem('accessToken');
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    if (token) {
-      return `${backendUrl}${endpoint}?token=${encodeURIComponent(token)}`;
-    }
-    return `${backendUrl}${endpoint}`;
+    // The frontend API routes handle authentication via cookies automatically
+    return endpoint;
   };
 
   // Check if document type can be displayed inline in browser

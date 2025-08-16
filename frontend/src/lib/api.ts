@@ -18,11 +18,19 @@ export class ApiClient {
       token = localStorage.getItem('accessToken');
     }
     
+    // Check if body is FormData - don't set Content-Type for FormData
+    const isFormData = options.body instanceof FormData;
+    
+    const defaultHeaders: Record<string, string> = {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      // Only set Content-Type for non-FormData requests
+      ...(!isFormData && { 'Content-Type': 'application/json' }),
+    };
+    
     const defaultOptions: RequestInit = {
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...defaultHeaders,
         ...options.headers,
       },
     };
@@ -37,18 +45,20 @@ export class ApiClient {
   }
 
   async post(endpoint: string, data?: any, options: RequestInit = {}): Promise<Response> {
+    const isFormData = data instanceof FormData;
     return this.fetch(endpoint, {
       ...options,
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: isFormData ? data : (data ? JSON.stringify(data) : undefined),
     });
   }
 
   async put(endpoint: string, data?: any, options: RequestInit = {}): Promise<Response> {
+    const isFormData = data instanceof FormData;
     return this.fetch(endpoint, {
       ...options,
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body: isFormData ? data : (data ? JSON.stringify(data) : undefined),
     });
   }
 

@@ -1,50 +1,46 @@
 const { PrismaClient } = require('@prisma/client');
-
 const prisma = new PrismaClient();
 
-async function main() {
+async function testDatabase() {
   try {
-    console.log('🔍 Testing database connections...');
+    console.log('Testing database...');
     
-    // Test 1: Count documents
-    const documentCount = await prisma.document.count();
-    console.log(`✅ Documents in database: ${documentCount}`);
+    const currentOrgId = 'cmed6dm7f0000ioaciudpllci';
     
-    // Test 2: List recent documents
-    const recentDocs = await prisma.document.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        createdBy: {
-          select: { firstName: true, lastName: true, email: true }
-        }
+    // Get all documents count
+    const totalDocuments = await prisma.document.count();
+    console.log(`Total documents in database: ${totalDocuments}`);
+    
+    // Get documents for current org
+    const orgDocuments = await prisma.document.count({
+      where: {
+        organizationId: currentOrgId
+      }
+    });
+    console.log(`Documents for org ${currentOrgId}: ${orgDocuments}`);
+    
+    // Get list of documents with titles
+    const documents = await prisma.document.findMany({
+      where: {
+        organizationId: currentOrgId
+      },
+      select: {
+        id: true,
+        title: true,
+        organizationId: true
       }
     });
     
-    console.log('📋 Recent documents:');
-    recentDocs.forEach((doc, index) => {
-      console.log(`  ${index + 1}. ${doc.title} (${doc.status}) by ${doc.createdBy.firstName} ${doc.createdBy.lastName}`);
+    console.log('\nDocuments in database:');
+    documents.forEach(doc => {
+      console.log(`- ${doc.title} (${doc.id}) - Org: ${doc.organizationId}`);
     });
     
-    // Test 3: Count users
-    const userCount = await prisma.user.count();
-    console.log(`✅ Users in database: ${userCount}`);
-    
-    // Test 4: Count organizations
-    const orgCount = await prisma.organization.count();
-    console.log(`✅ Organizations in database: ${orgCount}`);
-    
-    // Test 5: Count roles  
-    const roleCount = await prisma.role.count();
-    console.log(`✅ Roles in database: ${roleCount}`);
-    
-    console.log('🎉 Database connection test completed successfully!');
-    
   } catch (error) {
-    console.error('❌ Database connection test failed:', error);
+    console.error('Database test error:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-main();
+testDatabase();

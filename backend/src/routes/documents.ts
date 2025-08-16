@@ -361,53 +361,8 @@ router.get('/:id/thumbnail',
   }
 );
 
-// Create new document version
-router.post('/:id/versions',
-  upload.single('file'),
-  async (req: any, res) => {
-    try {
-      const documentId = req.params.id;
-
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          error: 'No file uploaded'
-        });
-      }
-
-      const { changeNotes } = req.body;
-
-      // Get current document
-      const document = await documentService.getDocumentById(
-        documentId,
-        req.user.id,
-        req.user.organizationId
-      );
-
-      if (!document) {
-        return res.status(404).json({
-          success: false,
-          error: 'Document not found'
-        });
-      }
-
-      // TODO: Implement version creation
-      // This would involve uploading the new file and creating a new version record
-
-      res.json({
-        success: true,
-        message: 'Version creation not yet implemented'
-      });
-
-    } catch (error) {
-      logger.error('Version creation failed:', error);
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Version creation failed'
-      });
-    }
-  }
-);
+// Document version creation is handled in server.ts with DocumentService
+// No version endpoint needed in routes - using server.ts endpoints for binary diff functionality
 
 // Search documents - Enhanced with Elasticsearch
 router.get('/search',
@@ -435,8 +390,8 @@ router.get('/search',
             {
               query: q.trim(),
               filters: {
-                category: category as string,
-                status: status as string
+                ...(category && { category: category as string }),
+                ...(status && { status: status as string })
               },
               size: parseInt(limit as string) || 20,
               from: ((parseInt(page as string) || 1) - 1) * (parseInt(limit as string) || 20)

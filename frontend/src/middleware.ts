@@ -48,7 +48,7 @@ export function middleware(request: NextRequest) {
     const response = NextResponse.next();
     
     // Add CORS headers
-    response.headers.set('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:3000');
+    response.headers.set('Access-Control-Allow-Origin', process.env.FRONTEND_URL || `http://localhost:${process.env.PORT || 3000}`);
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     response.headers.set('Access-Control-Allow-Credentials', 'true');
@@ -78,7 +78,7 @@ export function middleware(request: NextRequest) {
     "img-src 'self' data: https:",
     "font-src 'self'",
     "connect-src 'self' ws: wss:",
-    "frame-src 'self' http://localhost:4000 https://localhost:4000",
+    "frame-src 'self' http://localhost:4000 https://localhost:4000 blob:",
     "media-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",

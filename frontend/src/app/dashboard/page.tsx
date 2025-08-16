@@ -39,7 +39,8 @@ import {
   Business,
   Upload as UploadIcon,
   Delete as DeleteIcon,
-  MoreVert as MoreIcon
+  MoreVert as MoreIcon,
+  Publish as PublishIcon
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import WorkflowTasks from '../../components/WorkflowTasks';
@@ -51,6 +52,7 @@ interface DashboardData {
     id: string;
     title: string;
     category: string;
+    status: string;
     createdAt: string;
     createdBy: {
       firstName: string;
@@ -164,6 +166,10 @@ const DashboardPage: React.FC = () => {
 
   const handleViewAnalytics = () => {
     router.push('/analytics');
+  };
+
+  const handlePublishing = () => {
+    router.push('/publishing');
   };
 
   const handleDocumentClick = (documentId: string) => {
@@ -314,12 +320,12 @@ const DashboardPage: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
-                <AnalyticsIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
+                <PublishIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
                 <Typography variant="h4" component="div">
-                  98%
+                  {dashboardData.recentDocuments.filter(doc => doc.status === 'PUBLISHED').length}
                 </Typography>
                 <Typography color="text.secondary">
-                  System Health
+                  Published Documents
                 </Typography>
               </CardContent>
             </Card>
@@ -427,6 +433,23 @@ const DashboardPage: React.FC = () => {
                 >
                   View Analytics
                 </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<PublishIcon />}
+                  size="large"
+                  onClick={handlePublishing}
+                  sx={{ 
+                    color: 'success.main',
+                    borderColor: 'success.main',
+                    '&:hover': {
+                      borderColor: 'success.dark',
+                      backgroundColor: 'success.light'
+                    }
+                  }}
+                >
+                  Publishing Management
+                </Button>
               </Stack>
             </Paper>
 
@@ -441,8 +464,8 @@ const DashboardPage: React.FC = () => {
         <Box sx={{ mt: 4 }}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-              🚀 System Status: Backend API running at http://localhost:4000 | 
-              Frontend running at http://localhost:3000 | 
+              🚀 System Status: Backend API running at {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'} | 
+              Frontend running at http://localhost:{process.env.PORT || '3000'} | 
               Database: {dashboardData.totalUsers} users, {dashboardData.totalDocuments} documents
             </Typography>
           </Paper>

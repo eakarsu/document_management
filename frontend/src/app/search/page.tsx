@@ -332,12 +332,12 @@ const SearchPage: React.FC = () => {
             Search Engine Status: {searchHealth.status === 'healthy' ? 'Healthy' : 'Issues Detected'}
             {showHealthCheck && (
               <Box sx={{ mt: 1, fontSize: '0.875rem' }}>
-                <Typography variant="body2">
+                <div style={{ fontSize: '0.875rem', color: 'rgba(0, 0, 0, 0.6)' }}>
                   Last checked: {new Date(searchHealth.timestamp).toLocaleString()}
-                </Typography>
-                <Typography variant="body2">
+                </div>
+                <div style={{ fontSize: '0.875rem', color: 'rgba(0, 0, 0, 0.6)' }}>
                   Service: Elasticsearch • Status: {searchHealth.status}
-                </Typography>
+                </div>
               </Box>
             )}
           </Alert>
@@ -512,16 +512,16 @@ const SearchPage: React.FC = () => {
                             </Box>
                           }
                           secondary={
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
+                            <React.Fragment>
+                              <span style={{ color: 'rgba(0, 0, 0, 0.6)' }}>
                                 Created by {doc.createdBy?.firstName || 'Unknown'} {doc.createdBy?.lastName || 'User'} • {new Date(doc.createdAt).toLocaleDateString()}
-                              </Typography>
+                              </span>
                               {doc.content && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                <span style={{ display: 'block', marginTop: '4px', color: 'rgba(0, 0, 0, 0.6)' }}>
                                   {doc.content.substring(0, 150)}...
-                                </Typography>
+                                </span>
                               )}
-                            </Box>
+                            </React.Fragment>
                           }
                         />
                       </ListItemButton>

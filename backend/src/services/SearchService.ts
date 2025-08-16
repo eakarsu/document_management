@@ -4,6 +4,7 @@ import winston from 'winston';
 import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
+import { LibreOfficeService } from './LibreOfficeService';
 
 interface SearchDocument {
   id: string;
@@ -49,6 +50,7 @@ export class SearchService {
   private elasticsearch: ElasticsearchClient;
   private prisma: PrismaClient;
   private logger: winston.Logger;
+  private libreOfficeService: LibreOfficeService;
   private indexName: string = 'dms-documents';
 
   constructor() {
@@ -57,6 +59,7 @@ export class SearchService {
     });
 
     this.prisma = new PrismaClient();
+    this.libreOfficeService = new LibreOfficeService();
 
     this.logger = winston.createLogger({
       level: 'info',
@@ -327,7 +330,7 @@ export class SearchService {
             ],
             type: 'best_fields',
             fuzziness: 'AUTO',
-            operator: 'and'
+            operator: 'or'
           }
         });
       } else {
@@ -367,16 +370,16 @@ export class SearchService {
         esAggs[name] = config;
       });
 
-      // Add default aggregations
-      esAggs.categories = {
-        terms: { field: 'metadata.category', size: 20 }
-      };
-      esAggs.tags = {
-        terms: { field: 'metadata.tags', size: 50 }
-      };
-      esAggs.mimeTypes = {
-        terms: { field: 'metadata.mimeType', size: 20 }
-      };
+      // Temporarily disable aggregations to fix search
+      // esAggs.categories = {
+      //   terms: { field: 'metadata.category.keyword', size: 20 }
+      // };
+      // esAggs.tags = {
+      //   terms: { field: 'metadata.tags', size: 50 }
+      // };
+      // esAggs.mimeTypes = {
+      //   terms: { field: 'metadata.mimeType', size: 20 }
+      // };
 
       // Build highlight
       const esHighlight = highlight ? {
@@ -664,14 +667,14 @@ export class SearchService {
       if (mimeType === 'text/plain' || mimeType.startsWith('text/')) {
         const content = fs.readFileSync(filePath, 'utf8');
         this.logger.info('✅ Text file extracted', { filePath, contentLength: content.length });
-        return content.substring(0, 10000); // Limit to 10KB for indexing
+        return content.substring(0, 50000); // Limit to 50KB for indexing
       }
 
       // Handle CSV files  
       if (mimeType === 'text/csv') {
         const content = fs.readFileSync(filePath, 'utf8');
         this.logger.info('✅ CSV file extracted', { filePath, contentLength: content.length });
-        return content.substring(0, 10000);
+        return content.substring(0, 50000);
       }
 
       // Handle Excel files with XLSX library (primary method)
@@ -707,7 +710,7 @@ export class SearchService {
             contentPreview: extractedText.substring(0, 300) + '...'
           });
           
-          return extractedText.substring(0, 10000); // Limit to 10KB
+          return extractedText.substring(0, 50000); // Limit to 50KB
           
         } catch (xlsxError) {
           this.logger.warn('❌ XLSX extraction failed, trying LibreOffice fallback:', { 
@@ -717,11 +720,45 @@ export class SearchService {
         }
       }
 
-      // Handle LibreOffice-supported documents (DOCX, PDF, PPT, ODT, etc.) - EXCEPT Excel
+      // Handle PDF files with pdftotext (more reliable than LibreOffice for PDFs)
+      if (mimeType === 'application/pdf') {
+        this.logger.info('📄 Processing PDF with pdftotext', { filePath });
+        
+        try {
+          const { exec } = require('child_process');
+          const util = require('util');
+          const execPromise = util.promisify(exec);
+          
+          // Use pdftotext to extract text from PDF
+          const { stdout, stderr } = await execPromise(`pdftotext "${filePath}" -`);
+          
+          if (stderr && !stderr.includes('Warning')) {
+            this.logger.warn('pdftotext stderr:', stderr);
+          }
+          
+          if (stdout && stdout.length > 0) {
+            this.logger.info('✅ PDF text extracted with pdftotext', { 
+              filePath,
+              contentLength: stdout.length,
+              contentPreview: stdout.substring(0, 200) + '...'
+            });
+            return stdout.substring(0, 50000); // Limit to 50KB
+          } else {
+            this.logger.warn('⚠️ pdftotext returned empty content', { filePath });
+          }
+          
+        } catch (pdfError) {
+          this.logger.warn('❌ pdftotext extraction failed, trying LibreOffice fallback:', { 
+            filePath, 
+            error: pdfError instanceof Error ? pdfError.message : pdfError
+          });
+        }
+      }
+
+      // Handle LibreOffice-supported documents (DOCX, PPT, ODT, etc.) - EXCEPT Excel and PDF
       const isLibreOfficeDocument = 
         mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||  // .docx
         mimeType === 'application/msword' ||                                                        // .doc
-        mimeType === 'application/pdf' ||                                                           // .pdf
         mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || // .pptx
         mimeType === 'application/vnd.ms-powerpoint' ||                                            // .ppt
         mimeType === 'application/vnd.oasis.opendocument.text' ||                                  // .odt
@@ -735,52 +772,31 @@ export class SearchService {
       
       if (isLibreOfficeDocument && !isExcelDocument) {
         
-        this.logger.info('🔄 Attempting LibreOffice extraction for document type', { filePath, mimeType });
+        this.logger.info('🔄 Attempting LibreOffice extraction with retry mechanism', { filePath, mimeType });
         
         try {
-          const { execSync } = require('child_process');
           const tempDir = '/tmp';
           
-          // Use proper LibreOffice syntax with headless mode: soffice --headless --convert-to txt filename --outdir "/tmp/"
-          this.logger.info('🔧 Running LibreOffice conversion with headless mode', { filePath, tempDir });
-          const command = `/Applications/LibreOffice.app/Contents/MacOS/soffice --headless --convert-to txt "${filePath}" --outdir "${tempDir}"`;
-          this.logger.info('⚡ LibreOffice command:', command);
+          // Use the new LibreOffice service with retry mechanism
+          const extractResult = await this.libreOfficeService.extractTextFromDocument(filePath, tempDir);
           
-          const output = execSync(command, {
-            timeout: 30000, // 30 second timeout
-            encoding: 'utf8'
-          });
-          
-          this.logger.info('✅ LibreOffice conversion completed', { output });
-          
-          // Check for the expected output file (.txt)
-          const baseFileName = path.basename(filePath, path.extname(filePath));
-          const extractedFilePath = path.join(tempDir, baseFileName + '.txt');
-          
-          this.logger.info('🔍 Looking for extracted file', { extractedFilePath });
-          
-          if (fs.existsSync(extractedFilePath)) {
-            const content = fs.readFileSync(extractedFilePath, 'utf8');
-            this.logger.info('✅ LibreOffice extracted content successfully', { 
+          if (extractResult.success && extractResult.text) {
+            this.logger.info('✅ LibreOffice extracted content successfully with retry mechanism', { 
               filePath,
-              extractedFilePath,
-              contentLength: content.length,
-              contentPreview: content.substring(0, 200) + '...'
+              contentLength: extractResult.text.length,
+              contentPreview: extractResult.text.substring(0, 200) + '...'
             });
             
-            // Clean up temporary file
-            fs.unlinkSync(extractedFilePath);
-            return content.substring(0, 10000); // Limit to 10KB
+            return extractResult.text.substring(0, 50000); // Limit to 50KB
           } else {
-            this.logger.warn('❌ LibreOffice conversion succeeded but no output file found');
-            
-            // List all files in temp directory to see what was created
-            const tempFiles = fs.readdirSync(tempDir).filter(f => f.includes(baseFileName));
-            this.logger.info('🗂️ Files in temp dir matching document:', tempFiles);
+            this.logger.warn('❌ LibreOffice extraction failed with retry mechanism', { 
+              filePath, 
+              error: extractResult.error
+            });
           }
           
         } catch (libreOfficeError) {
-          this.logger.warn('❌ Failed to extract content using LibreOffice:', { 
+          this.logger.warn('❌ Failed to extract content using LibreOffice service:', { 
             filePath, 
             error: libreOfficeError instanceof Error ? libreOfficeError.message : libreOfficeError
           });
