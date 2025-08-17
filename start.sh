@@ -573,11 +573,22 @@ EOF
     echo "   🌐 Frontend:     http://localhost:3000"
     echo "   🔧 Backend API:  http://localhost:4000"
     echo "   💾 Database:     PostgreSQL (dms_dev)"
+    echo "   🤖 AI Services:  OpenRouter AI Integration"
     echo ""
     echo "👥 Demo Login Credentials:"
     echo "   👑 Admin:    admin@richmond-dms.com / admin123"
     echo "   👔 Manager:  manager@richmond-dms.com / manager123"
     echo "   👤 User:     user@richmond-dms.com / user123"
+    echo ""
+    echo "🤖 AI Features Available:"
+    echo "   📊 AI Workflow Dashboard - Real-time analytics and insights"
+    echo "   🧠 Smart Publishing - AI-powered document routing"
+    echo "   🤝 Collaborative AI - Real-time collaboration assistance"
+    echo "   🔍 Content Analysis - AI document quality assessment"
+    echo "   ⚡ Workflow Optimizer - Performance optimization suggestions"
+    echo "   💡 Recommendation Engine - Intelligent workflow recommendations"
+    echo "   ⚖️ Decision Support - AI-assisted decision making"
+    echo "   📈 Insights Hub - Predictive analytics and benchmarking"
     echo ""
     echo "📊 System Status:"
     
@@ -592,6 +603,13 @@ EOF
         echo "   ✅ Frontend: Accessible"
     else
         echo "   ⚠️  Frontend: May be starting (check frontend.log)"
+    fi
+    
+    # Check AI configuration
+    if [ -f backend/.env ] && grep -q "OPENROUTER_API_KEY" backend/.env && [ "$(grep -c '^OPENROUTER_API_KEY=sk-' backend/.env)" -eq 1 ]; then
+        echo "   ✅ AI Services: OpenRouter API configured"
+    else
+        echo "   ⚠️  AI Services: OpenRouter API key may not be configured"
     fi
 
     # Show database info
@@ -619,6 +637,7 @@ EOF
     echo "   ⚕️  Health:       curl http://localhost:4000/health"
     echo "   👥 Users:         curl http://localhost:4000/users"
     echo "   📄 Documents:     curl http://localhost:4000/documents"
+    echo "   🤖 AI Workflow:   curl http://localhost:4000/api/ai-workflow/analytics/dashboard"
     echo ""
     
     print_status "Setup completed successfully!"
@@ -669,8 +688,17 @@ case "${1:-}" in
         echo "  ✅ Creates database if needed"
         echo "  ✅ Installs all dependencies"
         echo "  ✅ Sets up database schema and demo data"
+        echo "  ✅ Configures AI services (OpenRouter integration)"
         echo "  ✅ Starts backend and frontend servers"
         echo "  ✅ Opens browser to http://localhost:3000"
+        echo ""
+        echo "AI Features included:"
+        echo "  🤖 Smart document analysis and routing"
+        echo "  📊 Real-time workflow analytics"
+        echo "  🤝 Collaborative AI assistance"
+        echo "  ⚡ Performance optimization suggestions"
+        echo "  💡 Intelligent recommendations"
+        echo "  ⚖️ AI-powered decision support"
         echo ""
         echo "Demo users will be created automatically:"
         echo "  - admin@richmond-dms.com / admin123"

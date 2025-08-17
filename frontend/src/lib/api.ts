@@ -16,6 +16,10 @@ export class ApiClient {
     let token: string | null = null;
     if (typeof window !== 'undefined') {
       token = localStorage.getItem('accessToken');
+      // Debug log for authentication issues
+      if (!token) {
+        console.warn('No accessToken found in localStorage');
+      }
     }
     
     // Check if body is FormData - don't set Content-Type for FormData

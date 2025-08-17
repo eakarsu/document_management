@@ -30,6 +30,9 @@ export const authMiddleware = async (
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
+      console.log('Received Bearer token:', token.substring(0, 20) + '...');
+    } else {
+      console.log('No Authorization header or invalid format. Headers:', JSON.stringify(req.headers, null, 2));
     }
 
     // If no header token, try query parameter for iframe/image requests

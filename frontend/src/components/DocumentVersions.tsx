@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
+import SmartPublishDialog from './ai/SmartPublishDialog';
+import CollaborativeAIAssistant from './ai/CollaborativeAIAssistant';
 import {
   Box,
   Paper,
@@ -38,7 +40,8 @@ import {
   Analytics,
   TrendingUp,
   TrendingDown,
-  DataUsage
+  DataUsage,
+  Psychology
 } from '@mui/icons-material';
 
 interface DocumentVersion {
@@ -90,6 +93,8 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [smartPublishDialogOpen, setSmartPublishDialogOpen] = useState(false);
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<DocumentVersion | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [changeNotes, setChangeNotes] = useState('');
@@ -313,15 +318,37 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
           )}
           
           {canPublish && (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<Publish />}
-              onClick={() => setPublishDialogOpen(true)}
-              disabled={loading}
-            >
-              Publish
-            </Button>
+            <>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<Publish />}
+                onClick={() => setPublishDialogOpen(true)}
+                disabled={loading}
+                sx={{ mr: 1 }}
+              >
+                Publish
+              </Button>
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<Psychology />}
+                onClick={() => setSmartPublishDialogOpen(true)}
+                disabled={loading}
+                sx={{ mr: 1 }}
+              >
+                AI Publish
+              </Button>
+              <Button
+                variant="outlined"
+                color="info"
+                startIcon={<Psychology />}
+                onClick={() => setAiAssistantOpen(true)}
+                disabled={loading}
+              >
+                AI Assistant
+              </Button>
+            </>
           )}
         </Box>
       </Box>
@@ -595,6 +622,27 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Smart Publish Dialog */}
+      <SmartPublishDialog
+        open={smartPublishDialogOpen}
+        onClose={() => setSmartPublishDialogOpen(false)}
+        documentId={documentId}
+        onSuccess={(result) => {
+          alert(`Smart publishing successful! AI Analysis:\nComplexity: ${result.aiAnalysis.contentComplexity}\nRisk Score: ${result.aiAnalysis.riskScore}%\nSuccess Probability: ${result.prediction.successProbability}%`);
+          fetchVersions();
+          if (onVersionUpdate) onVersionUpdate();
+        }}
+      />
+
+      {/* AI Assistant */}
+      {aiAssistantOpen && (
+        <CollaborativeAIAssistant
+          publishingId={documentId} // Using documentId as publishingId for demo
+          participantIds={[currentUserId]} // Include current user
+          onClose={() => setAiAssistantOpen(false)}
+        />
+      )}
     </Box>
   );
 };

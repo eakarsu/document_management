@@ -24,6 +24,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { healthRouter } from './routes/health';
 import { documentsRouter } from './routes/documents';
 import { publishingRouter } from './routes/publishing';
+import { aiWorkflowRouter } from './routes/aiWorkflow';
 import { DocumentService } from './services/DocumentService';
 import { AuthService } from './services/AuthService';
 import { SearchService } from './services/SearchService';
@@ -212,6 +213,9 @@ async function startServer() {
     
     // Publishing routes
     app.use('/api/publishing', publishingRouter);
+    
+    // AI Workflow routes
+    app.use('/api/ai-workflow', aiWorkflowRouter);
 
     // ===== AUTHENTICATION ENDPOINTS =====
     
@@ -1155,7 +1159,7 @@ async function startServer() {
       winstonInstance: logger,
     }));
 
-    const PORT = process.env.PORT || 4000;
+    const PORT = process.env.BACKEND_PORT || 4000;
     
     httpServer.listen(PORT, () => {
       logger.info(`🚀 Server ready at http://localhost:${PORT}`);

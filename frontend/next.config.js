@@ -1,3 +1,9 @@
+const { config } = require('dotenv');
+const { resolve } = require('path');
+
+// Load environment variables from root .env file
+config({ path: resolve(__dirname, '../.env') });
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -5,6 +11,11 @@ const nextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: false,
+  },
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_COMPANY_NAME: process.env.NEXT_PUBLIC_COMPANY_NAME,
+    NEXT_PUBLIC_COMPANY_LOCATION: process.env.NEXT_PUBLIC_COMPANY_LOCATION,
   },
   images: {
     domains: ['localhost', 'minio', 's3.amazonaws.com'],

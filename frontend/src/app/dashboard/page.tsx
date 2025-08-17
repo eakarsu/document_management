@@ -27,7 +27,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  DialogContentText
+  DialogContentText,
+  Tabs,
+  Tab,
+  Badge,
+  Collapse
 } from '@mui/material';
 import {
   Description as DocumentIcon,
@@ -40,7 +44,17 @@ import {
   Upload as UploadIcon,
   Delete as DeleteIcon,
   MoreVert as MoreIcon,
-  Publish as PublishIcon
+  Publish as PublishIcon,
+  Psychology as AIIcon,
+  Speed as OptimizeIcon,
+  Insights as InsightsIcon,
+  Timeline as MonitorIcon,
+  Lightbulb as RecommendIcon,
+  Gavel as DecisionIcon,
+  Assessment as ContentIcon,
+  Group as TeamIcon,
+  Visibility as RealtimeIcon,
+  AutoFixHigh as SmartIcon
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import WorkflowTasks from '../../components/WorkflowTasks';
@@ -231,6 +245,11 @@ const DashboardPage: React.FC = () => {
     setDeleteDialog({ open: false, docId: '', docTitle: '' });
   };
 
+  const handleAIWorkflow = () => {
+    router.push('/ai-workflow');
+  };
+
+
   return (
     <Box sx={{ flexGrow: 1 }}>
       {/* App Bar */}
@@ -269,8 +288,22 @@ const DashboardPage: React.FC = () => {
             Welcome to Richmond DMS
           </Typography>
           <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-            Your enterprise document management system is ready to use
+            Your enterprise document management system with AI-powered workflow automation is ready to use
           </Typography>
+          
+          {/* AI Features Highlight */}
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.light', borderRadius: 2, display: 'flex', alignItems: 'center' }}>
+            <AIIcon sx={{ mr: 2, color: 'primary.main', fontSize: 30 }} />
+            <Box>
+              <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                🚀 NEW: AI Workflow Assistant Available!
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Access 8 powerful AI features including smart recommendations, real-time monitoring, 
+                decision support, and predictive analytics. Click the AI Features card or button to explore.
+              </Typography>
+            </Box>
+          </Box>
         </Box>
 
         {/* Stats Cards */}
@@ -306,26 +339,39 @@ const DashboardPage: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
-                <FolderIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-                <Typography variant="h4" component="div">
-                  12
-                </Typography>
-                <Typography color="text.secondary">
-                  Folders
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
                 <PublishIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
                 <Typography variant="h4" component="div">
                   {dashboardData.recentDocuments.filter(doc => doc.status === 'PUBLISHED').length}
                 </Typography>
                 <Typography color="text.secondary">
                   Published Documents
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Card 
+              sx={{ 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                cursor: 'pointer',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                }
+              }}
+              onClick={handleAIWorkflow}
+            >
+              <CardContent sx={{ textAlign: 'center' }}>
+                <AIIcon sx={{ fontSize: 40, color: 'white', mb: 1 }} />
+                <Typography variant="h4" component="div">
+                  8
+                </Typography>
+                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                  AI Features
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                  Click to explore
                 </Typography>
               </CardContent>
             </Card>
@@ -450,6 +496,23 @@ const DashboardPage: React.FC = () => {
                 >
                   Publishing Management
                 </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<AIIcon />}
+                  size="large"
+                  onClick={handleAIWorkflow}
+                  sx={{ 
+                    color: 'primary.main',
+                    borderColor: 'primary.main',
+                    '&:hover': {
+                      borderColor: 'primary.dark',
+                      backgroundColor: 'primary.light'
+                    }
+                  }}
+                >
+                  🤖 AI Workflow Assistant
+                </Button>
               </Stack>
             </Paper>
 
@@ -459,6 +522,7 @@ const DashboardPage: React.FC = () => {
             </Box>
           </Grid>
         </Grid>
+
 
         {/* API Status */}
         <Box sx={{ mt: 4 }}>
