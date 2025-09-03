@@ -39,18 +39,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   // Use content directly from props if available
   const htmlContent = document?.content || '';
-  
-  // Add visible debug info
-  if (typeof window !== 'undefined') {
-    console.log('🔵 DocumentViewer mounted with props:', { 
-      documentId, 
-      hasDocument: !!document,
-      documentTitle: document?.title,
-      contentLength: htmlContent?.length || 0,
-      contentPreview: htmlContent?.substring(0, 200),
-      contentType: typeof htmlContent
-    });
-  }
 
   // Generate authenticated URLs for viewing - use frontend API proxy
   const getAuthenticatedUrl = async (endpoint: string): Promise<string> => {
@@ -221,14 +209,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   return (
     <Paper sx={{ p: 3 }}>
-      {/* Debug Info - TEMPORARY */}
-      <Box sx={{ p: 2, mb: 2, bgcolor: '#ffecb3', borderRadius: 1, border: '2px solid #ffa726' }}>
-        <Typography variant="caption" component="pre" sx={{ fontFamily: 'monospace' }}>
-          🔍 DEBUG: Content available = {htmlContent ? `YES (${htmlContent.length} chars)` : 'NO'}
-          {'\n'}First 100 chars: {htmlContent?.substring(0, 100) || 'EMPTY'}
-        </Typography>
-      </Box>
-      
       {/* Document Info Header */}
       <Box sx={{ mb: 3, textAlign: 'center' }}>
         <Typography variant="h5" gutterBottom>
