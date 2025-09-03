@@ -389,9 +389,26 @@ async function main() {
     sampleDocuments[2].folderId = marketingFolder?.id || null;
 
     for (const docData of sampleDocuments) {
+      // Generate unique checksum for each run to avoid conflicts
+      const uniqueChecksum = `${docData.checksum}-${Date.now()}-${Math.random()}`;
+      
+      // Check if document already exists with this title
+      const existingDoc = await prisma.document.findFirst({
+        where: {
+          title: docData.title,
+          organizationId: organization.id
+        }
+      });
+
+      if (existingDoc) {
+        console.log(`  - Document "${docData.title}" already exists, skipping...`);
+        continue;
+      }
+
       const document = await prisma.document.create({
         data: {
           ...docData,
+          checksum: uniqueChecksum, // Use unique checksum
           organizationId: organization.id,
           documentNumber: `DOC-2024-${String(Math.floor(Math.random() * 1000000)).padStart(6, '0')}`,
           qrCode: '', // Would be generated in real implementation
@@ -406,7 +423,7 @@ async function main() {
           title: docData.title,
           fileName: docData.fileName,
           fileSize: docData.fileSize,
-          checksum: docData.checksum,
+          checksum: uniqueChecksum, // Use the same unique checksum
           storagePath: docData.storagePath,
           changeNotes: 'Initial version',
           documentId: document.id,

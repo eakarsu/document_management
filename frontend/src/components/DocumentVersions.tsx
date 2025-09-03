@@ -72,7 +72,7 @@ interface DocumentVersion {
 
 interface DocumentVersionsProps {
   documentId: string;
-  document: {
+  document?: {
     title: string;
     status: string;
     currentVersion: number;
@@ -90,6 +90,24 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
 }) => {
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Show loading state if documentData is not yet available
+  if (!documentData) {
+    return (
+      <Box>
+        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <History sx={{ mr: 1 }} />
+          Document Versions
+        </Typography>
+        <Box sx={{ textAlign: 'center', py: 3 }}>
+          <CircularProgress size={24} />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Loading document information...
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
@@ -275,9 +293,9 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
     }
   };
 
-  const canUploadVersion = documentData.status !== 'PUBLISHED';
-  const canApprove = documentData.status === 'IN_REVIEW' && (documentData.createdById === currentUserId);
-  const canPublish = documentData.status === 'APPROVED' && (documentData.createdById === currentUserId);
+  const canUploadVersion = documentData?.status !== 'PUBLISHED';
+  const canApprove = documentData?.status === 'IN_REVIEW' && (documentData?.createdById === currentUserId);
+  const canPublish = documentData?.status === 'APPROVED' && (documentData?.createdById === currentUserId);
 
   return (
     <Box>
@@ -297,12 +315,14 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
         <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
           <History sx={{ mr: 1 }} />
           Document Versions
-          <Chip 
-            label={documentData.status} 
-            color={getStatusColor(documentData.status)} 
-            size="small" 
-            sx={{ ml: 2 }} 
-          />
+          {documentData?.status && (
+            <Chip 
+              label={documentData.status} 
+              color={getStatusColor(documentData.status)} 
+              size="small" 
+              sx={{ ml: 2 }} 
+            />
+          )}
         </Typography>
         
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -364,7 +384,7 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
             {versions.map((version, index) => (
               <React.Fragment key={version.id}>
                 <ListItem>
-                  <Avatar sx={{ mr: 2, bgcolor: version.versionNumber === documentData.currentVersion ? 'primary.main' : 'grey.400' }}>
+                  <Avatar sx={{ mr: 2, bgcolor: version.versionNumber === documentData?.currentVersion ? 'primary.main' : 'grey.400' }}>
                     v{version.versionNumber}
                   </Avatar>
                   <ListItemText
@@ -379,7 +399,7 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
                           variant="outlined"
                           color={version.changeType === 'MAJOR' ? 'error' : version.changeType === 'MINOR' ? 'warning' : 'info'}
                         />
-                        {version.versionNumber === documentData.currentVersion && (
+                        {version.versionNumber === documentData?.currentVersion && (
                           <Chip label="Current" size="small" color="primary" />
                         )}
                       </Box>
@@ -452,7 +472,7 @@ const DocumentVersions: React.FC<DocumentVersionsProps> = ({
                         </Button>
                       )}
                       
-                      {canApprove && documentData.status === 'IN_REVIEW' && (
+                      {canApprove && documentData?.status === 'IN_REVIEW' && (
                         <>
                           <Button
                             size="small"

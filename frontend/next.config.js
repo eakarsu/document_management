@@ -77,9 +77,20 @@ const nextConfig = {
   async redirects() {
     return [];
   },
-  // Rewrites for API proxy - proxy all /api calls to backend
+  // Rewrites for API proxy - proxy all /api calls to backend except preview and download routes
   async rewrites() {
     return [
+      // Don't proxy preview routes - handle them locally
+      {
+        source: '/api/documents/:id/preview',
+        destination: '/api/documents/:id/preview',
+      },
+      // Don't proxy download routes - handle them locally
+      {
+        source: '/api/documents/:id/download',
+        destination: '/api/documents/:id/download',
+      },
+      // Proxy all other API calls to backend
       {
         source: '/api/:path*',
         destination: 'http://localhost:4000/api/:path*',

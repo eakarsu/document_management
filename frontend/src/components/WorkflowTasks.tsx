@@ -213,34 +213,34 @@ const WorkflowTasks: React.FC<WorkflowTasksProps> = ({
                       </Box>
                     }
                     secondary={
-                      <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      <React.Fragment>
+                        <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                           {task.description}
                         </Typography>
                         
                         {task.document && (
-                          <Box sx={{ mb: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                          <Typography component="span" sx={{ display: 'block', mb: 1 }}>
+                            <Typography component="span" variant="body2" sx={{ fontWeight: 'medium' }}>
                               Document: {task.document.title}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                               Status: {task.document.status} • Version: {task.document.currentVersion}
                             </Typography>
-                          </Box>
+                          </Typography>
                         )}
                         
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                           <Person sx={{ fontSize: 16 }} />
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography component="span" variant="caption" color="text.secondary">
                             From {task.createdBy?.firstName || 'Unknown'} {task.createdBy?.lastName || 'User'}
                           </Typography>
                           <Schedule sx={{ fontSize: 16, ml: 1 }} />
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography component="span" variant="caption" color="text.secondary">
                             {formatDate(task.createdAt)}
                           </Typography>
                         </Box>
                         
-                        <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                        <Box component="span" sx={{ display: 'flex', gap: 1, mt: 2 }}>
                           {task.document && (
                             <Button
                               size="small"
@@ -284,7 +284,7 @@ const WorkflowTasks: React.FC<WorkflowTasksProps> = ({
                             </>
                           )}
                         </Box>
-                      </Box>
+                      </React.Fragment>
                     }
                   />
                 </ListItem>

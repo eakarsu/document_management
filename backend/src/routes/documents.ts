@@ -6,6 +6,7 @@ import { SearchService } from '../services/SearchService';
 import { authMiddleware, requirePermission } from '../middleware/auth';
 import winston from 'winston';
 import { PrismaClient } from '@prisma/client';
+import { getTemplateContent, getTemplateName } from '../templates/documentTemplates';
 
 const router = express.Router();
 const logger = winston.createLogger({
@@ -36,6 +37,106 @@ const upload = multer({
 
 // Middleware to apply to all document routes
 router.use(authMiddleware);
+
+// Create document with template
+router.post('/create-with-template',
+  async (req: any, res) => {
+    try {
+      const {
+        title,
+        templateId,
+        category,
+        description,
+        tags,
+        folderId
+      } = req.body;
+
+      // Get template content
+      const templateContent = getTemplateContent(templateId || 'blank');
+      const templateName = getTemplateName(templateId || 'blank');
+
+      // Create document with template content in customFields
+      const prisma = new PrismaClient();
+      
+      // Generate a unique file name for the document
+      const fileName = `${title || templateName}_${Date.now()}.html`;
+      const storagePath = `documents/${req.user.organizationId}/${fileName}`;
+      
+      // Create a unique checksum for the content with timestamp to avoid conflicts
+      const crypto = require('crypto');
+      const uniqueContent = `${templateContent}-${Date.now()}-${Math.random()}`;
+      const checksum = crypto.createHash('md5').update(uniqueContent).digest('hex');
+      
+      const document = await prisma.document.create({
+        data: {
+          title: title || templateName,
+          description: description || `Created from ${templateName} template`,
+          fileName: fileName,
+          originalName: fileName,
+          mimeType: 'text/html',
+          fileSize: Buffer.byteLength(templateContent, 'utf8'),
+          checksum: checksum,
+          storagePath: storagePath,
+          category: category || 'GENERAL',
+          status: 'DRAFT',
+          currentVersion: 1,
+          createdById: req.user.id,
+          organizationId: req.user.organizationId,
+          tags: tags || [],
+          customFields: {
+            templateId: templateId,
+            createdFrom: 'template',
+            content: templateContent // Store HTML content in customFields
+          }
+        },
+        include: {
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true
+            }
+          }
+        }
+      });
+
+      // Create initial version
+      await prisma.documentVersion.create({
+        data: {
+          documentId: document.id,
+          versionNumber: 1,
+          title: document.title,
+          fileName: fileName,
+          fileSize: Buffer.byteLength(templateContent, 'utf8'),
+          checksum: checksum,
+          storagePath: storagePath,
+          changeType: 'MINOR',
+          changeNotes: 'Initial version created from template',
+          createdById: req.user.id
+        }
+      });
+
+      logger.info('Document created from template', {
+        documentId: document.id,
+        templateId: templateId,
+        userId: req.user.id
+      });
+
+      res.json({
+        success: true,
+        document
+      });
+
+    } catch (error) {
+      logger.error('Document creation from template failed:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Creation failed'
+      });
+    }
+  }
+);
 
 // Upload single document
 router.post('/upload', 
@@ -519,9 +620,35 @@ router.get('/:id',
         });
       }
 
+      // Log document data for debugging, especially content in customFields
+      logger.info('Document retrieved', {
+        documentId: document.id,
+        title: document.title,
+        hasCustomFields: !!document.customFields,
+        customFieldsType: typeof document.customFields,
+        customFieldsKeys: document.customFields && typeof document.customFields === 'object' 
+          ? Object.keys(document.customFields as any) 
+          : [],
+        hasContent: !!(document.customFields && typeof document.customFields === 'object' && (document.customFields as any).content),
+        contentLength: document.customFields && typeof document.customFields === 'object' && (document.customFields as any).content 
+          ? (document.customFields as any).content.length 
+          : 0,
+        contentPreview: document.customFields && typeof document.customFields === 'object' && (document.customFields as any).content
+          ? (document.customFields as any).content.substring(0, 200)
+          : 'No content'
+      });
+
+      // Ensure content field is accessible in the response
+      const documentWithContent = {
+        ...document,
+        content: document.customFields && typeof document.customFields === 'object' && (document.customFields as any).content
+          ? (document.customFields as any).content
+          : null
+      };
+
       res.json({
         success: true,
-        document
+        document: documentWithContent
       });
 
     } catch (error) {

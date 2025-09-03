@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,431 +7,356 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Users and Authentication
 model User {
-  id                String   @id @default(cuid())
-  email             String   @unique
-  username          String?  @unique
-  firstName         String
-  lastName          String
-  passwordHash      String
-  avatar            String?
-  isActive          Boolean  @default(true)
-  emailVerified     Boolean  @default(false)
-  lastLogin         DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  // Multi-factor authentication
-  mfaEnabled        Boolean  @default(false)
-  mfaSecret         String?
-  backupCodes       String[]
-
-  // Profile information
-  department        String?
-  jobTitle          String?
-  phone             String?
-  timezone          String   @default("UTC")
-  language          String   @default("en")
-
-  // Relationships
-  role              Role     @relation(fields: [roleId], references: [id])
-  roleId            String
-  organization      Organization @relation(fields: [organizationId], references: [id])
-  organizationId    String
-  
-  // Document relationships
-  createdDocuments  Document[] @relation("DocumentCreator")
-  modifiedDocuments DocumentVersion[] @relation("DocumentModifier")
-  documentPermissions DocumentPermission[]
-  folderPermissions FolderPermission[]
-  
-  // Activity and audit
-  auditLogs         AuditLog[]
-  sessions          UserSession[]
-  
-  // Workflow relationships
-  assignedTasks     WorkflowTask[] @relation("TaskAssignee")
-  createdTasks      WorkflowTask[] @relation("TaskCreator")
-  comments          Comment[]
-
-  // Publishing relationships
-  approvalStepUsers ApprovalStepUser[] @relation("ApprovalStepUsers")
-  publishingSubmissions DocumentPublishing[] @relation("PublishingSubmitter")
-  publishingPublications DocumentPublishing[] @relation("PublishingPublisher")
-  documentApprovals DocumentApproval[] @relation("DocumentApprover")
-  approvalDelegations DocumentApproval[] @relation("ApprovalDelegator")
-  notifications     PublishingNotification[] @relation("NotificationRecipient")
-  distributionInitiations DocumentDistribution[] @relation("DistributionInitiator")
+  id                                                               String                        @id @default(cuid())
+  email                                                            String                        @unique
+  username                                                         String?                       @unique
+  firstName                                                        String
+  lastName                                                         String
+  passwordHash                                                     String
+  avatar                                                           String?
+  isActive                                                         Boolean                       @default(true)
+  emailVerified                                                    Boolean                       @default(false)
+  lastLogin                                                        DateTime?
+  createdAt                                                        DateTime                      @default(now())
+  updatedAt                                                        DateTime                      @updatedAt
+  mfaEnabled                                                       Boolean                       @default(false)
+  mfaSecret                                                        String?
+  backupCodes                                                      String[]
+  department                                                       String?
+  jobTitle                                                         String?
+  phone                                                            String?
+  timezone                                                         String                        @default("UTC")
+  language                                                         String                        @default("en")
+  roleId                                                           String
+  organizationId                                                   String
+  approval_step_reviewers                                          approval_step_reviewers[]
+  approvalStepUsers                                                ApprovalStepUser[]            @relation("ApprovalStepUsers")
+  auditLogs                                                        AuditLog[]
+  collaboration_sessions                                           collaboration_sessions[]
+  comments                                                         Comment[]
+  crm_entries_crm_entries_coordinatorIdTousers                     crm_entries[]                 @relation("crm_entries_coordinatorIdTousers")
+  crm_entries_crm_entries_resolvedByIdTousers                      crm_entries[]                 @relation("crm_entries_resolvedByIdTousers")
+  documentApprovals                                                DocumentApproval[]            @relation("DocumentApprover")
+  document_approvals_document_approvals_delegatedByIdTousers       DocumentApproval[]            @relation("document_approvals_delegatedByIdTousers")
+  document_collaborators_document_collaborators_invitedByIdTousers document_collaborators[]      @relation("document_collaborators_invitedByIdTousers")
+  document_collaborators_document_collaborators_userIdTousers      document_collaborators[]      @relation("document_collaborators_userIdTousers")
+  distributionInitiations                                          DocumentDistribution[]        @relation("DistributionInitiator")
+  documentPermissions                                              DocumentPermission[]
+  document_publishings_document_publishings_publishedByIdTousers   document_publishings[]        @relation("document_publishings_publishedByIdTousers")
+  document_publishings_document_publishings_submittedByIdTousers   document_publishings[]        @relation("document_publishings_submittedByIdTousers")
+  document_sections_document_sections_assignedToIdTousers          document_sections[]           @relation("document_sections_assignedToIdTousers")
+  document_sections_document_sections_primaryAuthorIdTousers       document_sections[]           @relation("document_sections_primaryAuthorIdTousers")
+  modifiedDocuments                                                DocumentVersion[]             @relation("DocumentModifier")
+  createdDocuments                                                 Document[]                    @relation("DocumentCreator")
+  folderPermissions                                                FolderPermission[]
+  internal_coordinating_users                                      internal_coordinating_users[]
+  notifications                                                    PublishingNotification[]      @relation("NotificationRecipient")
+  reviewer_feedback                                                reviewer_feedback[]
+  section_changes                                                  section_changes[]
+  section_comments_section_comments_resolvedByIdTousers            section_comments[]            @relation("section_comments_resolvedByIdTousers")
+  section_comments_section_comments_userIdTousers                  section_comments[]            @relation("section_comments_userIdTousers")
+  session_activities                                               session_activities[]
+  session_participants                                             session_participants[]
+  stage_transitions                                                stage_transitions[]
+  sessions                                                         UserSession[]
+  organization                                                     Organization                  @relation(fields: [organizationId], references: [id])
+  role                                                             Role                          @relation(fields: [roleId], references: [id])
+  workflow_instances                                               workflow_instances[]
+  workflow_stage_assignments                                       workflow_stage_assignments[]
+  workflow_stage_history                                           workflow_stage_history[]
+  assignedTasks                                                    WorkflowTask[]                @relation("TaskAssignee")
+  createdTasks                                                     WorkflowTask[]                @relation("TaskCreator")
 
   @@map("users")
 }
 
 model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  domain      String   @unique
-  settings    Json     @default("{}")
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relationships
-  users       User[]
-  roles       Role[]
-  documents   Document[]
-  folders     Folder[]
-  workflows   Workflow[]
-  publishingWorkflows PublishingWorkflow[]
+  id                  String               @id @default(cuid())
+  name                String
+  domain              String               @unique
+  settings            Json                 @default("{}")
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  document_publishing DocumentPublishing[]
+  documents           Document[]
+  folders             Folder[]
   publishingTemplates PublishingTemplate[]
+  publishingWorkflows PublishingWorkflow[]
+  roles               Role[]
+  users               User[]
+  workflow_instances  workflow_instances[]
+  workflows           Workflow[]
 
   @@map("organizations")
 }
 
 model Role {
-  id           String   @id @default(cuid())
-  name         String
-  description  String?
-  permissions  String[] // Array of permission strings
-  isSystem     Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // Relationships
-  organization Organization @relation(fields: [organizationId], references: [id])
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  permissions    String[]
+  isSystem       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   organizationId String
-  users        User[]
+  roleType       RoleType?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  users          User[]
 
   @@unique([name, organizationId])
+  @@unique([roleType, organizationId])
   @@map("roles")
 }
 
 model UserSession {
-  id          String   @id @default(cuid())
-  sessionId   String   @unique
-  userId      String
-  ipAddress   String
-  userAgent   String
-  isActive    Boolean  @default(true)
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  userId    String
+  ipAddress String
+  userAgent String
+  isActive  Boolean  @default(true)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_sessions")
 }
 
-// Document Management
 model Document {
-  id              String   @id @default(cuid())
-  title           String
-  description     String?
-  fileName        String
-  originalName    String
-  mimeType        String
-  fileSize        Int
-  checksum        String   @unique
-  
-  // Storage information
-  storagePath     String
-  storageProvider String   @default("minio") // minio, s3, etc.
-  
-  // Document metadata
-  status          DocumentStatus @default(DRAFT)
-  category        String?
-  tags            String[]
-  customFields    Json     @default("{}")
-  
-  // QR Code and identifiers
-  qrCode          String?
-  documentNumber  String?  @unique
-  
-  // Relationships
-  createdBy       User     @relation("DocumentCreator", fields: [createdById], references: [id])
-  createdById     String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  organizationId  String
-  folder          Folder?  @relation(fields: [folderId], references: [id])
-  folderId        String?
-  
-  // Document hierarchy
-  parentDocument  Document? @relation("DocumentHierarchy", fields: [parentDocumentId], references: [id])
-  parentDocumentId String?
-  childDocuments  Document[] @relation("DocumentHierarchy")
-  
-  // Versioning
-  currentVersion  Int      @default(1)
-  versions        DocumentVersion[]
-  
-  // Access control
-  permissions     DocumentPermission[]
-  
-  // Workflow and collaboration
-  workflows       DocumentWorkflow[]
-  comments        Comment[]
-  
-  // Publishing relationships
-  publishing      DocumentPublishing[] @relation("DocumentPublishing")
-  
-  // AI and processing
-  ocrProcessed    Boolean  @default(false)
-  ocrText         String?
-  aiClassification String?
-  aiTags          String[]
-  aiConfidence    Float?
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  lastAccessedAt  DateTime?
+  id                        String                      @id @default(cuid())
+  title                     String
+  description               String?
+  fileName                  String
+  originalName              String
+  mimeType                  String
+  fileSize                  Int
+  checksum                  String                      @unique
+  storagePath               String
+  storageProvider           String                      @default("minio")
+  status                    DocumentStatus              @default(DRAFT)
+  category                  String?
+  tags                      String[]
+  customFields              Json                        @default("{}")
+  qrCode                    String?
+  documentNumber            String?                     @unique
+  createdById               String
+  organizationId            String
+  folderId                  String?
+  parentDocumentId          String?
+  currentVersion            Int                         @default(1)
+  ocrProcessed              Boolean                     @default(false)
+  ocrText                   String?
+  aiClassification          String?
+  aiTags                    String[]
+  aiConfidence              Float?
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+  lastAccessedAt            DateTime?
+  collaboration_sessions    collaboration_sessions[]
+  comment_resolution_matrix comment_resolution_matrix[]
+  comments                  Comment[]
+  document_collaborators    document_collaborators[]
+  permissions               DocumentPermission[]
+  publishing                DocumentPublishing[]        @relation("DocumentPublishing")
+  document_publishings      document_publishings[]
+  document_sections         document_sections[]
+  versions                  DocumentVersion[]
+  workflows                 DocumentWorkflow[]
+  createdBy                 User                        @relation("DocumentCreator", fields: [createdById], references: [id])
+  folder                    Folder?                     @relation(fields: [folderId], references: [id])
+  organization              Organization                @relation(fields: [organizationId], references: [id])
+  parentDocument            Document?                   @relation("DocumentHierarchy", fields: [parentDocumentId], references: [id])
+  childDocuments            Document[]                  @relation("DocumentHierarchy")
+  sequential_workflows      sequential_workflows?
+  workflow_instances        workflow_instances[]
 
   @@map("documents")
 }
 
 model DocumentVersion {
-  id              String   @id @default(cuid())
-  versionNumber   Int
-  title           String
-  description     String?
-  fileName        String
-  fileSize        Int
-  checksum        String
-  storagePath     String
-  
-  // Change information
-  changeType      VersionChangeType @default(MINOR)
-  changeNotes     String?
-  
-  // Binary diff information
-  diffPath        String?  // Path to binary diff file
-  diffSize        Int?     // Size of diff file in bytes
-  compressionRatio Float?  // How much space saved (0-1)
-  patchAlgorithm  String?  // Algorithm used (bsdiff, xdelta, etc.)
-  
-  // Change analysis
-  bytesChanged    Int?     // Total bytes modified
-  percentChanged  Float?   // Percentage of file changed
-  changeCategory  String?  // MINOR, MAJOR, STRUCTURAL
-  similarity      Float?   // Similarity to previous version (0-100)
-  
-  // Relationships
-  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  documentId      String
-  createdBy       User     @relation("DocumentModifier", fields: [createdById], references: [id])
-  createdById     String
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
+  id               String            @id @default(cuid())
+  versionNumber    Int
+  title            String
+  description      String?
+  fileName         String
+  fileSize         Int
+  checksum         String
+  storagePath      String
+  changeType       VersionChangeType @default(MINOR)
+  changeNotes      String?
+  documentId       String
+  createdById      String
+  createdAt        DateTime          @default(now())
+  bytesChanged     Int?
+  changeCategory   String?
+  compressionRatio Float?
+  diffPath         String?
+  diffSize         Int?
+  patchAlgorithm   String?
+  percentChanged   Float?
+  similarity       Float?
+  createdBy        User              @relation("DocumentModifier", fields: [createdById], references: [id])
+  document         Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, versionNumber])
   @@map("document_versions")
 }
 
 model Folder {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  color           String?
-  icon            String?
-  
-  // Hierarchy
-  parentFolder    Folder?  @relation("FolderHierarchy", fields: [parentFolderId], references: [id])
-  parentFolderId  String?
-  subFolders      Folder[] @relation("FolderHierarchy")
-  
-  // Path for efficient queries
-  fullPath        String
-  depth           Int      @default(0)
-  
-  // Relationships
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  organizationId  String
-  documents       Document[]
-  permissions     FolderPermission[]
-  
-  // Metadata
-  customFields    Json     @default("{}")
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String             @id @default(cuid())
+  name           String
+  description    String?
+  color          String?
+  icon           String?
+  parentFolderId String?
+  fullPath       String
+  depth          Int                @default(0)
+  organizationId String
+  customFields   Json               @default("{}")
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  documents      Document[]
+  permissions    FolderPermission[]
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+  parentFolder   Folder?            @relation("FolderHierarchy", fields: [parentFolderId], references: [id])
+  subFolders     Folder[]           @relation("FolderHierarchy")
 
   @@unique([name, parentFolderId, organizationId])
   @@map("folders")
 }
 
-// Permissions and Access Control
 model DocumentPermission {
-  id          String   @id @default(cuid())
-  permission  PermissionType
-  
-  // Relationships
-  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  documentId  String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
-  
-  // Grant information
-  grantedAt   DateTime @default(now())
-  expiresAt   DateTime?
+  id         String         @id @default(cuid())
+  permission PermissionType
+  documentId String
+  userId     String
+  grantedAt  DateTime       @default(now())
+  expiresAt  DateTime?
+  document   Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, userId])
   @@map("document_permissions")
 }
 
 model FolderPermission {
-  id          String   @id @default(cuid())
-  permission  PermissionType
-  
-  // Relationships
-  folder      Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
-  folderId    String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
-  
-  // Grant information
-  grantedAt   DateTime @default(now())
-  expiresAt   DateTime?
+  id         String         @id @default(cuid())
+  permission PermissionType
+  folderId   String
+  userId     String
+  grantedAt  DateTime       @default(now())
+  expiresAt  DateTime?
+  folder     Folder         @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([folderId, userId])
   @@map("folder_permissions")
 }
 
-// Workflow Management
 model Workflow {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  definition      Json     // Workflow definition in JSON format
-  isActive        Boolean  @default(true)
-  
-  // Relationships
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  organizationId  String
-  
-  // Document workflows
+  id                String             @id @default(cuid())
+  name              String
+  description       String?
+  definition        Json
+  isActive          Boolean            @default(true)
+  organizationId    String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   documentWorkflows DocumentWorkflow[]
-  tasks           WorkflowTask[]
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  tasks             WorkflowTask[]
+  organization      Organization       @relation(fields: [organizationId], references: [id])
 
   @@map("workflows")
 }
 
 model DocumentWorkflow {
-  id              String   @id @default(cuid())
-  status          WorkflowStatus @default(PENDING)
-  currentStep     Int      @default(1)
-  totalSteps      Int
-  
-  // Relationships
-  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  documentId      String
-  workflow        Workflow @relation(fields: [workflowId], references: [id])
-  workflowId      String
-  
-  // Timestamps
-  startedAt       DateTime @default(now())
-  completedAt     DateTime?
-  updatedAt       DateTime @updatedAt
+  id          String         @id @default(cuid())
+  status      WorkflowStatus @default(PENDING)
+  currentStep Int            @default(1)
+  totalSteps  Int
+  documentId  String
+  workflowId  String
+  startedAt   DateTime       @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime       @updatedAt
+  document    Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  workflow    Workflow       @relation(fields: [workflowId], references: [id])
 
   @@map("document_workflows")
 }
 
 model WorkflowTask {
-  id              String   @id @default(cuid())
-  title           String
-  description     String?
-  status          TaskStatus @default(PENDING)
-  priority        TaskPriority @default(MEDIUM)
-  stepNumber      Int
-  
-  // Task data
-  formData        Json     @default("{}")
-  
-  // Relationships
-  workflow        Workflow @relation(fields: [workflowId], references: [id])
-  workflowId      String
-  assignedTo      User     @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  assignedToId    String
-  createdBy       User     @relation("TaskCreator", fields: [createdById], references: [id])
-  createdById     String
-  
-  // Timestamps
-  dueDate         DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  completedAt     DateTime?
+  id           String       @id @default(cuid())
+  title        String
+  description  String?
+  status       TaskStatus   @default(PENDING)
+  priority     TaskPriority @default(MEDIUM)
+  stepNumber   Int
+  formData     Json         @default("{}")
+  workflowId   String
+  assignedToId String
+  createdById  String
+  dueDate      DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  completedAt  DateTime?
+  assignedTo   User         @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy    User         @relation("TaskCreator", fields: [createdById], references: [id])
+  workflow     Workflow     @relation(fields: [workflowId], references: [id])
 
   @@map("workflow_tasks")
 }
 
-// Comments and Collaboration
 model Comment {
-  id          String   @id @default(cuid())
-  content     String
-  isResolved  Boolean  @default(false)
-  
-  // Position in document (for annotations)
-  pageNumber  Int?
-  positionX   Float?
-  positionY   Float?
-  
-  // Relationships
-  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  documentId  String
-  author      User     @relation(fields: [authorId], references: [id])
-  authorId    String
-  
-  // Threading
-  parentComment Comment? @relation("CommentThread", fields: [parentCommentId], references: [id])
+  id              String    @id @default(cuid())
+  content         String
+  isResolved      Boolean   @default(false)
+  pageNumber      Int?
+  positionX       Float?
+  positionY       Float?
+  documentId      String
+  authorId        String
   parentCommentId String?
-  replies     Comment[] @relation("CommentThread")
-  
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  author          User      @relation(fields: [authorId], references: [id])
+  document        Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  parentComment   Comment?  @relation("CommentThread", fields: [parentCommentId], references: [id])
+  replies         Comment[] @relation("CommentThread")
 
   @@map("comments")
 }
 
-// Audit and Logging
 model AuditLog {
-  id          String   @id @default(cuid())
-  action      String   // CREATE, UPDATE, DELETE, VIEW, DOWNLOAD, etc.
-  resource    String   // DOCUMENT, FOLDER, USER, etc.
-  resourceId  String
-  oldValues   Json?
-  newValues   Json?
-  ipAddress   String
-  userAgent   String
-  
-  // Relationships
-  user        User     @relation(fields: [userId], references: [id])
-  userId      String
-  
-  // Timestamps
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  action     String
+  resource   String
+  resourceId String
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String
+  userAgent  String
+  userId     String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
 
   @@index([resource, resourceId])
   @@index([userId, createdAt])
   @@map("audit_logs")
 }
 
-// Search and Indexing
 model SearchIndex {
   id          String   @id @default(cuid())
   documentId  String   @unique
-  content     String   // Full-text content for search
-  metadata    Json     // Searchable metadata
+  content     String
+  metadata    Json
   lastIndexed DateTime @default(now())
 
   @@map("search_index")
 }
 
-// System Configuration
 model SystemSetting {
   id          String   @id @default(cuid())
   key         String   @unique
@@ -446,7 +368,704 @@ model SystemSetting {
   @@map("system_settings")
 }
 
-// Enums
+model PublishingWorkflow {
+  id                   String                 @id @default(cuid())
+  name                 String
+  description          String?
+  workflowType         PublishingWorkflowType
+  isActive             Boolean                @default(true)
+  allowParallel        Boolean                @default(false)
+  requiredApprovers    Int                    @default(1)
+  timeoutHours         Int?
+  organizationId       String
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  autoApprove          Boolean?               @default(false)
+  templateId           String?
+  approvalSteps        ApprovalStep[]
+  document_publishings document_publishings[]
+  organization         Organization           @relation(fields: [organizationId], references: [id])
+
+  @@map("publishing_workflows")
+}
+
+model ApprovalStep {
+  id                      String                    @id @default(cuid())
+  workflowId              String
+  stepNumber              Int
+  stepName                String
+  description             String?
+  requiredRole            String
+  isRequired              Boolean                   @default(true)
+  canSkip                 Boolean                   @default(false)
+  timeoutHours            Int?
+  minApprovals            Int                       @default(1)
+  allowDelegation         Boolean                   @default(false)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  approval_step_reviewers approval_step_reviewers[]
+  requiredUsers           ApprovalStepUser[]
+  workflow                PublishingWorkflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  approvals               DocumentApproval[]
+
+  @@unique([workflowId, stepNumber])
+  @@map("approval_steps")
+}
+
+model ApprovalStepUser {
+  id           String       @id @default(cuid())
+  stepId       String
+  userId       String
+  canApprove   Boolean      @default(true)
+  canDelegate  Boolean      @default(false)
+  isRequired   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  approvalStep ApprovalStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  user         User         @relation("ApprovalStepUsers", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([stepId, userId])
+  @@map("approval_step_users")
+}
+
+model DocumentPublishing {
+  id             String       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  documentId     String
+  workflowId     String?
+  status         String?      @default("DRAFT")
+  publishedAt    DateTime?    @db.Timestamp(6)
+  publishedBy    String?
+  organizationId String
+  createdAt      DateTime?    @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime?    @default(now()) @updatedAt @db.Timestamp(6)
+  document       Document     @relation("DocumentPublishing", fields: [documentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organizations  Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("document_publishing")
+}
+
+model DocumentApproval {
+  id                                            String               @id @default(cuid())
+  publishingId                                  String
+  stepId                                        String
+  approverId                                    String
+  delegatedById                                 String?
+  status                                        ApprovalStatus       @default(PENDING)
+  decision                                      ApprovalDecision?
+  comments                                      String?
+  reviewNotes                                   String?
+  attachments                                   String[]             @default([])
+  assignedAt                                    DateTime             @default(now())
+  dueDate                                       DateTime?
+  respondedAt                                   DateTime?
+  approver                                      User                 @relation("DocumentApprover", fields: [approverId], references: [id])
+  users_document_approvals_delegatedByIdTousers User?                @relation("document_approvals_delegatedByIdTousers", fields: [delegatedById], references: [id])
+  documentPublishing                            document_publishings @relation(fields: [publishingId], references: [id], onDelete: Cascade)
+  approvalStep                                  ApprovalStep         @relation(fields: [stepId], references: [id])
+  reviewer_feedback                             reviewer_feedback[]
+
+  @@unique([publishingId, stepId, approverId])
+  @@map("document_approvals")
+}
+
+model PublishingTemplate {
+  id                   String       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name                 String
+  description          String?
+  templateType         String?      @default("STANDARD")
+  formatting           Json?        @default("{}")
+  layout               Json?        @default("{}")
+  metadata             Json?        @default("{}")
+  requiresCoverPage    Boolean?     @default(false)
+  requiresApprovalPage Boolean?     @default(false)
+  includeQRCode        Boolean?     @default(true)
+  includeWatermark     Boolean?     @default(false)
+  watermarkText        String?
+  organizationId       String
+  isActive             Boolean?     @default(true)
+  usageCount           Int?         @default(0)
+  createdAt            DateTime?    @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime?    @default(now()) @updatedAt @db.Timestamp(6)
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "publishing_templates_organization_id_fkey")
+
+  @@map("publishing_templates")
+}
+
+model PublishingNotification {
+  id                 String               @id @default(cuid())
+  publishingId       String
+  recipientId        String
+  type               NotificationType
+  title              String
+  message            String
+  isRead             Boolean              @default(false)
+  readAt             DateTime?
+  metadata           Json                 @default("{}")
+  createdAt          DateTime             @default(now())
+  notificationType   String?              @default("GENERAL")
+  documentPublishing document_publishings @relation(fields: [publishingId], references: [id], onDelete: Cascade)
+  recipient          User                 @relation("NotificationRecipient", fields: [recipientId], references: [id])
+
+  @@map("publishing_notifications")
+}
+
+model DocumentDistribution {
+  id                 String               @id @default(cuid())
+  publishingId       String
+  initiatedById      String
+  distributionType   DistributionType
+  targetAudience     String[]
+  channels           String[]
+  status             DistributionStatus   @default(PENDING)
+  totalRecipients    Int?
+  successCount       Int?
+  failureCount       Int?
+  scheduledAt        DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  metadata           Json                 @default("{}")
+  initiatedBy        User                 @relation("DistributionInitiator", fields: [initiatedById], references: [id])
+  documentPublishing document_publishings @relation(fields: [publishingId], references: [id], onDelete: Cascade)
+
+  @@map("document_distributions")
+}
+
+model af_form_673 {
+  id                            String             @id
+  workflow_instance_id          String
+  form_number                   String             @unique
+  document_title                String
+  document_number               String?
+  opr_name                      String
+  opr_office_symbol             String
+  opr_phone                     String?
+  certifying_official_id        String
+  certifying_official_signature String?
+  approval_authority_id         String
+  approval_authority_signature  String?
+  form_status                   AFFormStatus       @default(DRAFT)
+  form_data                     Json               @default("{}")
+  signed_at                     DateTime?
+  created_at                    DateTime           @default(now())
+  updated_at                    DateTime
+  workflow_instances            workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+
+  @@index([workflow_instance_id])
+}
+
+model approval_step_reviewers {
+  id             String                 @id
+  stepId         String
+  reviewerId     String
+  assignmentType ReviewerAssignmentType @default(PRIMARY)
+  isRequired     Boolean                @default(true)
+  assignedAt     DateTime               @default(now())
+  weight         Float                  @default(1.0)
+  expertise      String?
+  department     String?
+  status         ReviewerStatus         @default(ASSIGNED)
+  respondedAt    DateTime?
+  users          User                   @relation(fields: [reviewerId], references: [id])
+  approval_steps ApprovalStep           @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@unique([stepId, reviewerId])
+}
+
+model change_summaries {
+  id          String   @id
+  documentId  String
+  userId      String
+  summary     String
+  changeCount Int      @default(0)
+  startTime   DateTime
+  endTime     DateTime
+  sessionId   String?
+  metadata    Json     @default("{}")
+}
+
+model collaboration_sessions {
+  id                   String                   @id
+  documentId           String
+  sessionName          String?
+  sessionType          CollaborationSessionType @default(EDITING)
+  isActive             Boolean                  @default(true)
+  maxParticipants      Int                      @default(10)
+  allowAnonymous       Boolean                  @default(false)
+  requireInvitation    Boolean                  @default(true)
+  createdAt            DateTime                 @default(now())
+  endedAt              DateTime?
+  createdById          String
+  users                User                     @relation(fields: [createdById], references: [id])
+  documents            Document                 @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  session_activities   session_activities[]
+  session_participants session_participants[]
+}
+
+model comment_resolution_matrix {
+  id                     String                @id
+  workflow_instance_id   String?
+  stage                  WorkflowStage
+  comment_number         Int?
+  page_number            Int?
+  paragraph_number       Int?
+  line_number            Int?
+  commenter_id           String?
+  commenter_organization String?
+  comment_text           String?
+  comment_type           String?
+  status                 CRMStatus             @default(PENDING)
+  opr_response           String?
+  resolution_notes       String?
+  resolved_by            String?
+  resolved_at            DateTime?
+  created_at             DateTime              @default(now())
+  updated_at             DateTime
+  coordinationRound      Int?
+  documentId             String?
+  workflow_instances     workflow_instances?   @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+  documents              Document?             @relation(fields: [documentId], references: [id], map: "crm_document_fkey")
+  sequential_workflows   sequential_workflows? @relation(fields: [documentId], references: [documentId], map: "crm_seq_workflow_fkey")
+  crm_entries            crm_entries[]
+
+  @@index([documentId])
+  @@index([stage])
+  @@index([workflow_instance_id])
+}
+
+model crm_entries {
+  id                                     String                    @id
+  crmId                                  String
+  lineNumber                             String?
+  section                                String?
+  originalText                           String?
+  comment                                String
+  suggestedText                          String?
+  coordinatorId                          String
+  coordinatorOrg                         String
+  priority                               String                    @default("MEDIUM")
+  category                               String                    @default("CONTENT")
+  oprResponse                            String?
+  resolution                             String?
+  isResolved                             Boolean                   @default(false)
+  resolvedAt                             DateTime?
+  resolvedById                           String?
+  suspenseDate                           DateTime?
+  extensionRequested                     Boolean                   @default(false)
+  extensionReason                        String?
+  newSuspenseDate                        DateTime?
+  createdAt                              DateTime                  @default(now())
+  updatedAt                              DateTime
+  users_crm_entries_coordinatorIdTousers User                      @relation("crm_entries_coordinatorIdTousers", fields: [coordinatorId], references: [id])
+  comment_resolution_matrix              comment_resolution_matrix @relation(fields: [crmId], references: [id])
+  users_crm_entries_resolvedByIdTousers  User?                     @relation("crm_entries_resolvedByIdTousers", fields: [resolvedById], references: [id])
+}
+
+model document_changes {
+  id         String   @id
+  documentId String
+  userId     String
+  changeType String
+  content    String?
+  position   Int?
+  timestamp  DateTime @default(now())
+  sessionId  String?
+  metadata   Json     @default("{}")
+}
+
+model document_collaborators {
+  id                                              String                   @id
+  documentId                                      String
+  userId                                          String
+  role                                            CollaboratorRole         @default(CO_AUTHOR)
+  permissions                                     CollaboratorPermission[]
+  invitedById                                     String?
+  joinedAt                                        DateTime                 @default(now())
+  lastActiveAt                                    DateTime?
+  contributionSummary                             String?
+  isActive                                        Boolean                  @default(true)
+  documents                                       Document                 @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  users_document_collaborators_invitedByIdTousers User?                    @relation("document_collaborators_invitedByIdTousers", fields: [invitedById], references: [id])
+  users_document_collaborators_userIdTousers      User                     @relation("document_collaborators_userIdTousers", fields: [userId], references: [id])
+
+  @@unique([documentId, userId])
+}
+
+model document_publishings {
+  id                                              String                   @id
+  documentId                                      String
+  workflowId                                      String
+  submittedById                                   String
+  publishedById                                   String?
+  currentStepNumber                               Int                      @default(1)
+  status                                          PublishingStatus         @default(PENDING_APPROVAL)
+  priority                                        PublishingPriority       @default(NORMAL)
+  dueDate                                         DateTime?
+  scheduledPublishDate                            DateTime?
+  actualPublishDate                               DateTime?
+  submissionNotes                                 String?
+  rejectionReason                                 String?
+  metadata                                        Json                     @default("{}")
+  submittedAt                                     DateTime                 @default(now())
+  updatedAt                                       DateTime
+  approvals                                       DocumentApproval[]
+  distributions                                   DocumentDistribution[]
+  documents                                       Document                 @relation(fields: [documentId], references: [id])
+  users_document_publishings_publishedByIdTousers User?                    @relation("document_publishings_publishedByIdTousers", fields: [publishedById], references: [id])
+  users_document_publishings_submittedByIdTousers User                     @relation("document_publishings_submittedByIdTousers", fields: [submittedById], references: [id])
+  publishing_workflows                            PublishingWorkflow       @relation(fields: [workflowId], references: [id])
+  notifications                                   PublishingNotification[]
+}
+
+model document_sections {
+  id                                             String             @id
+  documentId                                     String
+  sectionNumber                                  Int
+  title                                          String
+  content                                        String             @default("")
+  wordCount                                      Int                @default(0)
+  primaryAuthorId                                String?
+  assignedToId                                   String?
+  status                                         SectionStatus      @default(DRAFT)
+  createdAt                                      DateTime           @default(now())
+  updatedAt                                      DateTime
+  dueDate                                        DateTime?
+  dependsOnSections                              String[]           @default([])
+  users_document_sections_assignedToIdTousers    User?              @relation("document_sections_assignedToIdTousers", fields: [assignedToId], references: [id])
+  documents                                      Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  users_document_sections_primaryAuthorIdTousers User?              @relation("document_sections_primaryAuthorIdTousers", fields: [primaryAuthorId], references: [id])
+  section_changes                                section_changes[]
+  section_comments                               section_comments[]
+
+  @@unique([documentId, sectionNumber])
+}
+
+model editor_sessions {
+  id              String    @id
+  documentId      String
+  userId          String
+  sessionToken    String    @unique
+  isActive        Boolean   @default(true)
+  startTime       DateTime  @default(now())
+  endTime         DateTime?
+  charactersTyped Int       @default(0)
+  timeSpent       Int       @default(0)
+  metadata        Json      @default("{}")
+}
+
+model external_coordinating_users {
+  id                      String             @id
+  workflow_instance_id    String
+  user_id                 String
+  coordination_type       CoordinationType
+  organization_code       String?
+  assigned_by             String
+  response_deadline       DateTime
+  extension_requested     Boolean?           @default(false)
+  extension_granted_until DateTime?
+  has_responded           Boolean            @default(false)
+  response_received_at    DateTime?
+  coordination_status     String             @default("PENDING")
+  created_at              DateTime           @default(now())
+  updated_at              DateTime
+  workflow_instances      workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+
+  @@index([workflow_instance_id])
+}
+
+model icu_draft_versions {
+  id                   String   @id
+  workflow_instance_id String
+  icu_id               String
+  document_version_id  String
+  is_active            Boolean  @default(true)
+  content_snapshot     String?
+  metadata             Json?    @default("{}")
+  created_at           DateTime @default(now())
+}
+
+model icu_feedback {
+  id                          String                      @id
+  icu_id                      String
+  paragraph_id                String?
+  suggestion_type             String
+  original_content            String?
+  suggested_content           String?
+  rationale                   String?
+  is_accepted                 Boolean?
+  opr_response                String?
+  created_at                  DateTime                    @default(now())
+  internal_coordinating_users internal_coordinating_users @relation(fields: [icu_id], references: [id], onDelete: Cascade)
+}
+
+model internal_coordinating_users {
+  id                   String             @id
+  workflow_instance_id String
+  user_id              String
+  assigned_by          String
+  draft_copy_id        String?
+  has_reviewed         Boolean            @default(false)
+  review_completed_at  DateTime?
+  feedback             String?
+  suggestions          Json?              @default("[]")
+  created_at           DateTime           @default(now())
+  updated_at           DateTime
+  icu_feedback         icu_feedback[]
+  users                User               @relation(fields: [user_id], references: [id])
+  workflow_instances   workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([workflow_instance_id])
+}
+
+model o6_15_coordination {
+  id                   String             @id
+  workflow_instance_id String
+  ecu_id               String
+  technical_area       String
+  expertise_level      String?
+  review_focus         String[]
+  technical_comments   Json?              @default("[]")
+  concurrence_status   String             @default("PENDING")
+  created_at           DateTime           @default(now())
+  workflow_instances   workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+}
+
+model reviewer_feedback {
+  id                    String           @id
+  approvalId            String
+  reviewerId            String
+  feedbackType          FeedbackType     @default(GENERAL)
+  summary               String?
+  detailedComments      String?
+  conditions            String[]         @default([])
+  recommendations       String[]         @default([])
+  sectionFeedback       Json             @default("{}")
+  overallRating         Float?
+  technicalRating       Float?
+  clarityRating         Float?
+  completenessRating    Float?
+  collaborativeNotes    String?
+  agreesWithReviewer    String?
+  disagreesWithReviewer String?
+  timeSpent             Int?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime
+  document_approvals    DocumentApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  users                 User             @relation(fields: [reviewerId], references: [id])
+
+  @@unique([approvalId, reviewerId])
+}
+
+model section_changes {
+  id                String            @id
+  sectionId         String
+  userId            String
+  changeType        ChangeType
+  content           String?
+  previousContent   String?
+  position          Int?
+  length            Int?
+  timestamp         DateTime          @default(now())
+  sessionId         String?
+  wordsDelta        Int?
+  charactersDelta   Int?
+  changeDescription String?
+  document_sections document_sections @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  users             User              @relation(fields: [userId], references: [id])
+}
+
+model section_comments {
+  id                                         String             @id
+  sectionId                                  String
+  userId                                     String
+  content                                    String
+  commentType                                CommentType        @default(GENERAL)
+  position                                   Int?
+  length                                     Int?
+  selectedText                               String?
+  parentCommentId                            String?
+  threadId                                   String?
+  isResolved                                 Boolean            @default(false)
+  resolvedAt                                 DateTime?
+  resolvedById                               String?
+  createdAt                                  DateTime           @default(now())
+  updatedAt                                  DateTime
+  section_comments                           section_comments?  @relation("section_commentsTosection_comments", fields: [parentCommentId], references: [id])
+  other_section_comments                     section_comments[] @relation("section_commentsTosection_comments")
+  users_section_comments_resolvedByIdTousers User?              @relation("section_comments_resolvedByIdTousers", fields: [resolvedById], references: [id])
+  document_sections                          document_sections  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  users_section_comments_userIdTousers       User               @relation("section_comments_userIdTousers", fields: [userId], references: [id])
+}
+
+model sequential_workflows {
+  id                         String                       @id
+  documentId                 String                       @unique
+  currentStage               WorkflowStage                @default(OPR_DRAFT_CREATION)
+  startedAt                  DateTime                     @default(now())
+  completedAt                DateTime?
+  isActive                   Boolean                      @default(true)
+  comment_resolution_matrix  comment_resolution_matrix[]
+  documents                  Document                     @relation(fields: [documentId], references: [id])
+  workflow_stage_assignments workflow_stage_assignments[]
+  workflow_stage_history     workflow_stage_history[]
+}
+
+model session_activities {
+  id                     String                 @id
+  sessionId              String
+  userId                 String
+  activityType           ActivityType
+  description            String
+  metadata               Json                   @default("{}")
+  timestamp              DateTime               @default(now())
+  collaboration_sessions collaboration_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  users                  User                   @relation(fields: [userId], references: [id])
+}
+
+model session_participants {
+  id                     String                 @id
+  sessionId              String
+  userId                 String
+  role                   SessionRole            @default(PARTICIPANT)
+  joinedAt               DateTime               @default(now())
+  leftAt                 DateTime?
+  isOnline               Boolean                @default(true)
+  lastCursorPosition     Int?
+  lastSectionId          String?
+  currentActivity        String?
+  collaboration_sessions collaboration_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  users                  User                   @relation(fields: [userId], references: [id])
+
+  @@unique([sessionId, userId])
+}
+
+model stage_requirements {
+  id                      String        @id
+  workflow_instance_id    String
+  stage                   WorkflowStage
+  requirement_type        String
+  requirement_description String
+  is_mandatory            Boolean       @default(true)
+  is_completed            Boolean       @default(false)
+  completed_by            String?
+  completed_at            DateTime?
+  verification_data       Json?         @default("{}")
+  created_at              DateTime      @default(now())
+}
+
+model stage_transitions {
+  id                   String             @id
+  workflow_instance_id String
+  from_stage           WorkflowStage?
+  to_stage             WorkflowStage
+  transitioned_by      String
+  transition_notes     String?
+  transition_data      Json?              @default("{}")
+  created_at           DateTime           @default(now())
+  users                User               @relation(fields: [transitioned_by], references: [id])
+  workflow_instances   workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+
+  @@index([workflow_instance_id])
+}
+
+model two_letter_coordination {
+  id                   String             @id
+  workflow_instance_id String
+  ecu_id               String
+  senior_official_id   String
+  organization_code    String
+  high_level_approval  Boolean?
+  strategic_comments   String?
+  policy_alignment     Boolean?           @default(true)
+  created_at           DateTime           @default(now())
+  workflow_instances   workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+}
+
+model workflow_audit_trail {
+  id                   String        @id
+  workflow_instance_id String
+  action_type          String
+  action_description   String
+  performed_by         String
+  stage                WorkflowStage
+  action_data          Json?         @default("{}")
+  ip_address           String?
+  user_agent           String?
+  created_at           DateTime      @default(now())
+
+  @@index([workflow_instance_id])
+}
+
+model workflow_instances {
+  id                            String                          @id
+  document_id                   String
+  organization_id               String
+  opr_user_id                   String
+  current_stage                 WorkflowStage                   @default(DRAFT_CREATION)
+  is_active                     Boolean                         @default(true)
+  workflow_metadata             Json?                           @default("{}")
+  created_at                    DateTime                        @default(now())
+  updated_at                    DateTime
+  completed_at                  DateTime?
+  af_form_673                   af_form_673[]
+  comment_resolution_matrix     comment_resolution_matrix[]
+  external_coordinating_users   external_coordinating_users[]
+  internal_coordinating_users   internal_coordinating_users[]
+  o6_15_coordination            o6_15_coordination[]
+  stage_transitions             stage_transitions[]
+  two_letter_coordination       two_letter_coordination[]
+  documents                     Document                        @relation(fields: [document_id], references: [id], onDelete: Cascade)
+  users                         User                            @relation(fields: [opr_user_id], references: [id])
+  organizations                 Organization                    @relation(fields: [organization_id], references: [id])
+  workflow_supporting_documents workflow_supporting_documents[]
+
+  @@index([current_stage])
+  @@index([document_id])
+  @@index([opr_user_id])
+}
+
+model workflow_stage_assignments {
+  id                   String               @id
+  workflowId           String
+  stage                WorkflowStage
+  assigneeId           String
+  dueDate              DateTime
+  suspenseDate         DateTime
+  extensionRequested   Boolean              @default(false)
+  extensionReason      String?
+  newDueDate           DateTime?
+  isCompleted          Boolean              @default(false)
+  completedAt          DateTime?
+  assignedAt           DateTime             @default(now())
+  users                User                 @relation(fields: [assigneeId], references: [id])
+  sequential_workflows sequential_workflows @relation(fields: [workflowId], references: [id])
+}
+
+model workflow_stage_history {
+  id                   String               @id
+  workflowId           String
+  stage                WorkflowStage
+  startedAt            DateTime             @default(now())
+  completedAt          DateTime?
+  isCompleted          Boolean              @default(false)
+  completedById        String?
+  completionNotes      String?
+  users                User?                @relation(fields: [completedById], references: [id])
+  sequential_workflows sequential_workflows @relation(fields: [workflowId], references: [id])
+}
+
+model workflow_supporting_documents {
+  id                   String             @id
+  workflow_instance_id String
+  document_id          String
+  document_type        String
+  stage_added          WorkflowStage
+  added_by             String
+  is_required          Boolean            @default(false)
+  notes                String?
+  created_at           DateTime           @default(now())
+  workflow_instances   workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+}
+
 enum DocumentStatus {
   DRAFT
   IN_REVIEW
@@ -493,284 +1112,6 @@ enum TaskPriority {
   URGENT
 }
 
-// Publishing System Models
-model PublishingWorkflow {
-  id                String   @id @default(cuid())
-  name              String
-  description       String?
-  workflowType      PublishingWorkflowType @default(DOCUMENT_APPROVAL)
-  isActive          Boolean  @default(true)
-  autoApprove       Boolean  @default(false)
-  
-  // Workflow configuration
-  approvalSteps     ApprovalStep[]
-  requiredApprovers Int      @default(1)
-  allowParallel     Boolean  @default(false)
-  timeoutHours      Int      @default(72)
-  
-  // Template and formatting
-  publishingTemplate PublishingTemplate? @relation(fields: [templateId], references: [id])
-  templateId        String?
-  
-  // Relationships
-  organization      Organization @relation(fields: [organizationId], references: [id])
-  organizationId    String
-  documents         DocumentPublishing[]
-  
-  // Timestamps
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@map("publishing_workflows")
-}
-
-model ApprovalStep {
-  id                String   @id @default(cuid())
-  stepNumber        Int
-  stepName          String
-  description       String?
-  isRequired        Boolean  @default(true)
-  canSkip           Boolean  @default(false)
-  timeoutHours      Int      @default(24)
-  
-  // Approval requirements
-  requiredRole      String?  // Role name required for this step
-  requiredUsers     ApprovalStepUser[]
-  minApprovals      Int      @default(1)
-  allowDelegation   Boolean  @default(true)
-  
-  // Relationships
-  workflow          PublishingWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  workflowId        String
-  approvals         DocumentApproval[]
-  
-  // Timestamps
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@unique([workflowId, stepNumber])
-  @@map("approval_steps")
-}
-
-model ApprovalStepUser {
-  id            String   @id @default(cuid())
-  
-  // Relationships
-  approvalStep  ApprovalStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  stepId        String
-  user          User     @relation("ApprovalStepUsers", fields: [userId], references: [id])
-  userId        String
-  
-  // Approval authority
-  canApprove    Boolean  @default(true)
-  canReject     Boolean  @default(true)
-  canDelegate   Boolean  @default(false)
-  
-  // Timestamps
-  createdAt     DateTime @default(now())
-
-  @@unique([stepId, userId])
-  @@map("approval_step_users")
-}
-
-model DocumentPublishing {
-  id                String   @id @default(cuid())
-  
-  // Document and workflow
-  document          Document @relation("DocumentPublishing", fields: [documentId], references: [id], onDelete: Cascade)
-  documentId        String
-  workflow          PublishingWorkflow @relation(fields: [workflowId], references: [id])
-  workflowId        String
-  
-  // Publishing details
-  publishingStatus  PublishingStatus @default(PENDING_APPROVAL)
-  currentStep       Int      @default(1)
-  totalSteps        Int
-  
-  // Scheduling
-  scheduledPublishAt DateTime?
-  publishedAt       DateTime?
-  expiresAt         DateTime?
-  
-  // Publishing destinations
-  destinations      PublishingDestination[]
-  
-  // Metadata
-  publishingNotes   String?
-  urgencyLevel      PublishingUrgency @default(NORMAL)
-  isEmergencyPublish Boolean @default(false)
-  
-  // Tracking
-  submittedBy       User     @relation("PublishingSubmitter", fields: [submittedById], references: [id])
-  submittedById     String
-  publishedBy       User?    @relation("PublishingPublisher", fields: [publishedById], references: [id])
-  publishedById     String?
-  
-  // Related records
-  approvals         DocumentApproval[]
-  notifications     PublishingNotification[]
-  distributions     DocumentDistribution[]
-  
-  // Timestamps
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@map("document_publishing")
-}
-
-model DocumentApproval {
-  id                String   @id @default(cuid())
-  
-  // Approval details
-  status            ApprovalStatus @default(PENDING)
-  decision          ApprovalDecision?
-  comments          String?
-  conditions        String?  // Conditional approval requirements
-  
-  // Approval step context
-  approvalStep      ApprovalStep @relation(fields: [stepId], references: [id])
-  stepId            String
-  documentPublishing DocumentPublishing @relation(fields: [publishingId], references: [id], onDelete: Cascade)
-  publishingId      String
-  
-  // Approver information
-  approver          User     @relation("DocumentApprover", fields: [approverId], references: [id])
-  approverId        String
-  delegatedFrom     User?    @relation("ApprovalDelegator", fields: [delegatedFromId], references: [id])
-  delegatedFromId   String?
-  
-  // Timing
-  dueDate           DateTime?
-  respondedAt       DateTime?
-  
-  // Timestamps
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@unique([publishingId, stepId, approverId])
-  @@map("document_approvals")
-}
-
-model PublishingTemplate {
-  id                String   @id @default(cuid())
-  name              String
-  description       String?
-  templateType      TemplateType @default(STANDARD)
-  
-  // Template configuration
-  formatting        Json     @default("{}")  // CSS/formatting rules
-  layout            Json     @default("{}")  // Layout configuration
-  metadata          Json     @default("{}")  // Default metadata
-  
-  // Content rules
-  requiresCoverPage Boolean  @default(false)
-  requiresApprovalPage Boolean @default(false)
-  includeQRCode     Boolean  @default(true)
-  includeWatermark  Boolean  @default(false)
-  watermarkText     String?
-  
-  // Relationships
-  organization      Organization @relation(fields: [organizationId], references: [id])
-  organizationId    String
-  workflows         PublishingWorkflow[]
-  
-  // Usage tracking
-  isActive          Boolean  @default(true)
-  usageCount        Int      @default(0)
-  
-  // Timestamps
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@map("publishing_templates")
-}
-
-model PublishingDestination {
-  id                String   @id @default(cuid())
-  
-  // Destination details
-  destinationType   DestinationType
-  destinationName   String
-  destinationConfig Json     @default("{}")  // Destination-specific config
-  
-  // Publishing context
-  documentPublishing DocumentPublishing @relation(fields: [publishingId], references: [id], onDelete: Cascade)
-  publishingId      String
-  
-  // Status tracking
-  status            DestinationStatus @default(PENDING)
-  publishedAt       DateTime?
-  publishedUrl      String?
-  errorMessage      String?
-  retryCount        Int      @default(0)
-  
-  // Timestamps
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@map("publishing_destinations")
-}
-
-model PublishingNotification {
-  id                String   @id @default(cuid())
-  
-  // Notification details
-  notificationType  NotificationType
-  title             String
-  message           String
-  isRead            Boolean  @default(false)
-  
-  // Delivery method
-  deliveryMethod    DeliveryMethod @default(IN_APP)
-  emailSent         Boolean  @default(false)
-  smsSent           Boolean   @default(false)
-  
-  // Relationships
-  documentPublishing DocumentPublishing @relation(fields: [publishingId], references: [id], onDelete: Cascade)
-  publishingId      String
-  recipient         User     @relation("NotificationRecipient", fields: [recipientId], references: [id])
-  recipientId       String
-  
-  // Timestamps
-  sentAt            DateTime?
-  readAt            DateTime?
-  createdAt         DateTime @default(now())
-
-  @@map("publishing_notifications")
-}
-
-model DocumentDistribution {
-  id                String   @id @default(cuid())
-  
-  // Distribution details
-  distributionMethod DistributionMethod
-  recipientType     RecipientType
-  recipientList     Json     @default("[]")  // Array of recipient info
-  
-  // Content details
-  distributionFormat String  @default("PDF")
-  includeAttachments Boolean @default(true)
-  personalizedMessage String?
-  
-  // Relationships
-  documentPublishing DocumentPublishing @relation(fields: [publishingId], references: [id], onDelete: Cascade)
-  publishingId      String
-  initiatedBy       User     @relation("DistributionInitiator", fields: [initiatedById], references: [id])
-  initiatedById     String
-  
-  // Status tracking
-  status            DistributionStatus @default(PENDING)
-  distributedAt     DateTime?
-  deliveryStats     Json     @default("{}")  // Delivery statistics
-  
-  // Timestamps
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@map("document_distributions")
-}
-
-// Publishing Enums
 enum PublishingWorkflowType {
   DOCUMENT_APPROVAL
   EMERGENCY_PUBLISH
@@ -878,4 +1219,173 @@ enum DistributionStatus {
   COMPLETED
   PARTIALLY_FAILED
   FAILED
+}
+
+enum AFFormStatus {
+  DRAFT
+  PENDING_SIGNATURE
+  SIGNED
+  ARCHIVED
+}
+
+enum ActivityType {
+  JOINED_SESSION
+  LEFT_SESSION
+  STARTED_EDITING
+  STOPPED_EDITING
+  ADDED_COMMENT
+  RESOLVED_COMMENT
+  MADE_SUGGESTION
+  APPROVED_CHANGE
+  REJECTED_CHANGE
+}
+
+enum CRMStatus {
+  PENDING
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  DEFERRED
+  INCORPORATED
+}
+
+enum ChangeType {
+  INSERT
+  DELETE
+  UPDATE
+  MOVE
+  FORMAT
+  COMMENT
+}
+
+enum CollaborationSessionType {
+  EDITING
+  REVIEWING
+  PLANNING
+  BRAINSTORMING
+  FINAL_REVIEW
+}
+
+enum CollaboratorPermission {
+  READ
+  EDIT_CONTENT
+  EDIT_STRUCTURE
+  ADD_COMMENTS
+  RESOLVE_COMMENTS
+  INVITE_OTHERS
+  MANAGE_SECTIONS
+}
+
+enum CollaboratorRole {
+  PRIMARY_AUTHOR
+  CO_AUTHOR
+  SECTION_AUTHOR
+  CONTRIBUTOR
+  REVIEWER
+  OBSERVER
+}
+
+enum CommentType {
+  GENERAL
+  SUGGESTION
+  QUESTION
+  ISSUE
+  APPROVAL
+  REJECTION
+}
+
+enum CoordinationType {
+  ICU
+  ECU
+  O6_15
+  TWO_LETTER
+}
+
+enum DistributionType {
+  INTERNAL_ONLY
+  PUBLIC_RELEASE
+  CONTROLLED_DISTRIBUTION
+  EMERGENCY_BROADCAST
+}
+
+enum FeedbackType {
+  GENERAL
+  TECHNICAL
+  LEGAL
+  EDITORIAL
+  EXPERT_OPINION
+  STAKEHOLDER_INPUT
+}
+
+enum PublishingPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ReviewerAssignmentType {
+  PRIMARY
+  SECONDARY
+  SUBJECT_MATTER_EXPERT
+  STAKEHOLDER
+  OPTIONAL
+}
+
+enum ReviewerStatus {
+  ASSIGNED
+  ACKNOWLEDGED
+  IN_PROGRESS
+  COMPLETED
+  DECLINED
+  DELEGATED
+}
+
+enum RoleType {
+  VIEWER
+  AUTHOR
+  INTERNAL_COORDINATOR
+  O6_GS15_COORDINATOR
+  TWO_LETTER_COORDINATOR
+  LEGAL_REVIEWER
+  OPR_LEADERSHIP
+  AFDPO_ANALYST
+  TECHNICAL_REVIEWER
+  COMMANDER
+  PUBLICATIONS_OFFICE
+  ADMIN
+  SUBJECT_MATTER_EXPERT
+}
+
+enum SectionStatus {
+  DRAFT
+  IN_PROGRESS
+  PENDING_REVIEW
+  APPROVED
+  NEEDS_REVISION
+  COMPLETED
+}
+
+enum SessionRole {
+  MODERATOR
+  PARTICIPANT
+  OBSERVER
+}
+
+enum WorkflowStage {
+  DRAFT_CREATION
+  INTERNAL_COORDINATION
+  LEGAL_REVIEW
+  O6_15_COORDINATION
+  TWO_LETTER_COORDINATION
+  LEADERSHIP_APPROVAL
+  FINAL_PUBLISHING
+  PUBLISHED
+  OPR_DRAFT_CREATION
+  O6_GS15_COORDINATION
+  OPR_UPDATE_FIRST
+  OPR_UPDATE_SECOND
+  LEGAL_COORDINATION
+  OPR_FINAL_UPDATE
+  AFDPO_PUBLISHING
 }

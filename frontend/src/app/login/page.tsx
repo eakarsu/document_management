@@ -70,6 +70,39 @@ const LoginPage: React.FC = () => {
     if (error) setError(''); // Clear error when user starts typing
   };
 
+  const quickLogin = (email: string, password: string) => {
+    // Clear any existing session first to prevent cached user issues
+    localStorage.removeItem('user');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    
+    // Clear cookies
+    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    
+    // Just populate the form fields, don't login automatically
+    setFormData({ email, password });
+    
+    // Clear any existing errors
+    setError('');
+  };
+
+  const clearSession = () => {
+    // Clear all stored authentication data
+    localStorage.removeItem('user');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    
+    // Clear cookies
+    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    
+    // Clear form and reload page
+    setFormData({ email: '', password: '' });
+    setError('');
+    window.location.reload();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -80,12 +113,25 @@ const LoginPage: React.FC = () => {
 
     setIsLoading(true);
 
+    // Clear ALL cached data before login
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Clear all cookies
+    document.cookie.split(";").forEach(function(c) { 
+      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+    });
+
     try {
+      console.log('🔍 LOGIN DEBUG: Submitting login with:', formData);
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
         },
+        cache: 'no-store',
         body: JSON.stringify(formData),
       });
 
@@ -208,25 +254,127 @@ const LoginPage: React.FC = () => {
 
         <Divider sx={{ my: 3 }} />
 
-        {/* Demo Users */}
+        {/* Workflow Test Users */}
         <Card variant="outlined" sx={{ mt: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom color="primary">
-              Demo Users
+              🎯 Workflow Test Users
             </Typography>
-            <Stack spacing={1}>
-              <Typography variant="body2">
-                👑 <strong>Admin:</strong> admin@richmond-dms.com / admin123
-              </Typography>
-              <Typography variant="body2">
-                👔 <strong>Manager:</strong> manager@richmond-dms.com / manager123
-              </Typography>
-              <Typography variant="body2">
-                👤 <strong>User:</strong> user@richmond-dms.com / user123
-              </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Air Force Publication Workflow - Role-Based Access Control
+            </Typography>
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  📝 <strong>OPR (Office of Primary Responsibility):</strong> opr@demo.mil
+                </Typography>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  onClick={() => quickLogin('opr@demo.mil', 'password123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.75rem' }}
+                >
+                  Quick Login as OPR
+                </Button>
+              </Box>
+
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  🔄 <strong>ICU Reviewer:</strong> icu@demo.mil
+                </Typography>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  onClick={() => quickLogin('icu@demo.mil', 'password123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.75rem' }}
+                >
+                  Quick Login as ICU
+                </Button>
+              </Box>
+
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  ⚙️ <strong>Technical Reviewer:</strong> technical@demo.mil
+                </Typography>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  onClick={() => quickLogin('technical@demo.mil', 'password123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.75rem' }}
+                >
+                  Quick Login as Technical
+                </Button>
+              </Box>
+
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  ⚖️ <strong>Legal Reviewer:</strong> legal@demo.mil
+                </Typography>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  onClick={() => quickLogin('legal@demo.mil', 'password123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.75rem' }}
+                >
+                  Quick Login as Legal
+                </Button>
+              </Box>
+
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  📰 <strong>Publisher:</strong> publisher@demo.mil
+                </Typography>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  onClick={() => quickLogin('publisher@demo.mil', 'password123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.75rem' }}
+                >
+                  Quick Login as Publisher
+                </Button>
+              </Box>
+
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  👑 <strong>Workflow Admin:</strong> admin@demo.mil
+                </Typography>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  color="secondary"
+                  onClick={() => quickLogin('admin@demo.mil', 'password123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.75rem' }}
+                >
+                  Quick Login as Admin
+                </Button>
+              </Box>
             </Stack>
+            <Box sx={{ mt: 2, p: 1, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+              <Typography variant="caption" color="text.secondary">
+                💡 Each user has different role-based permissions and UI elements for the 8-stage Air Force publication workflow
+              </Typography>
+            </Box>
           </CardContent>
         </Card>
+
+        {/* Clear Session Button */}
+        <Box sx={{ textAlign: 'center', mt: 2 }}>
+          <Button
+            variant="outlined"
+            color="warning"
+            size="small"
+            onClick={clearSession}
+            sx={{ mb: 2 }}
+          >
+            🗑️ Clear Session & Logout
+          </Button>
+        </Box>
 
         {/* Footer */}
         <Box sx={{ textAlign: 'center', mt: 3 }}>

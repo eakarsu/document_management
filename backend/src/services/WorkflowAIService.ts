@@ -1,4 +1,8 @@
-import { PrismaClient, PublishingWorkflow, DocumentPublishing, User, Document, ApprovalStep, DocumentApproval, ApprovalStatus, ApprovalDecision, PublishingStatus, NotificationType, PublishingUrgency, DestinationType } from '@prisma/client';
+import { PrismaClient, PublishingWorkflow, DocumentPublishing, User, Document, ApprovalStep, DocumentApproval, ApprovalStatus, ApprovalDecision, PublishingStatus, NotificationType } from '@prisma/client';
+
+// Types that don't exist in schema anymore - defining locally
+type PublishingUrgency = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+type DestinationType = 'EMAIL' | 'PORTAL' | 'API' | 'FTP' | 'WEBHOOK';
 import { DocumentService } from './DocumentService';
 import winston from 'winston';
 
@@ -666,17 +670,7 @@ export class WorkflowAIService {
       const publishing = await this.prisma.documentPublishing.findUnique({
         where: { id: conflictData.publishingId },
         include: {
-          document: true,
-          workflow: {
-            include: {
-              approvalSteps: true
-            }
-          },
-          approvals: {
-            include: {
-              approver: true
-            }
-          }
+          document: true
         }
       });
 
@@ -970,8 +964,7 @@ export class WorkflowAIService {
         }
       },
       include: {
-        workflow: true,
-        approvals: true
+        document: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -1015,7 +1008,7 @@ export class WorkflowAIService {
     return await this.prisma.documentPublishing.findMany({
       where: { workflowId },
       include: {
-        approvals: true
+        document: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -1038,7 +1031,7 @@ export class WorkflowAIService {
         }
       },
       orderBy: {
-        createdAt: 'desc'
+        assignedAt: 'desc'
       },
       take: 50,
       include: {
@@ -1068,17 +1061,7 @@ export class WorkflowAIService {
       publishings: await this.prisma.documentPublishing.findMany({
         where: whereClause,
         include: {
-          document: true,
-          workflow: {
-            include: {
-              approvalSteps: true
-            }
-          },
-          approvals: {
-            include: {
-              approver: true
-            }
-          }
+          document: true
         }
       }),
       workflows: await this.prisma.publishingWorkflow.findMany({

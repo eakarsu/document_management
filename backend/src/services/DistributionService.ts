@@ -1,4 +1,21 @@
-import { PrismaClient, DocumentDistribution, DistributionMethod, RecipientType, DistributionStatus } from '@prisma/client';
+import { PrismaClient, DocumentDistribution, DistributionStatus } from '@prisma/client';
+
+// Types that don't exist in schema - defining locally
+enum DistributionMethod {
+  EMAIL = 'EMAIL',
+  SECURE_LINK = 'SECURE_LINK',
+  DIRECT_DOWNLOAD = 'DIRECT_DOWNLOAD',
+  API_PUSH = 'API_PUSH',
+  PRINT_DISTRIBUTION = 'PRINT_DISTRIBUTION'
+}
+
+enum RecipientType {
+  INDIVIDUAL_USERS = 'INDIVIDUAL_USERS',
+  USER_GROUPS = 'USER_GROUPS',
+  EXTERNAL_CONTACTS = 'EXTERNAL_CONTACTS',
+  PUBLIC_DISTRIBUTION = 'PUBLIC_DISTRIBUTION',
+  DEPARTMENT_WIDE = 'DEPARTMENT_WIDE'
+}
 import { DocumentService } from './DocumentService';
 import { NotificationService } from './NotificationService';
 import { StorageService } from './StorageService';
@@ -89,7 +106,7 @@ export class DistributionService {
         }
       });
 
-      if (!publishing || publishing.publishingStatus !== 'PUBLISHED') {
+      if (!publishing || publishing.status !== 'PUBLISHED') {
         throw new Error('Document not found or not published');
       }
 
@@ -97,15 +114,20 @@ export class DistributionService {
       const distribution = await this.prisma.documentDistribution.create({
         data: {
           publishingId: input.publishingId,
-          distributionMethod: input.distributionMethod,
-          recipientType: input.recipientType,
-          recipientList: input.recipientList,
-          distributionFormat: input.distributionFormat,
-          includeAttachments: input.includeAttachments,
-          personalizedMessage: input.personalizedMessage,
           initiatedById: initiatorId,
+          distributionType: 'CONTROLLED_DISTRIBUTION', // Default value
+          targetAudience: input.recipientList?.map(r => r.email || r.name || r.id).filter((item): item is string => Boolean(item)) || [],
+          channels: [input.distributionMethod],
           status: DistributionStatus.PENDING,
-          deliveryStats: {}
+          totalRecipients: input.recipientList?.length || 0,
+          metadata: {
+            distributionFormat: input.distributionFormat,
+            includeAttachments: input.includeAttachments,
+            personalizedMessage: input.personalizedMessage,
+            recipientType: input.recipientType,
+            recipientList: input.recipientList,
+            deliveryStats: {}
+          }
         }
       });
 
@@ -141,7 +163,8 @@ export class DistributionService {
 
       let results: DistributionStats;
 
-      switch (distribution.distributionMethod) {
+      const distributionMethod = distribution.channels[0]; // Get the first channel
+      switch (distributionMethod) {
         case DistributionMethod.EMAIL:
           results = await this.distributeViaEmail(distribution, publishing, organizationId);
           break;
@@ -163,7 +186,7 @@ export class DistributionService {
           break;
         
         default:
-          throw new Error(`Unsupported distribution method: ${distribution.distributionMethod}`);
+          throw new Error(`Unsupported distribution method: ${distributionMethod}`);
       }
 
       // Update distribution status and stats
@@ -177,13 +200,18 @@ export class DistributionService {
         where: { id: distribution.id },
         data: {
           status: finalStatus,
-          distributedAt: new Date(),
-          deliveryStats: {
-            totalRecipients: results.totalRecipients,
-            delivered: results.delivered,
-            failed: results.failed,
-            pending: results.pending,
-            deliveryRate: results.deliveryRate
+          successCount: results.delivered,
+          failureCount: results.failed,
+          completedAt: new Date(),
+          metadata: {
+            ...(distribution.metadata as any || {}),
+            deliveryStats: {
+              totalRecipients: results.totalRecipients,
+              delivered: results.delivered,
+              failed: results.failed,
+              pending: results.pending,
+              deliveryRate: results.deliveryRate
+            }
           }
         }
       });
@@ -212,8 +240,9 @@ export class DistributionService {
     publishing: any,
     organizationId: string
   ): Promise<DistributionStats> {
+    const recipientList = this.getRecipientList(distribution);
     const stats: DistributionStats = {
-      totalRecipients: (distribution.recipientList as any[])?.length || 0,
+      totalRecipients: recipientList.length,
       delivered: 0,
       failed: 0,
       pending: 0,
@@ -244,12 +273,12 @@ export class DistributionService {
     const distributionPackage = await this.createDistributionPackage(
       publishing.document,
       documentContent,
-      distribution.distributionFormat,
-      distribution.includeAttachments
+      this.getDistributionFormat(distribution),
+      this.getIncludeAttachments(distribution)
     );
 
     // Send to each recipient
-    for (const recipient of (distribution.recipientList as any[]) || []) {
+    for (const recipient of recipientList) {
       try {
         if (!recipient.email) {
           stats.failed++;
@@ -258,7 +287,7 @@ export class DistributionService {
         }
 
         const personalizedMessage = this.personalizeMessage(
-          distribution.personalizedMessage || 'Please find the attached document.',
+          this.getPersonalizedMessage(distribution) || 'Please find the attached document.',
           recipient
         );
 
@@ -272,7 +301,7 @@ export class DistributionService {
             recipient
           ),
           attachments: [{
-            filename: `${publishing.document.title}.${distribution.distributionFormat.toLowerCase()}`,
+            filename: `${publishing.document.title}.${this.getDistributionFormat(distribution).toLowerCase()}`,
             content: distributionPackage
           }]
         });
@@ -303,8 +332,9 @@ export class DistributionService {
     publishing: any,
     organizationId: string
   ): Promise<DistributionStats> {
+    const recipientList = this.getRecipientList(distribution);
     const stats: DistributionStats = {
-      totalRecipients: (distribution.recipientList as any[])?.length || 0,
+      totalRecipients: recipientList.length,
       delivered: 0,
       failed: 0,
       pending: 0,
@@ -313,7 +343,7 @@ export class DistributionService {
     };
 
     // Generate secure download links for each recipient
-    for (const recipient of (distribution.recipientList as any[]) || []) {
+    for (const recipient of recipientList) {
       try {
         const secureToken = this.generateSecureToken();
         const downloadLink = `${process.env.BASE_URL}/api/distribution/secure-download/${secureToken}`;
@@ -333,7 +363,7 @@ export class DistributionService {
             recipient.name || 'Recipient',
             publishing.document.title,
             downloadLink,
-            distribution.personalizedMessage || undefined
+            this.getPersonalizedMessage(distribution)
           );
           stats.delivered++;
         } else {
@@ -372,8 +402,9 @@ export class DistributionService {
     publishing: any,
     organizationId: string
   ): Promise<DistributionStats> {
+    const recipientList = this.getRecipientList(distribution);
     const stats: DistributionStats = {
-      totalRecipients: (distribution.recipientList as any[])?.length || 0,
+      totalRecipients: recipientList.length,
       delivered: 0,
       failed: 0,
       pending: 0,
@@ -395,7 +426,7 @@ export class DistributionService {
     }
 
     // Push to each API endpoint
-    for (const recipient of (distribution.recipientList as any[]) || []) {
+    for (const recipient of recipientList) {
       try {
         if (!recipient.id) { // Using id as API endpoint identifier
           stats.failed++;
@@ -407,7 +438,7 @@ export class DistributionService {
           recipient.id, // API endpoint
           publishing.document,
           documentContent,
-          distribution.distributionFormat
+          this.getDistributionFormat(distribution)
         );
 
         stats.delivered++;
@@ -431,8 +462,9 @@ export class DistributionService {
     publishing: any,
     organizationId: string
   ): Promise<DistributionStats> {
+    const recipientList = this.getRecipientList(distribution);
     const stats: DistributionStats = {
-      totalRecipients: (distribution.recipientList as any[])?.length || 0,
+      totalRecipients: recipientList.length,
       delivered: 0,
       failed: 0,
       pending: 0,
@@ -441,12 +473,12 @@ export class DistributionService {
     };
 
     // For print distribution, we queue print jobs
-    for (const recipient of (distribution.recipientList as any[]) || []) {
+    for (const recipient of recipientList) {
       try {
         await this.queuePrintJob(
           publishing.document,
           recipient,
-          distribution.distributionFormat
+          this.getDistributionFormat(distribution)
         );
 
         stats.delivered++;
@@ -497,7 +529,7 @@ export class DistributionService {
           include: {
             documentPublishing: {
               include: {
-                document: {
+                documents: {
                   select: {
                     id: true,
                     title: true,
@@ -515,7 +547,7 @@ export class DistributionService {
             }
           },
           orderBy: {
-            createdAt: 'desc'
+            startedAt: 'desc'
           },
           take: 10
         }),
@@ -530,11 +562,13 @@ export class DistributionService {
 
       distributions.forEach(dist => {
         // Count by method
-        distributionsByMethod[dist.distributionMethod] = 
-          (distributionsByMethod[dist.distributionMethod] || 0) + 1;
+        const method = dist.channels[0] || 'UNKNOWN';
+        distributionsByMethod[method] = 
+          (distributionsByMethod[method] || 0) + 1;
 
         // Calculate delivery rates
-        const stats = dist.deliveryStats as any;
+        const metadata = (dist.metadata as any) || {};
+        const stats = metadata.deliveryStats;
         if (stats && typeof stats === 'object' && stats.deliveryRate !== undefined) {
           totalDeliveryRate += stats.deliveryRate;
           distributionsWithStats++;
@@ -569,6 +603,30 @@ export class DistributionService {
   /**
    * Helper methods
    */
+  private getDistributionMetadata(distribution: DocumentDistribution): any {
+    return (distribution.metadata as any) || {};
+  }
+
+  private getRecipientList(distribution: DocumentDistribution): any[] {
+    const metadata = this.getDistributionMetadata(distribution);
+    return metadata.recipientList || [];
+  }
+
+  private getDistributionFormat(distribution: DocumentDistribution): string {
+    const metadata = this.getDistributionMetadata(distribution);
+    return metadata.distributionFormat || 'pdf';
+  }
+
+  private getIncludeAttachments(distribution: DocumentDistribution): boolean {
+    const metadata = this.getDistributionMetadata(distribution);
+    return metadata.includeAttachments || false;
+  }
+
+  private getPersonalizedMessage(distribution: DocumentDistribution): string | undefined {
+    const metadata = this.getDistributionMetadata(distribution);
+    return metadata.personalizedMessage;
+  }
+
   private initializeEmailService(): void {
     if (process.env.SMTP_HOST) {
       this.emailTransporter = nodemailer.createTransport({

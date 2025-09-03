@@ -1,4 +1,7 @@
-import { PrismaClient, PublishingTemplate, TemplateType } from '@prisma/client';
+import { PrismaClient, PublishingTemplate } from '@prisma/client';
+
+// Type that doesn't exist in schema anymore - defining locally
+type TemplateType = 'DOCUMENT' | 'EMAIL' | 'CERTIFICATE' | 'REPORT' | 'FORM';
 import { StorageService } from './StorageService';
 import winston from 'winston';
 import PDFDocument from 'pdfkit';
@@ -242,7 +245,7 @@ export class TemplateService {
       await this.prisma.publishingTemplate.update({
         where: { id: template.id },
         data: {
-          usageCount: template.usageCount + 1
+          usageCount: (template.usageCount || 0) + 1
         }
       });
 
@@ -588,7 +591,7 @@ export class TemplateService {
       {
         name: 'Standard Document',
         description: 'Basic template for general documents',
-        templateType: TemplateType.STANDARD,
+        templateType: 'STANDARD',
         formatting: {
           fontFamily: 'Helvetica',
           fontSize: 12,
@@ -624,7 +627,7 @@ export class TemplateService {
       {
         name: 'Executive Report',
         description: 'Formal template for executive reports',
-        templateType: TemplateType.EXECUTIVE,
+        templateType: 'EXECUTIVE',
         formatting: {
           fontFamily: 'Times-Roman',
           fontSize: 11,

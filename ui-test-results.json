@@ -1,0 +1,80 @@
+{
+  "timestamp": "2025-09-02T17:05:49.661Z",
+  "summary": {
+    "total": 16,
+    "passed": 11,
+    "failed": 5,
+    "successRate": 69
+  },
+  "results": [
+    {
+      "test": "Homepage loads",
+      "status": "PASS"
+    },
+    {
+      "test": "Login page accessible",
+      "status": "PASS"
+    },
+    {
+      "test": "User login successful",
+      "status": "PASS"
+    },
+    {
+      "test": "Dashboard loads with content",
+      "status": "PASS"
+    },
+    {
+      "test": "Create Document button visible",
+      "status": "FAIL",
+      "error": "Waiting for selector `button:has-text(\"Create Document\")` failed"
+    },
+    {
+      "test": "Document creation page loads",
+      "status": "PASS"
+    },
+    {
+      "test": "Template cards displayed (≥4 templates)",
+      "status": "PASS"
+    },
+    {
+      "test": "Template cards displayed (≥4 templates)",
+      "status": "FAIL",
+      "error": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "test": "Biography templates identified (≥3 templates)",
+      "status": "FAIL",
+      "error": "Template test failed"
+    },
+    {
+      "test": "Template selection and form progression",
+      "status": "FAIL",
+      "error": "SyntaxError: Failed to execute 'querySelector' on 'Document': 'button:has-text(\"Next\"), button[aria-label*=\"next\"]' is not a valid selector."
+    },
+    {
+      "test": "Document form can be filled",
+      "status": "FAIL",
+      "error": "SyntaxError: Failed to execute 'querySelector' on 'Document': 'button:has-text(\"Next\"), button[aria-label*=\"next\"]' is not a valid selector."
+    },
+    {
+      "test": "Documents page accessible",
+      "status": "PASS"
+    },
+    {
+      "test": "Document search functionality",
+      "status": "PASS"
+    },
+    {
+      "test": "Publishing page accessible",
+      "status": "PASS"
+    },
+    {
+      "test": "AI Workflow page accessible",
+      "status": "PASS"
+    },
+    {
+      "test": "Frontend-Backend API integration",
+      "status": "PASS"
+    }
+  ]
+}

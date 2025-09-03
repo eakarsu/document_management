@@ -1060,17 +1060,23 @@ export class DocumentService {
 
   private async generateDocumentNumber(organizationId: string): Promise<string> {
     const year = new Date().getFullYear();
-    const count = await this.prisma.document.count({
-      where: {
-        organizationId,
-        createdAt: {
-          gte: new Date(`${year}-01-01`),
-          lt: new Date(`${year + 1}-01-01`)
-        }
-      }
+    
+    // Use timestamp + random for guaranteed uniqueness
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.floor(Math.random() * 999).toString().padStart(3, '0');
+    const documentNumber = `DOC-${year}-${timestamp}${random}`;
+    
+    // Very rare collision check
+    const existing = await this.prisma.document.findFirst({
+      where: { documentNumber, organizationId }
     });
-
-    return `DOC-${year}-${(count + 1).toString().padStart(6, '0')}`;
+    
+    if (existing) {
+      // Use UUID as ultimate fallback
+      return `DOC-${year}-${crypto.randomUUID().slice(0, 9).toUpperCase()}`;
+    }
+    
+    return documentNumber;
   }
 
   private async generateQRCode(documentNumber: string): Promise<string> {

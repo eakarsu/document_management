@@ -9,6 +9,12 @@ const publicRoutes = ['/login', '/register', '/forgot-password', '/verify-email'
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  
+  // Allow preview routes without authentication
+  if (pathname.includes('/api/documents/') && pathname.endsWith('/preview')) {
+    return NextResponse.next();
+  }
+  
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
   
@@ -42,6 +48,7 @@ export function middleware(request: NextRequest) {
   if (isPublicRoute && hasValidToken) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
+
 
   // For API routes, add CORS headers
   if (pathname.startsWith('/api/')) {

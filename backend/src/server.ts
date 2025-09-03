@@ -25,6 +25,8 @@ import { healthRouter } from './routes/health';
 import { documentsRouter } from './routes/documents';
 import { publishingRouter } from './routes/publishing';
 import { aiWorkflowRouter } from './routes/aiWorkflow';
+import eightStageWorkflowRouter from './routes/eightStageWorkflow';
+import editorRouter from './routes/editor';
 import { DocumentService } from './services/DocumentService';
 import { AuthService } from './services/AuthService';
 import { SearchService } from './services/SearchService';
@@ -216,6 +218,12 @@ async function startServer() {
     
     // AI Workflow routes
     app.use('/api/ai-workflow', aiWorkflowRouter);
+    
+    // 8-Stage Workflow routes
+    app.use('/api/workflow/8-stage', eightStageWorkflowRouter);
+    
+    // Editor routes
+    app.use('/api/editor', editorRouter);
 
     // ===== AUTHENTICATION ENDPOINTS =====
     

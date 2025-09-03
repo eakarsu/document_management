@@ -1,0 +1,118 @@
+I'll stop working and provide you with documentation of the files I've created and modified. Let me read through the key
+  files first to understand the full scope.
+
+⏺ Documentation of Files Created/Modified
+
+  Backend Files
+
+  1. /backend/src/services/EightStageWorkflowService.ts
+
+  Purpose: Simplified 8-stage workflow service that works with existing database schema
+  Key Features:
+  - Stores workflow state in document customFields JSON instead of dedicated tables
+  - Manages 8 workflow stages: DRAFT_CREATION → INTERNAL_COORDINATION → OPR_REVISIONS → EXTERNAL_COORDINATION → OPR_FINAL →
+  LEGAL_REVIEW → OPR_LEGAL → FINAL_PUBLISHING
+  - Handles ICU feedback submission and retrieval
+  - Tracks stage transitions with history
+
+  Main Methods:
+  - createWorkflowInstance() - Initializes workflow for a document
+  - advanceToInternalCoordination() - Moves to stage 2
+  - submitICUFeedback() - Records reviewer feedback
+  - getWorkflowStatus() - Retrieves current workflow state
+
+  2. /backend/setup-8stage-workflow-users.js
+
+  Purpose: Creates 20 Richmond DMS test accounts for workflow testing
+  User Types: ADMIN, OPR, AUTHOR, TECHNICAL_REVIEWER, LEGAL_REVIEWER, PUBLISHER, MANAGER, USER
+  Format: email@richmondDMS.com / password123
+
+  3. /backend/setup-military-workflow-users.js
+
+  Purpose: Creates 20 military .mil domain accounts with proper ranks
+  Format: role.rank@af.mil / password (Rank Name)
+  Example: opr.chief@af.mil / opr123 (Lt Col John Smith)
+
+  Frontend Files
+
+  4. /frontend/src/lib/authTokenService.ts
+
+  Purpose: Centralized authentication token management
+  Key Features:
+  - Stores/retrieves tokens from localStorage
+  - Automatic token refresh on 401 errors
+  - Authenticated fetch wrapper with Bearer token injection
+  - Fallback to user data in localStorage if tokens not found
+
+  5. /frontend/src/app/documents/create/page.tsx
+
+  Purpose: Document creation page with template selection
+  Key Features:
+  - 4 document templates: DAFMAN, DAFI, MEMO, LEGAL
+  - Template selection auto-populates document sections
+  - File upload support (optional)
+  - Category selection and tagging system
+  - Form validation and error handling
+  - Redirects to new document after creation
+
+  6. /frontend/src/app/dashboard/page.tsx (Modified)
+
+  Changes Made:
+  - Added "Create Document" button as primary action (contained variant)
+  - Changed "Upload Document" to outlined variant
+  - Create button routes to /documents/create
+
+  7. /frontend/src/app/documents/page.tsx (Modified)
+
+  Changes Made:
+  - Added "Create" button in AppBar next to Upload
+  - Added "Create Document" button in empty state alongside "Upload Documents"
+  - Both buttons route to /documents/create
+
+  8. /frontend/src/app/documents/[id]/page.tsx (Previously existed)
+
+  Status: Contains 8-stage workflow UI with progress indicators and action buttons
+
+  Key Integration Points
+
+  Authentication Flow:
+
+  1. User logs in → receives JWT tokens
+  2. authTokenService stores tokens in localStorage
+  3. All API calls use authenticated fetch with automatic token refresh
+  4. 401 responses trigger token refresh or redirect to login
+
+  Document Creation Flow:
+
+  1. User clicks "Create Document" from dashboard or documents page
+  2. Template selection populates document sections
+  3. Form submission creates document via /api/documents/create
+  4. Success redirects to document details page
+
+  8-Stage Workflow Integration:
+
+  1. Workflow state stored in document.customFields.workflow
+  2. EightStageWorkflowService manages state transitions
+  3. Frontend displays current stage and available actions
+  4. ICU feedback collected and stored in workflow metadata
+
+  Test Accounts Available:
+
+  Richmond DMS (20 accounts):
+  - admin1@richmondDMS.com / password123 (ADMIN)
+  - opr1@richmondDMS.com / password123 (OPR)
+  - author1@richmondDMS.com / password123 (AUTHOR)
+  - etc.
+
+  Military .mil (20 accounts):
+  - admin.colonel@af.mil / admin123 (Col Jane Smith)
+  - opr.chief@af.mil / opr123 (Lt Col John Smith)
+  - author.captain@af.mil / author123 (Capt Sarah Johnson)
+  - etc.
+
+  The system now has restored document creation functionality with template selection and the 8-stage workflow system is
+  operational.
+
+> I will tell you what todo
+
+⏺ I understand. I'm ready to listen to your instructions. What would you like me to do?

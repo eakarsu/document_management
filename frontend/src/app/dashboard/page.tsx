@@ -54,7 +54,8 @@ import {
   Assessment as ContentIcon,
   Group as TeamIcon,
   Visibility as RealtimeIcon,
-  AutoFixHigh as SmartIcon
+  AutoFixHigh as SmartIcon,
+  Create as CreateIcon
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import WorkflowTasks from '../../components/WorkflowTasks';
@@ -247,6 +248,10 @@ const DashboardPage: React.FC = () => {
 
   const handleAIWorkflow = () => {
     router.push('/ai-workflow');
+  };
+
+  const handleCreateDocument = () => {
+    router.push('/documents/create');
   };
 
 
@@ -446,6 +451,15 @@ const DashboardPage: React.FC = () => {
                 <Button
                   fullWidth
                   variant="contained"
+                  startIcon={<CreateIcon />}
+                  size="large"
+                  onClick={handleCreateDocument}
+                >
+                  Create Document
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
                   startIcon={<UploadIcon />}
                   size="large"
                   onClick={handleUploadDocument}

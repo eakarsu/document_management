@@ -1,4 +1,7 @@
-import { PrismaClient, PublishingNotification, NotificationType, DeliveryMethod } from '@prisma/client';
+import { PrismaClient, PublishingNotification, NotificationType } from '@prisma/client';
+
+// Local type definition for DeliveryMethod since it's not available in Prisma schema
+type DeliveryMethod = 'IN_APP' | 'EMAIL' | 'SMS' | 'PUSH_NOTIFICATION';
 import winston from 'winston';
 import nodemailer from 'nodemailer';
 import twilio from 'twilio';
@@ -278,7 +281,7 @@ export class NotificationService {
           include: {
             documentPublishing: {
               include: {
-                document: {
+                documents: {
                   select: {
                     id: true,
                     title: true,
@@ -412,7 +415,7 @@ export class NotificationService {
         include: {
           documentPublishing: {
             include: {
-              document: {
+              documents: {
                 select: {
                   title: true,
                   fileName: true
@@ -488,13 +491,11 @@ export class NotificationService {
       data: {
         publishingId: input.publishingId,
         recipientId: input.recipientId,
-        notificationType: input.notificationType,
+        type: input.notificationType,
         title: input.title,
         message: input.message,
-        deliveryMethod,
         isRead: false,
-        emailSent: false,
-        smsSent: false
+        metadata: { deliveryMethod }
       }
     });
   }
@@ -507,21 +508,23 @@ export class NotificationService {
     recipient: any,
     input: SendNotificationInput
   ): Promise<boolean> {
-    switch (notification.deliveryMethod) {
-      case DeliveryMethod.EMAIL:
+    const deliveryMethod = (notification.metadata as any)?.deliveryMethod;
+    
+    switch (deliveryMethod) {
+      case 'EMAIL':
         return this.sendEmailNotification(notification, recipient);
       
-      case DeliveryMethod.SMS:
+      case 'SMS':
         return this.sendSMSNotification(notification, recipient);
       
-      case DeliveryMethod.PUSH_NOTIFICATION:
+      case 'PUSH_NOTIFICATION':
         return this.sendPushNotification(notification, recipient);
       
-      case DeliveryMethod.IN_APP:
+      case 'IN_APP':
         return true; // In-app notifications are already stored in database
       
       default:
-        this.logger.warn('Unknown delivery method:', notification.deliveryMethod);
+        this.logger.warn('Unknown delivery method:', deliveryMethod);
         return false;
     }
   }
@@ -614,20 +617,26 @@ export class NotificationService {
     notificationId: string,
     deliveryMethod: DeliveryMethod
   ): Promise<void> {
-    const updateData: any = {
-      sentAt: new Date()
-    };
-
-    if (deliveryMethod === DeliveryMethod.EMAIL) {
-      updateData.emailSent = true;
-    } else if (deliveryMethod === DeliveryMethod.SMS) {
-      updateData.smsSent = true;
-    }
-
-    await this.prisma.publishingNotification.update({
-      where: { id: notificationId },
-      data: updateData
+    const notification = await this.prisma.publishingNotification.findUnique({
+      where: { id: notificationId }
     });
+    
+    if (notification) {
+      const metadata = notification.metadata as any || {};
+      metadata.sentAt = new Date().toISOString();
+      metadata.deliveryStatus = 'sent';
+      
+      if (deliveryMethod === 'EMAIL') {
+        metadata.emailSent = true;
+      } else if (deliveryMethod === 'SMS') {
+        metadata.smsSent = true;
+      }
+
+      await this.prisma.publishingNotification.update({
+        where: { id: notificationId },
+        data: { metadata }
+      });
+    }
   }
 
   /**
