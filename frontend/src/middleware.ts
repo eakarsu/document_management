@@ -10,9 +10,15 @@ const publicRoutes = ['/login', '/register', '/forgot-password', '/verify-email'
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Allow preview routes without authentication
-  if (pathname.includes('/api/documents/') && pathname.endsWith('/preview')) {
-    return NextResponse.next();
+  // Allow preview and draft routes without authentication
+  if (pathname.includes('/api/documents/') && (pathname.endsWith('/preview') || pathname.includes('/draft'))) {
+    const response = NextResponse.next();
+    // Add CORS headers for API routes
+    response.headers.set('Access-Control-Allow-Origin', process.env.FRONTEND_URL || `http://localhost:${process.env.PORT || 3000}`);
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    return response;
   }
   
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));

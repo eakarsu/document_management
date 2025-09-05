@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -40,7 +40,8 @@ import {
   Download,
   Upload,
   EmojiEmotions,
-  Functions
+  Functions,
+  FormatListNumbered
 } from '@mui/icons-material';
 import { useRouter, useParams } from 'next/navigation';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -107,6 +108,9 @@ const DocumentEditor: React.FC = () => {
   const [replaceTerm, setReplaceTerm] = useState('');
   const [fontSize, setFontSize] = useState('16px');
   const [fontFamily, setFontFamily] = useState('serif');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Get user from localStorage
   useEffect(() => {
@@ -114,6 +118,110 @@ const DocumentEditor: React.FC = () => {
     if (userData) {
       setUser(JSON.parse(userData));
     }
+  }, []);
+
+  // We'll define these after the editor is created
+  const calculatePageFromCursorRef = useRef<(() => void) | null>(null);
+  const calculatePageFromScrollRef = useRef<(() => void) | null>(null);
+
+  // Calculate page based on scroll position
+  const calculatePageFromScroll = useCallback(() => {
+    // Check if document is ready
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+    
+    try {
+      // Get scroll position - handle SSR and early renders
+      const scrollTop = window.pageYOffset || 
+                       (document.documentElement && document.documentElement.scrollTop) || 
+                       (document.body && document.body.scrollTop) || 
+                       0;
+      const scrollHeight = Math.max(
+        (document.documentElement && document.documentElement.scrollHeight) || 0,
+        (document.body && document.body.scrollHeight) || 0,
+        1
+      );
+      const clientHeight = window.innerHeight || 
+                          (document.documentElement && document.documentElement.clientHeight) || 
+                          (document.body && document.body.clientHeight) || 
+                          0;
+      
+      // Avoid division by zero
+      if (scrollHeight <= clientHeight || totalPages === 0) {
+        // Document fits in window, use cursor position instead
+        if (calculatePageFromCursorRef.current) {
+          calculatePageFromCursorRef.current();
+        }
+        return;
+      }
+      
+      // Calculate what percentage of the document we've scrolled through
+      const maxScroll = scrollHeight - clientHeight;
+      const scrollPercentage = Math.min(1, Math.max(0, scrollTop / maxScroll));
+      
+      // Calculate current page based on scroll position
+      // Use floor and add 1 to start from page 1
+      const calculatedPage = Math.max(1, Math.min(totalPages, 
+        Math.floor(scrollPercentage * (totalPages - 1)) + 1
+      ));
+      
+      // Debug logging
+      console.log('Scroll calculation:', {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        maxScroll,
+        scrollPercentage: (scrollPercentage * 100).toFixed(2) + '%',
+        calculatedPage,
+        totalPages
+      });
+      
+      setCurrentPage(calculatedPage);
+    } catch (error) {
+      console.error('Error calculating page from scroll:', error);
+      if (calculatePageFromCursorRef.current) {
+        calculatePageFromCursorRef.current();
+      }
+    }
+  }, [totalPages]);
+
+  // Store the function in ref to avoid dependency issues
+  useEffect(() => {
+    calculatePageFromScrollRef.current = calculatePageFromScroll;
+  }, [calculatePageFromScroll]);
+
+  // Track scroll events
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    let scrollTimeout: NodeJS.Timeout;
+    const handleScroll = () => {
+      // Debounce scroll events for performance
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        console.log('Scroll event processed');
+        if (calculatePageFromScrollRef.current) {
+          calculatePageFromScrollRef.current();
+        }
+      }, 50);
+    };
+
+    // Listen to window scroll
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Calculate initial page position
+    setTimeout(() => {
+      console.log('Initial page calculation triggered');
+      if (calculatePageFromScrollRef.current) {
+        calculatePageFromScrollRef.current();
+      }
+    }, 1000);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+    };
   }, []);
 
   const lowlight = createLowlight(common);
@@ -210,6 +318,51 @@ const DocumentEditor: React.FC = () => {
       const words = editor.storage.characterCount.words();
       setCharCount(chars);
       setWordCount(words);
+      
+      // Calculate total pages based on content
+      // More accurate estimation: ~250 words per page for Air Force documents
+      // Or count paragraphs/blocks for better accuracy
+      const doc = editor.state.doc;
+      let blockCount = 0;
+      doc.descendants((node) => {
+        if (node.isBlock) {
+          blockCount++;
+        }
+      });
+      
+      const wordsPerPage = 250; // More conservative for formatted documents
+      const charsPerPage = 1500; // More conservative for formatted documents
+      const blocksPerPage = 25; // Approximate blocks per page
+      
+      // Use multiple calculations for better accuracy
+      const pagesByWords = Math.ceil(words / wordsPerPage);
+      const pagesByChars = Math.ceil(chars / charsPerPage);
+      const pagesByBlocks = Math.ceil(blockCount / blocksPerPage);
+      const estimatedPages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
+      
+      console.log('Page calculation in onUpdate:', {
+        words,
+        chars,
+        blockCount,
+        pagesByWords,
+        pagesByChars,
+        pagesByBlocks,
+        estimatedPages
+      });
+      
+      setTotalPages(estimatedPages);
+      
+      // Don't update current page here - let scroll handle it
+      // Just recalculate based on scroll after content changes
+      setTimeout(() => {
+        if (calculatePageFromScrollRef.current) {
+          calculatePageFromScrollRef.current();
+        }
+      }, 100);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      // Don't update page on selection, let scroll handle it
+      // This prevents jumping when just moving cursor
     },
     editorProps: {
       attributes: {
@@ -218,6 +371,62 @@ const DocumentEditor: React.FC = () => {
       },
     },
   });
+
+  // Define the cursor-based page calculation function now that editor exists
+  const calculatePageFromCursor = useCallback(() => {
+    if (!editor || totalPages <= 1) return;
+    
+    try {
+      // Get the current selection/cursor position
+      const { from } = editor.state.selection;
+      const totalSize = editor.state.doc.content.size;
+      
+      if (totalSize === 0) {
+        setCurrentPage(1);
+        return;
+      }
+      
+      // Calculate percentage through document
+      const percentage = from / totalSize;
+      
+      // Calculate page based on position
+      const calculatedPage = Math.max(1, Math.min(totalPages, Math.ceil(percentage * totalPages)));
+      
+      console.log('Cursor-based page calculation:', {
+        cursorPosition: from,
+        totalSize,
+        percentage: (percentage * 100).toFixed(2) + '%',
+        calculatedPage,
+        totalPages
+      });
+      
+      setCurrentPage(calculatedPage);
+    } catch (error) {
+      console.error('Error calculating page from cursor:', error);
+    }
+  }, [editor, totalPages]);
+
+  // Update the ref with the cursor calculation function
+  useEffect(() => {
+    calculatePageFromCursorRef.current = calculatePageFromCursor;
+  }, [calculatePageFromCursor]);
+
+  // Listen to editor selection changes
+  useEffect(() => {
+    if (!editor) return;
+    
+    const updatePageFromSelection = () => {
+      if (calculatePageFromCursorRef.current) {
+        calculatePageFromCursorRef.current();
+      }
+    };
+    
+    editor.on('selectionUpdate', updatePageFromSelection);
+    
+    return () => {
+      editor.off('selectionUpdate', updatePageFromSelection);
+    };
+  }, [editor]);
 
   // Load document content
   useEffect(() => {
@@ -262,6 +471,35 @@ const DocumentEditor: React.FC = () => {
               
               editor.commands.setContent(content);
               console.log('Content set in editor, editor has content:', editor.getHTML());
+              
+              // Trigger page calculation after content is set
+              setTimeout(() => {
+                const chars = editor.storage.characterCount.characters();
+                const words = editor.storage.characterCount.words();
+                const doc = editor.state.doc;
+                let blockCount = 0;
+                doc.descendants((node) => {
+                  if (node.isBlock) {
+                    blockCount++;
+                  }
+                });
+                
+                const pagesByWords = Math.ceil(words / 250);
+                const pagesByChars = Math.ceil(chars / 1500);
+                const pagesByBlocks = Math.ceil(blockCount / 25);
+                const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
+                console.log('Initial page calculation after content load:', { 
+                  words, 
+                  chars, 
+                  blockCount,
+                  pagesByWords,
+                  pagesByChars,
+                  pagesByBlocks,
+                  pages 
+                });
+                setTotalPages(pages);
+                calculatePageFromScroll();
+              }, 500);
             } else if (docData.document.content) {
               // Try to use content from basic document API
               let content = docData.document.content;
@@ -274,6 +512,35 @@ const DocumentEditor: React.FC = () => {
               
               editor.commands.setContent(content);
               console.log('Fallback content set in editor');
+              
+              // Trigger page calculation after content is set
+              setTimeout(() => {
+                const chars = editor.storage.characterCount.characters();
+                const words = editor.storage.characterCount.words();
+                const doc = editor.state.doc;
+                let blockCount = 0;
+                doc.descendants((node) => {
+                  if (node.isBlock) {
+                    blockCount++;
+                  }
+                });
+                
+                const pagesByWords = Math.ceil(words / 250);
+                const pagesByChars = Math.ceil(chars / 1500);
+                const pagesByBlocks = Math.ceil(blockCount / 25);
+                const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
+                console.log('Initial page calculation after fallback content:', { 
+                  words, 
+                  chars, 
+                  blockCount,
+                  pagesByWords,
+                  pagesByChars,
+                  pagesByBlocks,
+                  pages 
+                });
+                setTotalPages(pages);
+                calculatePageFromScroll();
+              }, 500);
             } else {
               console.log('No content found, using default');
               // Initialize with default content only if document has no content
@@ -295,6 +562,35 @@ const DocumentEditor: React.FC = () => {
               }
               
               editor.commands.setContent(content);
+              
+              // Trigger page calculation
+              setTimeout(() => {
+                const chars = editor.storage.characterCount.characters();
+                const words = editor.storage.characterCount.words();
+                const doc = editor.state.doc;
+                let blockCount = 0;
+                doc.descendants((node) => {
+                  if (node.isBlock) {
+                    blockCount++;
+                  }
+                });
+                
+                const pagesByWords = Math.ceil(words / 250);
+                const pagesByChars = Math.ceil(chars / 1500);
+                const pagesByBlocks = Math.ceil(blockCount / 25);
+                const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
+                console.log('Page calculation from else path:', { 
+                  words, 
+                  chars, 
+                  blockCount,
+                  pagesByWords,
+                  pagesByChars,
+                  pagesByBlocks,
+                  pages 
+                });
+                setTotalPages(pages);
+                calculatePageFromScroll();
+              }, 500);
             } else {
               // Fallback to basic content
               editor.commands.setContent(`
@@ -581,6 +877,13 @@ const DocumentEditor: React.FC = () => {
 
             {/* Status on the right */}
             <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Chip 
+                label={`Page ${currentPage} of ${totalPages}`}
+                size="small" 
+                color="primary" 
+                variant="outlined"
+                icon={<FormatListNumbered />}
+              />
               <Typography variant="caption" color="text.secondary">
                 Words: {wordCount} | Characters: {charCount}
               </Typography>
@@ -1074,7 +1377,7 @@ const DocumentEditor: React.FC = () => {
         </Paper>
 
         {/* Editor Content */}
-        <Paper sx={{ minHeight: 600 }}>
+        <Paper sx={{ minHeight: 600 }} ref={editorContainerRef}>
           <style jsx global>{`
             .ProseMirror table {
               border-collapse: collapse;
@@ -1187,6 +1490,41 @@ const DocumentEditor: React.FC = () => {
         </Paper>
 
       </Container>
+
+      {/* Floating Page Indicator */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 30,
+          right: 30,
+          zIndex: 10000,
+          backgroundColor: '#2196f3',
+          color: 'white',
+          padding: '12px 20px',
+          borderRadius: '24px',
+          boxShadow: '0 4px 12px rgba(33, 150, 243, 0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          fontWeight: 'bold',
+          fontSize: '14px',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'scale(1.05)',
+            boxShadow: '0 6px 16px rgba(33, 150, 243, 0.5)',
+          }
+        }}
+      >
+        <Box component="span" sx={{ fontSize: '18px' }}>📄</Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Box component="span" sx={{ fontSize: '16px', fontWeight: 'bold' }}>
+            Page {currentPage} of {totalPages}
+          </Box>
+          <Box component="span" sx={{ fontSize: '10px', opacity: 0.9 }}>
+            {wordCount} words
+          </Box>
+        </Box>
+      </Box>
 
       {/* Changes Drawer */}
       <Drawer

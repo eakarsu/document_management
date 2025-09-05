@@ -51,6 +51,7 @@ import { useRouter, useParams } from 'next/navigation';
 import DocumentViewer from '../../../components/DocumentViewer';
 import DocumentVersions from '../../../components/DocumentVersions';
 import WorkflowTasks from '../../../components/WorkflowTasks';
+import OPRFeedbackProcessor from '../../../components/feedback/OPRFeedbackProcessor';
 import { api } from '../../../lib/api';
 import { authTokenService } from '../../../lib/authTokenService';
 import CRMFeedbackForm from '../../../components/feedback/CRMFeedbackForm';
@@ -1182,6 +1183,20 @@ const DocumentViewPage: React.FC = () => {
                   Review & CRM
                 </Button>
 
+                {/* OPR Review - Only visible to OPR and ADMIN users */}
+                {(userRole?.role === 'OPR' || userRole?.role === 'ADMIN' || userRole?.role === 'Admin') && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="large"
+                    startIcon={<AssignmentIcon />}
+                    onClick={() => router.push(`/documents/${documentId}/opr-review`)}
+                    sx={{ minWidth: 150 }}
+                  >
+                    OPR Review
+                  </Button>
+                )}
+
                 {/* Start/Continue Workflow */}
                 {isWorkflowNotStarted() ? (
                   <Button
@@ -1381,17 +1396,40 @@ const DocumentViewPage: React.FC = () => {
               <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
                 📄 Document Preview
               </Typography>
-              <DocumentViewer 
-                documentId={documentId} 
-                document={{
-                  title: documentData.title,
-                  mimeType: documentData.mimeType || 'text/html',
-                  category: documentData.category,
-                  fileSize: documentData.fileSize,
-                  content: documentData.content || documentData.customFields?.content || ''
-                }}
-              />
+              {(() => {
+                const content = documentData.content || documentData.customFields?.content || '';
+                console.log('📄 Document content for viewer:', {
+                  hasContent: !!content,
+                  contentLength: content.length,
+                  contentPreview: content.substring(0, 100),
+                  hasDocumentData: !!documentData,
+                  hasCustomFields: !!documentData.customFields,
+                  workflowStage
+                });
+                return (
+                  <DocumentViewer 
+                    documentId={documentId} 
+                    document={{
+                      title: documentData.title,
+                      mimeType: documentData.mimeType || 'text/html',
+                      category: documentData.category,
+                      fileSize: documentData.fileSize,
+                      content: content
+                    }}
+                  />
+                );
+              })()}
             </Paper>
+
+            {/* OPR Feedback Processor - Only visible to OPR users */}
+            {(userRole?.role === 'OPR' || userRole?.role === 'ADMIN') && (
+              <Paper sx={{ p: 2, mt: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                  🤖 AI-Powered Feedback Processing
+                </Typography>
+                <OPRFeedbackProcessor documentId={documentId} />
+              </Paper>
+            )}
           </Grid>
 
           {/* Sidebar */}

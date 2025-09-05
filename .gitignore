@@ -111,7 +111,7 @@ temp/
 uploads/
 storage/
 files/
-documents/
+# documents/ # Removed - we need to track source code in documents folders
 temp-uploads/
 user-uploads/
 

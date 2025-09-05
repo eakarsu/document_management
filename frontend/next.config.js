@@ -90,6 +90,11 @@ const nextConfig = {
         source: '/api/documents/:id/download',
         destination: '/api/documents/:id/download',
       },
+      // Don't proxy documents PATCH route - handle feedback locally
+      {
+        source: '/api/documents/:id',
+        destination: '/api/documents/:id',
+      },
       // Proxy all other API calls to backend
       {
         source: '/api/:path*',

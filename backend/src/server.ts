@@ -27,6 +27,8 @@ import { publishingRouter } from './routes/publishing';
 import { aiWorkflowRouter } from './routes/aiWorkflow';
 import eightStageWorkflowRouter from './routes/eightStageWorkflow';
 import editorRouter from './routes/editor';
+import feedbackProcessorRouter from './routes/feedbackProcessor';
+import oprWorkflowFeedbackRouter from './routes/oprWorkflowFeedback';
 import { DocumentService } from './services/DocumentService';
 import { AuthService } from './services/AuthService';
 import { SearchService } from './services/SearchService';
@@ -224,6 +226,12 @@ async function startServer() {
     
     // Editor routes
     app.use('/api/editor', editorRouter);
+    
+    // Feedback Processor routes (OpenRouter AI)
+    app.use('/api/feedback-processor', feedbackProcessorRouter);
+    
+    // OPR Workflow Feedback routes (Stage 3 & 7 feedback)
+    app.use('/api/opr-workflow-feedback', oprWorkflowFeedbackRouter);
 
     // ===== AUTHENTICATION ENDPOINTS =====
     

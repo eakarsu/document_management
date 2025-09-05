@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest,
@@ -94,6 +98,53 @@ export async function DELETE(
     return NextResponse.json({ 
       success: false, 
       error: 'Internal server error' 
+    }, { status: 500 });
+  }
+}
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json();
+    
+    // Get current document directly from database
+    const currentDoc = await prisma.document.findUnique({
+      where: { id: params.id }
+    });
+
+    if (!currentDoc) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Document not found" 
+      }, { status: 404 });
+    }
+    
+    // Merge customFields
+    const currentCustomFields = currentDoc.customFields as any || {};
+    const updatedCustomFields = {
+      ...currentCustomFields,
+      ...(body.customFields || {})
+    };
+
+    // Update document directly in database
+    const updatedDocument = await prisma.document.update({
+      where: { id: params.id },
+      data: {
+        customFields: updatedCustomFields
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      document: updatedDocument
+    });
+
+  } catch (error) {
+    console.error("PATCH API error:", error);
+    return NextResponse.json({ 
+      success: false, 
+      error: "Internal server error" 
     }, { status: 500 });
   }
 }

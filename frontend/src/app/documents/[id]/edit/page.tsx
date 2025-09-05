@@ -19,7 +19,9 @@ import {
   Grid,
   Chip,
   Tabs,
-  Tab
+  Tab,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import {
   ArrowBack,
@@ -31,10 +33,14 @@ import {
   Download as DownloadIcon,
   CloudUpload as UploadIcon,
   Launch as LaunchIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  Preview as PreviewIcon,
+  FormatListNumbered
 } from '@mui/icons-material';
 import { api } from '../../../../lib/api';
 import { DAFPublicationEditor } from '../../../../components/editor/DAFPublicationEditor';
+import { DAFPublicationEditorWithPageNumbers } from '../../../../components/editor/DAFPublicationEditorWithPageNumbers';
+import DocumentNumbering from '../../../../components/DocumentNumbering';
 
 interface Document {
   id: string;
@@ -63,6 +69,28 @@ export default function EditDocumentPage() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [documentContent, setDocumentContent] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const [showLineNumbers, setShowLineNumbers] = useState(true);
+  const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
+  const [showPageNumbers, setShowPageNumbers] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Calculate pages whenever content changes
+  useEffect(() => {
+    if (documentContent) {
+      const pages = Math.max(1, Math.ceil(documentContent.length / 3000));
+      console.log('Page calculation:', {
+        contentLength: documentContent.length,
+        calculatedPages: pages,
+        currentPage,
+        totalPages
+      });
+      setTotalPages(pages);
+      // Simple current page estimate - could be enhanced with cursor position
+      setCurrentPage(Math.min(currentPage, pages));
+    }
+  }, [documentContent]);
 
   useEffect(() => {
     if (!documentId) return;
@@ -475,45 +503,166 @@ export default function EditDocumentPage() {
             {error}
           </Alert>
         )}
+        
+        {/* Always visible floating page indicator */}
+        {console.log('Floating indicator check:', { 
+          hasContent: !!documentContent, 
+          contentLength: documentContent?.length,
+          calculatedPages: Math.max(1, Math.ceil((documentContent?.length || 0) / 3000))
+        })}
+        {documentContent && (
+          <Box
+            sx={{ 
+              position: 'fixed',
+              bottom: '30px',
+              right: '30px',
+              zIndex: 10000,
+              padding: '10px 16px',
+              backgroundColor: '#2196f3',
+              color: 'white',
+              borderRadius: '20px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontWeight: 'bold'
+            }}
+          >
+            📄 Page {Math.ceil((documentContent?.length || 0) / 3000) || 1} of {Math.max(1, Math.ceil((documentContent?.length || 0) / 3000))}
+          </Box>
+        )}
 
         <Grid container spacing={4}>
           <Grid item xs={12}>
             {/* Content Editing Tabs */}
             <Paper sx={{ mb: 3 }}>
-              <Tabs
-                value={tabValue}
-                onChange={(e, newValue) => setTabValue(newValue)}
-                variant="fullWidth"
-                sx={{ borderBottom: 1, borderColor: 'divider' }}
-              >
-                <Tab label="Rich Text Editor" disabled={!canUseRichTextEditor(documentData?.mimeType || '')} />
-                <Tab label="External Editor" />
-                <Tab label="Metadata" />
-              </Tabs>
+              <Box sx={{ display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+                <Tabs
+                  value={tabValue}
+                  onChange={(e, newValue) => setTabValue(newValue)}
+                  sx={{ flexGrow: 1 }}
+                >
+                  <Tab label="Rich Text Editor" disabled={!canUseRichTextEditor(documentData?.mimeType || '')} />
+                  <Tab label="External Editor" />
+                  <Tab label="Metadata" />
+                </Tabs>
+                {tabValue === 0 && canUseRichTextEditor(documentData?.mimeType || '') && (
+                  <Button
+                    onClick={() => setShowPreview(!showPreview)}
+                    startIcon={showPreview ? <EditIcon /> : <PreviewIcon />}
+                    sx={{ mr: 2 }}
+                  >
+                    {showPreview ? 'Edit' : 'Preview with Numbers'}
+                  </Button>
+                )}
+              </Box>
             </Paper>
 
+            {console.log('Tab check:', { tabValue, canUse: canUseRichTextEditor(documentData?.mimeType || ''), mimeType: documentData?.mimeType })}
             {tabValue === 0 && canUseRichTextEditor(documentData?.mimeType || '') && (
-              <Paper sx={{ p: 0, height: 'calc(100vh - 300px)' }}>
-                <DAFPublicationEditor
-                  documentId={documentId}
-                  initialContent={documentContent || `
-                    <h1>${documentData.title || 'Document'}</h1>
-                    <p>Start editing your document content here...</p>
-                  `}
-                  initialMetadata={{
-                    title: documentData.title || 'Untitled',
-                    publicationType: 'DAFMAN',
-                    publicationNumber: '',
-                    opr: ''
-                  }}
-                  mode="edit"
-                  onSave={async (content, metadata, sections) => {
-                    await handleRichTextSave(content, metadata);
-                  }}
-                  onExport={handleRichTextExport}
-                  readOnly={false}
-                />
-              </Paper>
+              <>
+                {console.log('Edit mode - showPreview:', showPreview, 'mimeType:', documentData?.mimeType)}
+                {showPreview ? (
+                  <Paper sx={{ p: 3, minHeight: 'calc(100vh - 300px)' }}>
+                    {/* Numbering Controls */}
+                    <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Document Numbering Options:
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={showLineNumbers}
+                              onChange={(e) => setShowLineNumbers(e.target.checked)}
+                              size="small"
+                            />
+                          }
+                          label="Line Numbers"
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={showParagraphNumbers}
+                              onChange={(e) => setShowParagraphNumbers(e.target.checked)}
+                              size="small"
+                            />
+                          }
+                          label="Paragraph Numbers"
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={showPageNumbers}
+                              onChange={(e) => setShowPageNumbers(e.target.checked)}
+                              size="small"
+                            />
+                          }
+                          label="Page Numbers"
+                        />
+                      </Box>
+                    </Box>
+                    
+                    {/* Document Preview with Numbering */}
+                    <DocumentNumbering
+                      content={documentContent || `
+                        <h1>${documentData.title || 'Document'}</h1>
+                        <p>Start editing your document content here...</p>
+                      `}
+                      enableLineNumbers={showLineNumbers}
+                      enableParagraphNumbers={showParagraphNumbers}
+                      enablePageNumbers={showPageNumbers}
+                      linesPerPage={50}
+                    />
+                  </Paper>
+                ) : (
+                  <>
+                    {console.log('Rendering floating indicator:', { currentPage, totalPages, showPreview })}
+                    {/* Floating page indicator - always visible in edit mode */}
+                    <Box
+                      sx={{ 
+                        position: 'fixed',
+                        bottom: '20px',
+                        right: '20px',
+                        zIndex: 9999,
+                        padding: '12px 20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        backgroundColor: '#1976d2',
+                        color: 'white',
+                        borderRadius: '25px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        fontSize: '16px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      <FormatListNumbered />
+                      <span>Page {currentPage} of {totalPages}</span>
+                    </Box>
+                    
+                    <Paper sx={{ p: 0, height: 'calc(100vh - 300px)' }}>
+                      <DAFPublicationEditorWithPageNumbers
+                        documentId={documentId}
+                        initialContent={documentContent || `
+                          <h1>${documentData.title || 'Document'}</h1>
+                          <p>Start editing your document content here...</p>
+                        `}
+                        onSave={async (content) => {
+                          await handleRichTextSave(content, {
+                            title: documentData.title || 'Untitled',
+                            publicationType: 'DAFMAN',
+                            publicationNumber: '',
+                            opr: ''
+                          });
+                          setDocumentContent(content); // Update content for preview
+                        }}
+                        readOnly={false}
+                      />
+                    </Paper>
+                  </>
+                )}
+              </>
             )}
 
             {tabValue === 1 && (

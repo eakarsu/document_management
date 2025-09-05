@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { authTokenService } from '../../../../lib/authTokenService';
+import DocumentNumbering from '../../../../components/DocumentNumbering';
 import {
   Container,
   Paper,
@@ -31,7 +32,17 @@ import {
   ListItem,
   ListItemText,
   Badge,
-  Drawer
+  Drawer,
+  FormGroup,
+  FormControlLabel,
+  Switch,
+  ToggleButton,
+  ToggleButtonGroup,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
 } from '@mui/material';
 import {
   ArrowBack,
@@ -43,7 +54,12 @@ import {
   Visibility as ViewIcon,
   Close as CloseIcon,
   ExpandMore as ExpandIcon,
-  ExpandLess as CollapseIcon
+  ExpandLess as CollapseIcon,
+  FormatListNumbered,
+  Merge as MergeIcon,
+  AutoAwesome as AIIcon,
+  Build as ManualIcon,
+  Psychology as HybridIcon
 } from '@mui/icons-material';
 
 interface CRMComment {
@@ -74,6 +90,14 @@ const DocumentReviewPage = () => {
   const [documentContent, setDocumentContent] = useState<string>('');
   const [showAddForm, setShowAddForm] = useState(true);
   const [token, setToken] = useState<string>('');
+  const [showLineNumbers, setShowLineNumbers] = useState(true);
+  const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
+  const [showPageNumbers, setShowPageNumbers] = useState(true);
+  const [mergeMode, setMergeMode] = useState<'manual' | 'ai' | 'hybrid'>('manual');
+  const [processingMerge, setProcessingMerge] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [mergeResult, setMergeResult] = useState<string>('');
+  const [selectedComment, setSelectedComment] = useState<CRMComment | null>(null);
   const [currentComment, setCurrentComment] = useState<CRMComment>({
     component: '',
     pocName: '',
@@ -126,6 +150,17 @@ const DocumentReviewPage = () => {
           }
           
           setDocumentContent(content);
+          
+          // Load draft feedback from database only
+          if (doc.customFields && typeof doc.customFields === 'object') {
+            const customFields = doc.customFields as any;
+            if (customFields.draftFeedback && Array.isArray(customFields.draftFeedback)) {
+              setComments(customFields.draftFeedback);
+              console.log('Loaded', customFields.draftFeedback.length, 'draft comments from database');
+            } else {
+              console.log('No draft feedback found in database');
+            }
+          }
         } else {
           console.error('Failed to fetch document');
           if (response.status === 401) {
@@ -140,13 +175,88 @@ const DocumentReviewPage = () => {
     fetchDocument();
   }, [documentId, router]);
 
-  const handleAddComment = () => {
+  const handleEditComment = (comment: CRMComment) => {
+    setCurrentComment(comment);
+    setSelectedComment(comment);
+    setShowAddForm(true);
+  };
+
+  const handleMergeModeChange = (event: React.MouseEvent<HTMLElement>, newMode: 'manual' | 'ai' | 'hybrid' | null) => {
+    if (newMode !== null) {
+      setMergeMode(newMode);
+    }
+  };
+
+  const handleMergeFeedback = async () => {
+    if (!selectedComment) return;
+    
+    setProcessingMerge(true);
+    setShowMergeDialog(true);
+    
+    try {
+      if (mergeMode === 'ai' || mergeMode === 'hybrid') {
+        // AI merge
+        const response = await authTokenService.authenticatedFetch('/api/feedback-processor/merge', {
+          method: 'POST',
+          body: JSON.stringify({
+            documentContent: documentContent,
+            feedback: selectedComment,
+            mode: mergeMode
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          setMergeResult(mergeMode === 'ai' ? result.mergedContent : result.suggestedContent);
+        }
+      } else {
+        // Manual merge
+        if (selectedComment.changeTo) {
+          setMergeResult('Manual merge: Replace "' + (selectedComment.changeFrom || '') + '" with "' + selectedComment.changeTo + '"');
+        }
+      }
+    } catch (error) {
+      console.error('Error merging feedback:', error);
+      setMergeResult('Error merging feedback');
+    } finally {
+      setProcessingMerge(false);
+    }
+  };
+
+
+  const handleAddComment = async () => {
     if (!currentComment.component || !currentComment.commentType) {
       alert('Please fill in required fields: Component and Comment Type');
       return;
     }
     
-    setComments([...comments, { ...currentComment, id: Date.now().toString() }]);
+    // Add new comment
+    const newComment = { ...currentComment, id: Date.now().toString() };
+    const updatedComments = [...comments, newComment];
+    setComments(updatedComments);
+    
+    // Save directly to database only (no localStorage)
+    try {
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            draftFeedback: updatedComments,
+            lastDraftUpdate: new Date().toISOString()
+          }
+        })
+      });
+
+      if (response.ok) {
+        console.log('Draft feedback saved to database');
+      } else {
+        console.error('Failed to save feedback to database');
+        alert('Failed to save feedback to database');
+      }
+    } catch (error) {
+      console.error('Error saving to database:', error);
+      alert('Error saving feedback to database');
+    }
     
     // Reset form
     setCurrentComment({
@@ -165,8 +275,32 @@ const DocumentReviewPage = () => {
     });
   };
 
-  const handleDeleteComment = (id: string) => {
-    setComments(comments.filter(c => c.id !== id));
+  const handleDeleteComment = async (id: string) => {
+    const updatedComments = comments.filter(c => c.id !== id);
+    setComments(updatedComments);
+    
+    // Update database only (no localStorage)
+    try {
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            draftFeedback: updatedComments,
+            lastDraftUpdate: new Date().toISOString()
+          }
+        })
+      });
+      
+      if (response.ok) {
+        console.log('Comment deleted from database');
+      } else {
+        console.error('Failed to delete comment from database');
+        alert('Failed to delete comment from database');
+      }
+    } catch (error) {
+      console.error('Error updating database:', error);
+      alert('Error deleting comment');
+    }
   };
 
   const handleSubmit = async () => {
@@ -181,7 +315,8 @@ const DocumentReviewPage = () => {
         body: JSON.stringify({
           comments,
           userRole: 'coordinator',
-          documentId
+          documentId,
+          isDraft: false  // Final submission, not a draft
         })
       });
 
@@ -270,21 +405,53 @@ const DocumentReviewPage = () => {
                   </Grid>
                 </Box>
                 
-                {/* Document Content */}
+                {/* Numbering Controls */}
+                <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Document Numbering for Feedback Reference:
+                  </Typography>
+                  <FormGroup row>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={showLineNumbers}
+                          onChange={(e) => setShowLineNumbers(e.target.checked)}
+                          size="small"
+                        />
+                      }
+                      label="Line Numbers"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={showParagraphNumbers}
+                          onChange={(e) => setShowParagraphNumbers(e.target.checked)}
+                          size="small"
+                        />
+                      }
+                      label="Paragraph Numbers"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={showPageNumbers}
+                          onChange={(e) => setShowPageNumbers(e.target.checked)}
+                          size="small"
+                        />
+                      }
+                      label="Page Numbers"
+                    />
+                  </FormGroup>
+                </Box>
+
+                {/* Document Content with Numbering */}
                 {documentContent ? (
-                  <Box 
-                    dangerouslySetInnerHTML={{ __html: documentContent }}
-                    sx={{
-                      '& h1': { fontSize: '2rem', fontWeight: 'bold', mb: 2, mt: 3, color: 'primary.main' },
-                      '& h2': { fontSize: '1.5rem', fontWeight: 'bold', mb: 1.5, mt: 2.5 },
-                      '& h3': { fontSize: '1.25rem', fontWeight: 'bold', mb: 1, mt: 2 },
-                      '& p': { mb: 1.5, lineHeight: 1.7 },
-                      '& ul, & ol': { mb: 1.5, pl: 3 },
-                      '& li': { mb: 0.5 },
-                      '& table': { width: '100%', borderCollapse: 'collapse', mb: 2 },
-                      '& th, & td': { border: '1px solid #ddd', padding: '8px' },
-                      '& th': { bgcolor: 'grey.100', fontWeight: 'bold' }
-                    }}
+                  <DocumentNumbering
+                    content={documentContent}
+                    enableLineNumbers={showLineNumbers}
+                    enableParagraphNumbers={showParagraphNumbers}
+                    enablePageNumbers={showPageNumbers}
+                    linesPerPage={50}
                   />
                 ) : (
                   <Box sx={{ p: 5, textAlign: 'center' }}>
@@ -332,11 +499,50 @@ const DocumentReviewPage = () => {
 
         {/* Right Side: CRM Feedback Form */}
         <Box sx={{ width: '600px', overflow: 'auto', p: 3, bgcolor: 'background.default' }}>
-          {/* Add Comment Form */}
+          {/* Merge Mode Selection */}
           <Paper sx={{ p: 2, mb: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Merge Mode
+            </Typography>
+            <ToggleButtonGroup
+              value={mergeMode}
+              exclusive
+              onChange={handleMergeModeChange}
+              fullWidth
+            >
+              <ToggleButton value="manual">
+                <ManualIcon sx={{ mr: 1 }} />
+                Manual
+              </ToggleButton>
+              <ToggleButton value="ai">
+                <AIIcon sx={{ mr: 1 }} />
+                AI-Assisted
+              </ToggleButton>
+              <ToggleButton value="hybrid">
+                <HybridIcon sx={{ mr: 1 }} />
+                Hybrid
+              </ToggleButton>
+            </ToggleButtonGroup>
+            
+            {selectedComment && (
+              <Button
+                variant="contained"
+                fullWidth
+                sx={{ mt: 2 }}
+                startIcon={<MergeIcon />}
+                onClick={handleMergeFeedback}
+                disabled={!selectedComment || processingMerge}
+              >
+                Merge Selected Feedback
+              </Button>
+            )}
+          </Paper>
+
+          {/* Add Comment Form */}
+          <Paper sx={{ p: 2, mb: 2, border: selectedComment ? 2 : 1, borderColor: selectedComment ? 'primary.main' : 'divider' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                Add CRM Comment
+              <Typography variant="h6" sx={{ flexGrow: 1, color: selectedComment ? 'primary.main' : 'text.primary' }}>
+                {selectedComment ? 'Selected Feedback Details' : 'Add CRM Comment'}
               </Typography>
               <IconButton onClick={() => setShowAddForm(!showAddForm)} size="small">
                 {showAddForm ? <CollapseIcon /> : <ExpandIcon />}
@@ -345,6 +551,20 @@ const DocumentReviewPage = () => {
             
             {showAddForm && (
               <Grid container spacing={2}>
+                {/* Show selected feedback details if any */}
+                {selectedComment && (
+                  <>
+                    <Grid item xs={12}>
+                      <Box sx={{ p: 1.5, bgcolor: 'blue.50', borderRadius: 1, border: 1, borderColor: 'blue.200', mb: 2 }}>
+                        <Typography variant="caption" color="primary" fontWeight="bold">Current Selection:</Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          {selectedComment.component} - {selectedComment.coordinatorComment}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </>
+                )}
+                
                 {/* Column 1: Component and POC */}
                 <Grid item xs={12}>
                   <Typography variant="caption" color="primary">
@@ -521,7 +741,7 @@ const DocumentReviewPage = () => {
           </Paper>
 
           {/* Comments List */}
-          <Paper sx={{ p: 2 }}>
+          <Paper sx={{ p: 2, maxHeight: 'calc(100vh - 200px)', overflow: 'auto' }}>
             <Typography variant="h6" gutterBottom>
               Comment Matrix ({comments.length})
             </Typography>
@@ -531,58 +751,81 @@ const DocumentReviewPage = () => {
                 No comments added yet. Add your first comment above.
               </Box>
             ) : (
-              <List>
+              <List sx={{ pt: 0 }}>
                 {comments.map((comment, index) => (
-                  <ListItem
-                    key={comment.id}
-                    sx={{ 
-                      mb: 1, 
-                      border: 1, 
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      display: 'block',
-                      p: 2
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
-                        #{index + 1} - {comment.component}
-                      </Typography>
-                      <Chip 
-                        label={getCommentTypeLabel(comment.commentType)}
-                        color={getCommentTypeColor(comment.commentType) as any}
-                        size="small"
-                        sx={{ mr: 1 }}
-                      />
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteComment(comment.id!)}
+                    <ListItem
+                      key={comment.id}
+                      sx={{ 
+                        mb: 1, 
+                        border: 1, 
+                        borderColor: comment.commentType === 'C' ? 'error.main' : 'divider',
+                        borderRadius: 1,
+                        display: 'block',
+                        p: 0,
+                        bgcolor: comment.commentType === 'C' ? 'error.50' : 'background.paper',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          boxShadow: 2
+                        }
+                      }}
+                    >
+                      {/* Header - Always Visible */}
+                      <Box 
+                        sx={{ 
+                          p: 2, 
+                          cursor: 'pointer',
+                          '&:hover': {
+                            bgcolor: 'grey.50'
+                          }
+                        }}
+                        onClick={() => handleEditComment(comment)}
                       >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                    
-                    <Typography variant="body2" gutterBottom>
-                      📍 Page {comment.page || '-'}, Para {comment.paragraphNumber || '-'}, Line {comment.lineNumber || '-'}
-                    </Typography>
-                    
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                      {comment.coordinatorComment}
-                    </Typography>
-                    
-                    {comment.changeFrom && (
-                      <Box sx={{ mt: 1, p: 1, bgcolor: 'error.light', borderRadius: 1 }}>
-                        <Typography variant="caption">From: {comment.changeFrom}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold', ml: 2 }}>
+                            #{index + 1} - {comment.component}
+                          </Typography>
+                          <Chip 
+                            label={getCommentTypeLabel(comment.commentType)}
+                            color={getCommentTypeColor(comment.commentType) as any}
+                            size="small"
+                            sx={{ mr: 1 }}
+                          />
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteComment(comment.id!);
+                            }}
+                            title="Delete Comment"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                        
+                        {/* Summary Line - Always Visible */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, ml: 2 }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ mr: 2 }}>
+                            📍 Page {comment.page || '-'}, Para {comment.paragraphNumber || '-'}, Line {comment.lineNumber || '-'}
+                          </Typography>
+                          {comment.coordinatorComment && (
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                flexGrow: 1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                color: 'text.secondary',
+                                fontStyle: 'italic'
+                              }}
+                            >
+                              {comment.coordinatorComment}
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
-                    )}
-                    
-                    {comment.changeTo && (
-                      <Box sx={{ mt: 0.5, p: 1, bgcolor: 'success.light', borderRadius: 1 }}>
-                        <Typography variant="caption">To: {comment.changeTo}</Typography>
-                      </Box>
-                    )}
-                  </ListItem>
+                    </ListItem>
                 ))}
               </List>
             )}
@@ -596,6 +839,31 @@ const DocumentReviewPage = () => {
           </Paper>
         </Box>
       </Box>
+
+      {/* Merge Result Dialog */}
+      <Dialog open={showMergeDialog} onClose={() => setShowMergeDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Merge Result</DialogTitle>
+        <DialogContent>
+          {processingMerge ? (
+            <Box sx={{ textAlign: 'center', py: 3 }}>
+              <CircularProgress />
+              <Typography sx={{ mt: 2 }}>Processing merge...</Typography>
+            </Box>
+          ) : (
+            <Box>
+              <Typography variant="body1">{mergeResult}</Typography>
+              {mergeMode === 'hybrid' && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  This is an AI suggestion. Please review and apply the changes manually.
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowMergeDialog(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

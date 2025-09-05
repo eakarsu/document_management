@@ -40,6 +40,91 @@ import { api } from '../../../lib/api';
 
 // Templates matching backend template IDs
 const documentTemplates = [
+  // CRITICAL TEMPLATES - Coordination & Workflow
+  {
+    id: 'comment-resolution-matrix',
+    name: 'Comment Resolution Matrix (CRM)',
+    description: 'Track and resolve coordination comments',
+    icon: AssignmentIcon,
+    sections: ['Header Info', 'Comments', 'Resolutions', 'Coordinator Concurrence'],
+    hasBiography: false
+  },
+  {
+    id: 'af-form-673',
+    name: 'AF Form 673 - Coordination Record',
+    description: 'Official coordination and approval record',
+    icon: LegalIcon,
+    sections: ['Publication Info', 'Coordination List', 'Signatures', 'Concurrence'],
+    hasBiography: false
+  },
+  {
+    id: 'supplement-template',
+    name: 'Supplement Template',
+    description: 'Supplement to existing publication',
+    icon: DocumentIcon,
+    sections: ['Parent Pub Reference', 'Added Paragraphs', 'Modified Paragraphs', 'Local Procedures'],
+    hasBiography: false
+  },
+  {
+    id: 'o6-gs15-coordination',
+    name: 'O6/GS15 Coordination',
+    description: 'SME review and coordination template',
+    icon: AssignmentIcon,
+    sections: ['Document Info', 'SME Review', 'Technical Comments', 'Resolution'],
+    hasBiography: false
+  },
+  {
+    id: '2-letter-coordination',
+    name: '2-Letter Coordination',
+    description: 'Senior leadership review template',
+    icon: PolicyIcon,
+    sections: ['Executive Summary', 'Key Issues', 'Recommendations', 'Leadership Decision'],
+    hasBiography: false
+  },
+  {
+    id: 'legal-coordination',
+    name: 'Legal Coordination',
+    description: 'Legal review and compliance template',
+    icon: LegalIcon,
+    sections: ['Legal Requirements', 'Compliance Check', 'Statutory Review', 'Legal Approval'],
+    hasBiography: false
+  },
+  
+  // HIGH PRIORITY TEMPLATES - Policy Documents
+  {
+    id: 'dafpd-template',
+    name: 'DAF Policy Directive (DAFPD)',
+    description: 'Department of Air Force Policy Directive',
+    icon: PolicyIcon,
+    sections: ['Overview', 'Policy', 'Roles & Responsibilities', 'Summary', 'Attachments'],
+    hasBiography: false
+  },
+  {
+    id: 'dafman-template',
+    name: 'DAF Manual (DAFMAN)',
+    description: 'Department of Air Force Manual template',
+    icon: ManualIcon,
+    sections: ['General Information', 'Responsibilities', 'Procedures', 'Glossary'],
+    hasBiography: false
+  },
+  {
+    id: 'guidance-memorandum',
+    name: 'Guidance Memorandum',
+    description: 'Interim guidance pending formal publication update',
+    icon: PolicyIcon,
+    sections: ['Purpose', 'Background', 'Guidance', 'Specific Changes', 'Expiration'],
+    hasBiography: false
+  },
+  {
+    id: 'waiver-request',
+    name: 'Waiver Request',
+    description: 'Request for waiver from existing requirements',
+    icon: LegalIcon,
+    sections: ['Request', 'Justification', 'Alternative Compliance', 'Risk Assessment', 'Approval'],
+    hasBiography: false
+  },
+  
+  // EXISTING TEMPLATES
   {
     id: 'air-force-manual',
     name: 'Air Force Technical Manual',
@@ -131,88 +216,7 @@ const CreateDocumentPage: React.FC = () => {
       const template = documentTemplates.find(t => t.id === selectedTemplate);
       if (!template) return;
 
-      // Create document content based on selected template
-      let documentContent = `# ${documentData.title}\n\n`;
-      
-      // Add document metadata
-      documentContent += `**Publication Number:** ${documentData.publicationNumber || '[To be assigned]'}\n`;
-      documentContent += `**OPR:** ${documentData.opr || '[To be specified]'}\n`;
-      documentContent += `**Date:** ${new Date().toLocaleDateString()}\n\n`;
-      
-      if (documentData.supersedes) {
-        documentContent += `**Supersedes:** ${documentData.supersedes}\n\n`;
-      }
-
-      // Add template sections with content
-      template.sections.forEach(section => {
-        documentContent += `## ${section}\n\n`;
-        
-        switch (section.toLowerCase()) {
-          case 'header':
-            documentContent += `BY ORDER OF THE SECRETARY OF THE AIR FORCE\n\n`;
-            documentContent += `${template.name.toUpperCase()} ${documentData.publicationNumber || '[NUMBER]'}\n\n`;
-            documentContent += `${new Date().toLocaleDateString()}\n\n`;
-            documentContent += `${documentData.title}\n\n`;
-            break;
-          
-          case 'background/biography':
-          case 'subject biography':
-          case 'biography/background':
-            documentContent += `**Background and Biographical Information:**\n\n`;
-            documentContent += `This section provides the historical background, biographical context, and foundational information relevant to this publication. `;
-            documentContent += `Please include:\n\n`;
-            documentContent += `- Historical context and development\n`;
-            documentContent += `- Key personnel or subject biographies\n`;
-            documentContent += `- Organizational background\n`;
-            documentContent += `- Previous versions and evolution\n`;
-            documentContent += `- Relevant regulatory history\n\n`;
-            documentContent += `[Please replace this placeholder with specific biographical and background information for your publication.]\n\n`;
-            break;
-          
-          case 'policy statement':
-            documentContent += `This directive establishes policy for [specify the subject matter]. `;
-            documentContent += `It applies to all Air Force personnel and operations.\n\n`;
-            break;
-          
-          case 'responsibilities':
-            documentContent += `**Air Force Chief of Staff.** [Define responsibilities]\n\n`;
-            documentContent += `**Major Commands.** [Define responsibilities]\n\n`;
-            documentContent += `**Wings and Units.** [Define responsibilities]\n\n`;
-            break;
-          
-          case 'procedures':
-            documentContent += `1. [Step-by-step procedures]\n`;
-            documentContent += `2. [Additional procedures]\n`;
-            documentContent += `3. [More procedures as needed]\n\n`;
-            break;
-          
-          case 'implementation':
-            documentContent += `This directive is effective immediately. `;
-            documentContent += `Commands will ensure compliance within [specify timeframe].\n\n`;
-            break;
-          
-          default:
-            documentContent += `[Content for ${section} - Please provide relevant information for this section.]\n\n`;
-        }
-      });
-
-      // Add standard footer
-      documentContent += `---\n\n`;
-      documentContent += `**Certifying Official:** ${documentData.certifyingOfficial || '[Name and Title]'}\n\n`;
-      documentContent += `**OPR:** ${documentData.opr || '[Office Symbol]'}\n\n`;
-
-      // Convert markdown content to HTML for the editor
-      const htmlContent = documentContent
-        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-        .replace(/^- (.*$)/gim, '<li>$1</li>')
-        .replace(/^(\d+)\. (.*$)/gim, '<li>$2</li>')
-        .replace(/\n\n/g, '</p><p>')
-        .replace(/^/, '<p>')
-        .replace(/$/, '</p>');
-
-      // Create document with content using the template endpoint
+      // Create document with the ACTUAL template content from backend
       const response = await api.post('/api/documents/create-with-template', {
         title: documentData.title,
         description: documentData.description || `${template.name}: ${documentData.title}`,
@@ -225,21 +229,12 @@ const CreateDocumentPage: React.FC = () => {
         const data = await response.json();
         
         if (data.success && data.document) {
-          // Save the HTML content to the document
-          const saveResponse = await api.post(`/api/editor/documents/${data.document.id}/save`, {
-            content: htmlContent,
-            title: documentData.title,
-            timestamp: new Date().toISOString()
-          });
-          
-          if (saveResponse.ok) {
-            alert('Document created successfully with template content!');
-            // Navigate to the editor for immediate editing
-            router.push(`/editor/${data.document.id}`);
-          } else {
-            alert('Document created but content save failed. You can still edit it.');
-            router.push(`/editor/${data.document.id}`);
-          }
+          // DO NOT overwrite the template content!
+          // The backend already has the proper HTML template content
+          // Just navigate to the editor
+          alert('Document created successfully with template content!');
+          // Navigate to the document view/edit page
+          router.push(`/documents/${data.document.id}`);
         } else {
           throw new Error('Failed to create document');
         }

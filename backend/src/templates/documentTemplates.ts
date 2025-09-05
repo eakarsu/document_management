@@ -1,5 +1,53 @@
+// Import critical templates
+import { criticalTemplates } from './criticalPubOneTemplates';
+
 // Document templates with full content
 export const documentTemplates = {
+  // CRITICAL TEMPLATES - From PubOne Requirements
+  'comment-resolution-matrix': {
+    name: criticalTemplates['comment-resolution-matrix'].name,
+    content: criticalTemplates['comment-resolution-matrix'].content
+  },
+  'af-form-673': {
+    name: criticalTemplates['af-form-673'].name,
+    content: criticalTemplates['af-form-673'].content
+  },
+  'supplement-template': {
+    name: criticalTemplates['supplement-template'].name,
+    content: criticalTemplates['supplement-template'].content
+  },
+  'o6-gs15-coordination': {
+    name: criticalTemplates['o6-gs15-coordination'].name,
+    content: criticalTemplates['o6-gs15-coordination'].content
+  },
+  '2-letter-coordination': {
+    name: criticalTemplates['2-letter-coordination'].name,
+    content: criticalTemplates['2-letter-coordination'].content
+  },
+  'legal-coordination': {
+    name: criticalTemplates['legal-coordination'].name,
+    content: criticalTemplates['legal-coordination'].content
+  },
+  
+  // HIGH PRIORITY TEMPLATES
+  'dafpd-template': {
+    name: criticalTemplates['dafpd-template'].name,
+    content: criticalTemplates['dafpd-template'].content
+  },
+  'dafman-template': {
+    name: criticalTemplates['dafman-template'].name,
+    content: criticalTemplates['dafman-template'].content
+  },
+  'guidance-memorandum': {
+    name: criticalTemplates['guidance-memorandum'].name,
+    content: criticalTemplates['guidance-memorandum'].content
+  },
+  'waiver-request': {
+    name: criticalTemplates['waiver-request'].name,
+    content: criticalTemplates['waiver-request'].content
+  },
+  
+  // EXISTING TEMPLATES
   'air-force-manual': {
     name: 'Air Force Technical Manual',
     content: `

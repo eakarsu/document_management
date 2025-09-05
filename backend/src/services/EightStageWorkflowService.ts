@@ -40,12 +40,17 @@ export class EightStageWorkflowService {
   // Stage 1: Initial Draft Creation
   async createWorkflowInstance(params: WorkflowParams) {
     try {
+      // First get the existing document to preserve its customFields
+      const existingDocument = await prisma.document.findUnique({
+        where: { id: params.documentId }
+      });
+      
       // For now, create a simple workflow entry using document's metadata
       const document = await prisma.document.update({
         where: { id: params.documentId },
         data: {
           customFields: {
-            ...{},
+            ...(existingDocument?.customFields as object || {}),
             workflow: {
               stage: 'DRAFT_CREATION',
               status: 'active',

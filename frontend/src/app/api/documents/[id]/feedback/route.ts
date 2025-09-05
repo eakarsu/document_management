@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
 
@@ -21,7 +21,7 @@ export async function POST(
 
     // Get request body
     const body = await request.json();
-    const { comments, userRole } = body;
+    const { comments, userRole, isDraft } = body;
     const documentId = params.id;
 
     // Get the document
@@ -35,23 +35,48 @@ export async function POST(
 
     // Save feedback to document's customFields
     const existingFeedback = document.customFields as any || {};
-    const crmFeedback = existingFeedback.crmFeedback || [];
     
-    // Add new comments with metadata
-    const newFeedback = comments.map((comment: any) => ({
-      ...comment,
-      id: `crm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      userId,
-      userRole,
-      createdAt: new Date().toISOString(),
-      status: 'pending'
-    }));
+    // Handle draft vs final feedback differently
+    let updatedFeedback;
+    
+    if (isDraft) {
+      // For drafts, replace existing draft or create new one
+      const drafts = existingFeedback.draftFeedback || {};
+      drafts[userId] = {
+        comments,
+        userRole,
+        userId,
+        lastUpdated: new Date().toISOString(),
+        isDraft: true
+      };
+      existingFeedback.draftFeedback = drafts;
+      updatedFeedback = comments;
+    } else {
+      // For final submission, add to permanent feedback
+      const crmFeedback = existingFeedback.crmFeedback || [];
+      
+      // Add new comments with metadata
+      const newFeedback = comments.map((comment: any) => ({
+        ...comment,
+        id: comment.id || `crm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        userId,
+        userRole,
+        createdAt: new Date().toISOString(),
+        status: 'pending'
+      }));
 
-    // Merge with existing feedback
-    const updatedFeedback = [...crmFeedback, ...newFeedback];
+      // Merge with existing feedback
+      updatedFeedback = [...crmFeedback, ...newFeedback];
+      existingFeedback.crmFeedback = updatedFeedback;
+      
+      // Clear the draft for this user
+      if (existingFeedback.draftFeedback) {
+        delete existingFeedback.draftFeedback[userId];
+      }
+    }
 
     // Check for critical comments
-    const hasCritical = newFeedback.some((c: any) => c.commentType === 'C');
+    const hasCritical = comments.some((c: any) => c.commentType === 'C');
     
     // Update document with new feedback
     const updatedDocument = await prisma.document.update({
@@ -59,31 +84,32 @@ export async function POST(
       data: {
         customFields: {
           ...existingFeedback,
-          crmFeedback: updatedFeedback,
-          hasCriticalComments: hasCritical || existingFeedback.hasCriticalComments,
+          hasCriticalComments: (!isDraft && hasCritical) || existingFeedback.hasCriticalComments,
           lastFeedbackAt: new Date().toISOString(),
-          totalComments: updatedFeedback.length
+          totalComments: existingFeedback.crmFeedback?.length || 0
         }
       }
     });
 
-    // Create audit log entry
-    await prisma.auditLog.create({
-      data: {
-        action: 'CRM_FEEDBACK_ADDED',
-        entityType: 'Document',
-        entityId: documentId,
-        userId,
-        metadata: {
-          commentCount: newFeedback.length,
-          hasCritical,
-          commentTypes: newFeedback.map((c: any) => c.commentType)
+    // Create audit log entry only for final submissions
+    if (!isDraft) {
+      await prisma.auditLog.create({
+        data: {
+          action: 'CRM_FEEDBACK_ADDED',
+          entityId: documentId,
+          userId,
+          metadata: {
+            entityType: 'Document',
+            commentCount: comments.length,
+            hasCritical,
+            commentTypes: comments.map((c: any) => c.commentType)
+          }
         }
-      }
-    });
+      });
+    }
 
-    // If there are critical comments, update document status
-    if (hasCritical) {
+    // If there are critical comments in final submission, update document status
+    if (!isDraft && hasCritical) {
       await prisma.document.update({
         where: { id: documentId },
         data: {
@@ -118,6 +144,20 @@ export async function GET(
 ) {
   try {
     const documentId = params.id;
+    
+    // Get auth token to identify user
+    const authHeader = request.headers.get('authorization');
+    let userId = null;
+    
+    if (authHeader) {
+      try {
+        const token = authHeader.replace('Bearer ', '');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+        userId = decoded.userId;
+      } catch (e) {
+        console.log('Could not decode token for user identification');
+      }
+    }
 
     // Get the document
     const document = await prisma.document.findUnique({
@@ -132,10 +172,32 @@ export async function GET(
     }
 
     const customFields = document.customFields as any || {};
+    
+    // Check if requesting draft feedback
+    const url = new URL(request.url);
+    const isDraft = url.searchParams.get('isDraft') === 'true';
+    
+    if (isDraft && userId && customFields.draftFeedback && customFields.draftFeedback[userId]) {
+      // Return user's draft feedback
+      const draft = customFields.draftFeedback[userId];
+      return NextResponse.json({
+        feedback: [{
+          feedbackData: draft,
+          isDraft: true
+        }],
+        totalComments: draft.comments?.length || 0,
+        hasCritical: draft.comments?.some((c: any) => c.commentType === 'C') || false
+      });
+    }
+    
+    // Return final feedback
     const crmFeedback = customFields.crmFeedback || [];
 
     return NextResponse.json({
-      feedback: crmFeedback,
+      feedback: crmFeedback.map((f: any) => ({
+        feedbackData: { comments: [f] },
+        isDraft: false
+      })),
       totalComments: crmFeedback.length,
       hasCritical: crmFeedback.some((c: any) => c.commentType === 'C')
     });

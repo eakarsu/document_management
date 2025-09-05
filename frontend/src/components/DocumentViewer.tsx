@@ -8,14 +8,19 @@ import {
   Button,
   Alert,
   CircularProgress,
-  Chip
+  Chip,
+  FormGroup,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import {
   Visibility as ViewIcon,
   Download as DownloadIcon,
-  OpenInNew as OpenIcon
+  OpenInNew as OpenIcon,
+  FormatListNumbered
 } from '@mui/icons-material';
 import { api } from '../lib/api';
+import DocumentNumbering from './DocumentNumbering';
 
 interface DocumentViewerProps {
   documentId: string;
@@ -36,6 +41,9 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLineNumbers, setShowLineNumbers] = useState(true);
+  const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
+  const [showPageNumbers, setShowPageNumbers] = useState(true);
 
   // Use content directly from props if available
   const htmlContent = document?.content || '';
@@ -163,30 +171,60 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       return html;
     };
 
-    // Render the HTML content directly in the component
+    // Render the HTML content with automatic numbering
     return (
-      <Box 
-        sx={{ 
-          width: '100%', 
-          minHeight: '600px', 
-          border: '1px solid #ddd', 
-          borderRadius: 1,
-          p: 3,
-          backgroundColor: '#fff',
-          overflowY: 'auto',
-          maxHeight: '800px',
-          '& h1': { fontSize: '2rem', fontWeight: 'bold', mb: 2, color: '#1976d2' },
-          '& h2': { fontSize: '1.5rem', fontWeight: 'bold', mt: 2, mb: 1, color: '#1565c0' },
-          '& h3': { fontSize: '1.2rem', fontWeight: 'bold', mt: 1.5, mb: 1 },
-          '& p': { mb: 1.5, lineHeight: 1.6 },
-          '& ul, & ol': { ml: 3, mb: 1.5 },
-          '& li': { mb: 0.5 },
-          '& hr': { my: 2 }
-        }}
-        dangerouslySetInnerHTML={{ __html: extractContent(htmlContent) }}
-      />
+      <>
+        {/* Numbering Controls */}
+        <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Document Numbering Options:
+          </Typography>
+          <FormGroup row>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showLineNumbers}
+                  onChange={(e) => setShowLineNumbers(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Line Numbers"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showParagraphNumbers}
+                  onChange={(e) => setShowParagraphNumbers(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Paragraph Numbers"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showPageNumbers}
+                  onChange={(e) => setShowPageNumbers(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Page Numbers"
+            />
+          </FormGroup>
+        </Box>
+        
+        {/* Document Content with Numbering */}
+        <DocumentNumbering
+          content={extractContent(htmlContent)}
+          enableLineNumbers={showLineNumbers}
+          enableParagraphNumbers={showParagraphNumbers}
+          enablePageNumbers={showPageNumbers}
+          linesPerPage={50}
+        />
+      </>
     );
   };
+
 
   const formatFileSize = (bytes?: number): string => {
     if (!bytes) return 'Unknown size';
