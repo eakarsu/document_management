@@ -63,11 +63,12 @@ export class OpenRouterService {
     });
 
     // Model priority based on feedback severity and task complexity
+    // Using Claude 3.5 Sonnet as primary model for all severities (cost-effective)
     this.modelPriority = new Map([
-      ['CRITICAL', ['anthropic/claude-3-opus', 'openai/gpt-4-turbo', 'anthropic/claude-3.5-sonnet']],
+      ['CRITICAL', ['anthropic/claude-3.5-sonnet', 'openai/gpt-4-turbo', 'openai/gpt-4']],
       ['MAJOR', ['anthropic/claude-3.5-sonnet', 'openai/gpt-4', 'google/gemini-pro']],
-      ['SUBSTANTIVE', ['openai/gpt-4', 'anthropic/claude-3-haiku', 'google/gemini-pro']],
-      ['ADMINISTRATIVE', ['openai/gpt-3.5-turbo', 'anthropic/claude-3-haiku', 'mistralai/mistral-medium']]
+      ['SUBSTANTIVE', ['anthropic/claude-3.5-sonnet', 'openai/gpt-3.5-turbo', 'google/gemini-pro']],
+      ['ADMINISTRATIVE', ['anthropic/claude-3.5-sonnet', 'openai/gpt-3.5-turbo', 'mistralai/mistral-medium']]
     ]);
   }
 

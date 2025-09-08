@@ -1,0 +1,110 @@
+{
+  "timestamp": "2025-09-08T16:46:26.164Z",
+  "documentId": "doc_test_comprehensive_mfbcsram",
+  "documentTitle": "Comprehensive Test Document - Spelling and Rephrasing",
+  "totalFeedback": 14,
+  "successful": 14,
+  "failed": 0,
+  "skipped": 0,
+  "successRate": "100.0%",
+  "results": [
+    {
+      "feedbackId": "fb_comp_004",
+      "status": "SUCCESS",
+      "type": "S",
+      "severity": "MAJOR",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_005",
+      "status": "SUCCESS",
+      "type": "S",
+      "severity": "MAJOR",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_007",
+      "status": "SUCCESS",
+      "type": "S",
+      "severity": "MAJOR",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_011",
+      "status": "SUCCESS",
+      "type": "S",
+      "severity": "MAJOR",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_006",
+      "status": "SUCCESS",
+      "type": "S",
+      "severity": "MAJOR",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_009",
+      "status": "SUCCESS",
+      "type": "C",
+      "severity": "CRITICAL",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_012",
+      "status": "SUCCESS",
+      "type": "A",
+      "severity": "MINOR",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_010",
+      "status": "SUCCESS",
+      "type": "S",
+      "severity": "MAJOR",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_008",
+      "status": "SUCCESS",
+      "type": "S",
+      "severity": "MAJOR",
+      "changeType": "SENTENCE"
+    },
+    {
+      "feedbackId": "fb_comp_001",
+      "status": "SUCCESS",
+      "type": "A",
+      "severity": "MINOR",
+      "changeType": "WORD"
+    },
+    {
+      "feedbackId": "fb_comp_002",
+      "status": "SUCCESS",
+      "type": "A",
+      "severity": "MINOR",
+      "changeType": "WORD"
+    },
+    {
+      "feedbackId": "fb_comp_003",
+      "status": "SUCCESS",
+      "type": "A",
+      "severity": "MINOR",
+      "changeType": "WORD"
+    },
+    {
+      "feedbackId": "fb_comp_013",
+      "status": "SUCCESS",
+      "type": "A",
+      "severity": "MINOR",
+      "changeType": "WORD"
+    },
+    {
+      "feedbackId": "fb_comp_014",
+      "status": "SUCCESS",
+      "type": "A",
+      "severity": "MINOR",
+      "changeType": "WORD"
+    }
+  ]
+}

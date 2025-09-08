@@ -349,14 +349,14 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
   const styles = `
     .numbered-paragraph {
       position: relative;
-      ${enableParagraphNumbers ? 'margin-left: 80px;' : ''}
+      ${enableParagraphNumbers && enableLineNumbers ? 'margin-left: 140px;' : enableParagraphNumbers ? 'margin-left: 80px;' : enableLineNumbers ? 'margin-left: 60px;' : ''}
     }
     
     .numbered-paragraph::before {
       ${enableParagraphNumbers ? `
         content: attr(data-paragraph);
         position: absolute;
-        left: -75px;
+        left: ${enableLineNumbers ? '-75px' : '-75px'};
         top: 0;
         color: #666;
         font-size: 0.9em;
@@ -368,17 +368,20 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
     }
     
     .numbered-line {
-      ${enableLineNumbers ? 'border-left: 1px solid #eee; padding-left: 5px;' : ''}
+      ${enableLineNumbers ? 'position: relative;' : ''}
     }
     
     .numbered-line::after {
       ${enableLineNumbers ? `
         content: attr(data-line-start);
         position: absolute;
-        right: -30px;
+        left: ${enableParagraphNumbers ? '-135px' : '-55px'};
         top: 0;
         color: #999;
         font-size: 0.8em;
+        width: 45px;
+        text-align: right;
+        padding-right: 10px;
       ` : ''}
     }
     

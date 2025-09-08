@@ -120,6 +120,23 @@ export async function PATCH(
       }, { status: 404 });
     }
     
+    // DEBUG: Check for duplicates in incoming content
+    if (body.customFields?.content) {
+      const incomingContent = body.customFields.content;
+      const h1Count = (incomingContent.match(/<h1>/g) || []).length;
+      const sectionICount = (incomingContent.match(/SECTION I - INTRODUCTION/g) || []).length;
+      
+      console.log('PATCH API - Incoming content check:');
+      console.log('  - Document ID:', params.id);
+      console.log('  - Content length:', incomingContent.length);
+      console.log('  - H1 count:', h1Count, h1Count > 1 ? '❌ HAS DUPLICATES!' : '✅');
+      console.log('  - Section I count:', sectionICount, sectionICount > 1 ? '❌ HAS DUPLICATES!' : '✅');
+      
+      if (h1Count > 1 || sectionICount > 1) {
+        console.error('❌ CRITICAL: Frontend sent content with duplicates to PATCH!');
+      }
+    }
+    
     // Merge customFields
     const currentCustomFields = currentDoc.customFields as any || {};
     const updatedCustomFields = {

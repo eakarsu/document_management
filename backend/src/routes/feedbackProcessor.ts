@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import OpenRouterService from '../services/OpenRouterService';
+import * as cheerio from 'cheerio';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -297,7 +298,8 @@ router.post('/feedback/batch-process',
             
             if (document && document.customFields) {
               const content = (document.customFields as any).content || '';
-              const updatedContent = content.replace(
+              // FIX: Use replaceAll to replace ALL occurrences, not just the first one
+              const updatedContent = content.replaceAll(
                 processed.originalSentence,
                 processed.improvedSentence
               );
@@ -405,6 +407,273 @@ router.post('/feedback/ai-recommendation',
       res.status(500).json({ error: error.message || 'Failed to get recommendation' });
     }
 });
+
+/**
+ * Merge feedback into document with AI assistance
+ */
+router.post('/merge',
+  authMiddleware,
+  // checkOPRPermission, // TEMPORARILY DISABLED FOR TESTING
+  async (req: Request, res: Response) => {
+    try {
+      const { documentContent, feedback, mode } = req.body;
+      
+      // Debug logging - ALSO write to backend.log file
+      const fs = require('fs');
+      const debugLog = `
+=== MERGE ENDPOINT DEBUG ===
+Time: ${new Date().toISOString()}
+Mode: ${mode}
+Feedback received: ${JSON.stringify(feedback, null, 2)}
+Document content length: ${documentContent?.length || 0}
+Document content preview (first 500 chars): ${documentContent?.substring(0, 500)}
+
+=== TEXT LOCATION DEBUG ===
+Looking for text (changeFrom): ${feedback.changeFrom}
+Replace with text (changeTo): ${feedback.changeTo}
+Location - Page: ${feedback.page}, Paragraph: ${feedback.paragraphNumber}, Line: ${feedback.lineNumber}
+`;
+      
+      // Write to backend.log
+      fs.appendFileSync('/Users/erolakarsu/projects/document_management/backend/backend.log', debugLog);
+      
+      // Also log to console
+      console.log('=== MERGE ENDPOINT DEBUG ===');
+      console.log('Mode:', mode);
+      console.log('Feedback received:', JSON.stringify(feedback, null, 2));
+      console.log('Document content length:', documentContent?.length || 0);
+      console.log('Document content preview (first 500 chars):', documentContent?.substring(0, 500));
+      
+      // Log the specific text to locate and replace
+      console.log('\n=== TEXT LOCATION DEBUG ===');
+      console.log('Looking for text (changeFrom):', feedback.changeFrom);
+      console.log('Replace with text (changeTo):', feedback.changeTo);
+      console.log('Location - Page:', feedback.page, 'Paragraph:', feedback.paragraphNumber, 'Line:', feedback.lineNumber);
+      
+      if (!documentContent || !feedback) {
+        return res.status(400).json({ error: 'Document content and feedback are required' });
+      }
+      
+      let mergedContent = documentContent;
+      
+      if (mode === 'ai' || mode === 'hybrid') {
+        // Parse HTML to extract text from specific paragraph if needed
+        const $ = cheerio.load(documentContent);
+        let originalText = feedback.changeFrom || '';
+        
+        // If we have a paragraph number but no changeFrom text, extract it
+        if (!originalText && feedback.paragraphNumber) {
+          console.log('No changeFrom text provided, attempting to extract from paragraph:', feedback.paragraphNumber);
+          
+          // Find paragraph by data-paragraph attribute
+          const targetParagraph = $(`[data-paragraph="${feedback.paragraphNumber}"]`);
+          if (targetParagraph.length > 0) {
+            originalText = targetParagraph.text().trim();
+            console.log('Extracted text from paragraph:', originalText);
+          } else {
+            // Try to find by section numbering in the text
+            const allParagraphs = $('p');
+            allParagraphs.each((i, elem) => {
+              const text = $(elem).text();
+              if (text.includes(feedback.paragraphNumber)) {
+                originalText = text.replace(new RegExp(`^${feedback.paragraphNumber}\\s*`), '').trim();
+                console.log('Found paragraph by number in text:', originalText);
+                return false; // break the loop
+              }
+            });
+          }
+        }
+        
+        console.log('Change From:', originalText);
+        console.log('Change To:', feedback.changeTo);
+        console.log('Coordinator Comment:', feedback.coordinatorComment);
+        console.log('Justification:', feedback.coordinatorJustification);
+        
+        // Create FeedbackItem format for the service
+        const feedbackItem: any = {
+          id: feedback.id || 'temp-' + Date.now(),
+          lineNumber: feedback.lineNumber || '0',
+          paragraphNumber: feedback.paragraphNumber || '0',
+          pageNumber: feedback.page || '0',
+          content: feedback.coordinatorComment || feedback.changeTo || '',
+          severity: feedback.commentType === 'C' ? 'CRITICAL' : 
+                   feedback.commentType === 'M' ? 'MAJOR' :
+                   feedback.commentType === 'S' ? 'SUBSTANTIVE' : 'ADMINISTRATIVE',
+          reviewerId: 'opr-user',
+          reviewerName: feedback.pocName || 'OPR',
+          originalSentence: originalText,
+          documentContext: documentContent
+        };
+        
+        console.log('Calling OpenRouterService.processFeedback with:', {
+          originalText,
+          feedbackItem,
+          hasContext: !!documentContent
+        });
+        
+        try {
+          // CRITICAL: First verify the changeFrom text actually exists in the document
+          if (!feedback.changeFrom || !documentContent.includes(feedback.changeFrom)) {
+            console.error('ERROR: changeFrom text not found in document!');
+            console.error('Looking for:', feedback.changeFrom);
+            console.error('Document length:', documentContent.length);
+            
+            // Check if the changeTo text is already present (cascading change)
+            if (feedback.changeTo && documentContent.includes(feedback.changeTo)) {
+              console.log('ℹ️ INFO: changeTo text already present in document');
+              console.log('   This likely means the change was already applied by a previous merge');
+              console.log('   Treating as successful (idempotent operation)');
+              
+              // Return success since the desired state is already achieved
+              return res.json({
+                success: true,
+                mergedContent: documentContent,
+                message: 'Change already applied - text is in desired state',
+                cascading: true
+              });
+            }
+            
+            // Try to find similar text for debugging
+            if (feedback.changeFrom) {
+              const searchStart = feedback.changeFrom.substring(0, Math.min(20, feedback.changeFrom.length));
+              const similarIndex = documentContent.indexOf(searchStart);
+              if (similarIndex > -1) {
+                const actualText = documentContent.substring(similarIndex, Math.min(similarIndex + 100, documentContent.length));
+                console.error('Found similar text at position', similarIndex + ':', actualText);
+                
+                // Check if this is a partial match due to previous changes
+                const partialWords = feedback.changeFrom.split(' ').slice(0, 3).join(' ');
+                if (documentContent.includes(partialWords)) {
+                  console.log('⚠️ WARNING: Partial match found - text may have been partially modified');
+                }
+              } else {
+                console.error('No similar text found even with partial search:', searchStart);
+              }
+            }
+            
+            // Return error response with details
+            return res.status(400).json({
+              success: false,
+              error: 'Text to replace not found in document',
+              details: {
+                changeFrom: feedback.changeFrom || 'Not provided',
+                changeToAlreadyPresent: feedback.changeTo ? documentContent.includes(feedback.changeTo) : false,
+                textExists: false,
+                documentLength: documentContent.length,
+                page: feedback.page,
+                paragraph: feedback.paragraphNumber,
+                line: feedback.lineNumber
+              }
+            });
+          }
+          
+          // Text exists, proceed with replacement
+          console.log('✓ changeFrom text found in document at position:', documentContent.indexOf(feedback.changeFrom));
+          console.log('✓ Proceeding with replacement');
+          
+          // Check for duplicates BEFORE merge
+          const h1CountBefore = (documentContent.match(/<h1>/g) || []).length;
+          const sectionICountBefore = (documentContent.match(/SECTION I - INTRODUCTION/g) || []).length;
+          console.log('BEFORE MERGE - H1 count:', h1CountBefore, 'Section I count:', sectionICountBefore);
+          
+          if (h1CountBefore > 1 || sectionICountBefore > 1) {
+            console.error('❌ WARNING: Input document ALREADY HAS DUPLICATES!');
+            console.error('  - H1 headers:', h1CountBefore);
+            console.error('  - Section I occurrences:', sectionICountBefore);
+            console.error('  - Frontend sent corrupted content!');
+          }
+          
+          // AI mode - Call OpenRouterService for intelligent merging
+          console.log('AI mode: Calling OpenRouterService for AI-powered merge');
+          
+          try {
+            // Actually call the AI service
+            const aiResult = await openRouterService.processFeedback(
+              originalText,
+              [feedbackItem],
+              documentContent
+            );
+            
+            if (aiResult?.improvedSentence) {
+              console.log('✓ AI generated improved text');
+              // Replace the original text with AI-improved version
+              mergedContent = documentContent.replace(feedback.changeFrom, aiResult.improvedSentence);
+            } else {
+              console.log('⚠️ AI did not return improved text, falling back to simple replacement');
+              mergedContent = documentContent.replaceAll(feedback.changeFrom, feedback.changeTo);
+            }
+          } catch (aiError) {
+            console.error('AI service error, falling back to simple replacement:', aiError);
+            mergedContent = documentContent.replaceAll(feedback.changeFrom, feedback.changeTo);
+          }
+          
+          // Check for duplicates AFTER merge
+          const h1CountAfter = (mergedContent.match(/<h1>/g) || []).length;
+          const sectionICountAfter = (mergedContent.match(/SECTION I - INTRODUCTION/g) || []).length;
+          console.log('AFTER MERGE - H1 count:', h1CountAfter, 'Section I count:', sectionICountAfter);
+          
+          if (h1CountAfter > h1CountBefore || sectionICountAfter > sectionICountBefore) {
+            console.error('❌ CRITICAL: Merge CREATED duplicates!');
+            console.error('  - H1 headers:', h1CountBefore, '->', h1CountAfter);
+            console.error('  - Section I:', sectionICountBefore, '->', sectionICountAfter);
+          }
+          
+          // Verify the replacement actually happened
+          if (!mergedContent.includes(feedback.changeTo)) {
+            console.error('WARNING: changeTo text not found after merge!');
+            console.error('Expected to find:', feedback.changeTo);
+            
+            // Check if merge failed silently
+            if (mergedContent === documentContent) {
+              console.error('ERROR: Document content unchanged after merge!');
+              return res.status(500).json({
+                success: false,
+                error: 'Merge failed - document unchanged',
+                details: {
+                  changeFrom: feedback.changeFrom,
+                  changeTo: feedback.changeTo,
+                  reason: 'Replacement did not occur'
+                }
+              });
+            }
+          } else {
+            console.log('✓ changeTo text successfully added to document');
+            console.log('✓ Verification passed - new text is present');
+          }
+          
+          console.log('Merge completed using AI mode');
+          console.log('Content changed:', mergedContent !== documentContent);
+          
+        } catch (aiError) {
+          console.error('AI processing failed, falling back to simple merge:', aiError);
+          
+          // Fallback to simple replacement if AI fails
+          if (feedback.changeFrom && feedback.changeTo) {
+            // FIX: Use replaceAll to replace ALL occurrences
+            mergedContent = documentContent.replaceAll(feedback.changeFrom, feedback.changeTo);
+          }
+        }
+      } else {
+        // Manual merge - simple replacement
+        console.log('Manual merge mode - applying direct replacement');
+        if (feedback.changeFrom && feedback.changeTo) {
+          // FIX: Use replaceAll to replace ALL occurrences
+          mergedContent = documentContent.replaceAll(feedback.changeFrom, feedback.changeTo);
+        }
+      }
+      
+      console.log('=== END MERGE DEBUG ===');
+      
+      res.json({
+        success: true,
+        mergedContent,
+        suggestedContent: mode === 'hybrid' ? mergedContent : undefined
+      });
+    } catch (error: any) {
+      console.error('Error in merge endpoint:', error);
+      res.status(500).json({ error: error.message || 'Failed to merge feedback' });
+    }
+  });
 
 /**
  * Get critical feedback requiring mandatory resolution

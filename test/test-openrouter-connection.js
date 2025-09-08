@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 
 class OpenRouterConnectionTest {
   constructor() {
-    this.apiKey = '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';
+    this.apiKey = '';
     this.baseURL = 'https://openrouter.ai/api/v1';
     this.testResults = {
       passed: [],

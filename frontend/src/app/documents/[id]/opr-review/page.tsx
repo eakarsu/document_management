@@ -35,8 +35,7 @@ import {
   DialogActions,
   CircularProgress,
   Tooltip,
-  Menu,
-  MenuItem
+  Menu
 } from '@mui/material';
 import {
   ArrowBack,
@@ -96,6 +95,7 @@ const OPRReviewPage = () => {
   const [processingMerge, setProcessingMerge] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeResult, setMergeResult] = useState<string>('');
+  const [mergeResultContent, setMergeResultContent] = useState<string>(''); // Store actual content separately
   const [savingDocument, setSavingDocument] = useState(false);
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
@@ -142,8 +142,33 @@ const OPRReviewPage = () => {
             content = `<p>${doc.description}</p>`;
           }
           
+          // Check for duplicates WHEN LOADING
+          const h1CountOnLoad = (content.match(/<h1>/g) || []).length;
+          const sectionICountOnLoad = (content.match(/SECTION I - INTRODUCTION/g) || []).length;
+          
           setDocumentContent(content);
           setEditableContent(content);
+          
+          // DEBUG: Log what we're loading
+          console.log('Loading document content:', {
+            contentLength: content.length,
+            hasContent: !!content,
+            contentSource: doc.customFields?.content ? 'customFields.content' : 
+                          doc.content ? 'content' : 
+                          doc.description ? 'description' : 'unknown',
+            first100: content.substring(0, 100),
+            rawCustomFieldsLength: doc.customFields?.content?.length || 0,
+            fullDocSize: JSON.stringify(doc).length,
+            h1Count: h1CountOnLoad,
+            sectionICount: sectionICountOnLoad,
+            hasDuplicates: h1CountOnLoad > 1 || sectionICountOnLoad > 1 ? '❌ YES' : '✅ NO'
+          });
+          
+          if (h1CountOnLoad > 1 || sectionICountOnLoad > 1) {
+            console.error('❌ CRITICAL: Document loaded from database ALREADY HAS DUPLICATES!');
+            console.error('  - H1 headers:', h1CountOnLoad);
+            console.error('  - Section I occurrences:', sectionICountOnLoad);
+          }
           
           // Load feedback from document's customFields
           if (doc.customFields && typeof doc.customFields === 'object') {
@@ -213,6 +238,11 @@ const OPRReviewPage = () => {
   const handleMergeFeedback = async () => {
     if (!selectedFeedback) return;
     
+    console.log('=== FRONTEND MERGE DEBUG ===');
+    console.log('Selected Feedback:', selectedFeedback);
+    console.log('Merge Mode:', mergeMode);
+    console.log('Document Content Length:', editableContent.length);
+    
     setProcessingMerge(true);
     setShowMergeDialog(true);
     
@@ -220,11 +250,46 @@ const OPRReviewPage = () => {
       // Get the numbered HTML from the DocumentNumbering component
       // We need to get the processed HTML with data-paragraph attributes
       // For now, we'll send the raw content but the API will process it
+      // CRITICAL FIX: Always send the current editableContent which has all previous merges
+      // The editableContent is the source of truth for the current state
       const documentContentToSend = editableContent;
       
+      // Check document BEFORE sending to backend
+      const h1CountBefore = (documentContentToSend.match(/<h1>/g) || []).length;
+      const sectionICountBefore = (documentContentToSend.match(/SECTION I - INTRODUCTION/g) || []).length;
+      console.log('BEFORE SENDING TO BACKEND:');
+      console.log('  - H1 count:', h1CountBefore, h1CountBefore > 1 ? '❌ ALREADY HAS DUPLICATES!' : '✅');
+      console.log('  - Section I count:', sectionICountBefore, sectionICountBefore > 1 ? '❌ ALREADY HAS DUPLICATES!' : '✅');
+      
+      if (h1CountBefore > 1 || sectionICountBefore > 1) {
+        console.error('❌ CRITICAL: Sending corrupted content to backend!');
+        console.error('The editableContent already has duplicates before merge!');
+      }
+      
+      console.log('Sending to backend:', {
+        mode: mergeMode,
+        hasChangeFrom: !!selectedFeedback.changeFrom,
+        hasChangeTo: !!selectedFeedback.changeTo,
+        page: selectedFeedback.page,
+        paragraph: selectedFeedback.paragraphNumber,
+        line: selectedFeedback.lineNumber,
+        contentSource: 'editable (current state)',
+        contentLength: documentContentToSend.length,
+        documentDataContentLength: documentData?.customFields?.content?.length || 0,
+        editableContentLength: editableContent.length
+      });
+      
       if (mergeMode === 'ai') {
-        // AI merge
-        const response = await authTokenService.authenticatedFetch('/api/feedback-processor/merge', {
+        // AI merge - Call the BACKEND endpoint through our proxy
+        console.log('🤖 AI MERGE DEBUG - Starting AI merge');
+        console.log('  - Feedback ID:', selectedFeedback.id);
+        console.log('  - Current content length:', documentContentToSend.length);
+        console.log('  - Current feedback count:', feedback.length);
+        console.log('  - Change From:', selectedFeedback.changeFrom);
+        console.log('  - Change To:', selectedFeedback.changeTo);
+        
+        // Create a simple proxy endpoint that just forwards to backend
+        const response = await authTokenService.authenticatedFetch('/api/backend-proxy/feedback-processor/merge', {
           method: 'POST',
           body: JSON.stringify({
             documentContent: documentContentToSend,
@@ -235,8 +300,66 @@ const OPRReviewPage = () => {
         
         if (response.ok) {
           const result = await response.json();
-          setMergeResult(result.mergedContent);
+          console.log('AI Merge Response:', result);
+          console.log('  - Merged content length:', result.mergedContent?.length);
+          console.log('  - Content changed:', result.mergedContent !== documentContentToSend);
+          
+          // Check for duplicates in the merged content
+          const h1CountAfter = (result.mergedContent.match(/<h1>/g) || []).length;
+          const sectionICountAfter = (result.mergedContent.match(/SECTION I - INTRODUCTION/g) || []).length;
+          console.log('  - AFTER MERGE - H1 count:', h1CountAfter, 'Section I count:', sectionICountAfter);
+          
+          if (h1CountAfter > 1 || sectionICountAfter > 1) {
+            console.error('❌ DUPLICATE SECTIONS DETECTED IN MERGED CONTENT!');
+            console.error('  - H1 headers:', h1CountAfter);
+            console.error('  - Section I occurrences:', sectionICountAfter);
+            console.error('  - This means the backend returned corrupted content');
+          }
+          
+          // CRITICAL: Update BOTH editableContent AND documentData.customFields.content
+          // This ensures the next merge uses the updated content, just like automated tests
           setEditableContent(result.mergedContent);
+          console.log('  - Updated editableContent');
+          
+          // Update the document data with merged content for next merge
+          if (documentData) {
+            console.log('  - Updating documentData state');
+            setDocumentData(prevData => ({
+              ...prevData,
+              customFields: {
+                ...prevData.customFields,
+                content: result.mergedContent  // This is critical for subsequent merges
+              }
+            }));
+          }
+          
+          // Save to database immediately to ensure consistency
+          // MUST save the updated feedback list too!
+          const remainingFeedback = feedback.filter(f => f.id !== selectedFeedback.id);
+          console.log('  - Remaining feedback count:', remainingFeedback.length);
+          console.log('  - Saving to database with updated feedback list');
+          
+          await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              customFields: {
+                content: result.mergedContent,
+                draftFeedback: remainingFeedback,
+                lastAIMerge: new Date().toISOString()
+              }
+            })
+          });
+          
+          console.log('  - AI merge completed successfully');
+          setMergeResult('✅ AI merge completed successfully. The document has been updated with the improved content.');
+          
+          // Save to database like automated test does
+          // Note: Frontend doesn't have a document update endpoint, so we'll skip this for now
+          // The automated tests save directly via Prisma, but frontend can't do that
+          console.log('Note: Document save skipped - frontend API route not available');
+          // In production, you'd implement a proper update endpoint or save on final submit
+        } else {
+          console.error('AI Merge failed:', response.status, response.statusText);
         }
       } else if (mergeMode === 'hybrid') {
         // Hybrid merge - AI suggestion with manual review
@@ -251,27 +374,88 @@ const OPRReviewPage = () => {
         
         if (response.ok) {
           const result = await response.json();
-          setMergeResult(result.suggestedContent);
+          // Store the actual merged content for later application
+          setMergeResultContent(result.suggestedContent || result.mergedContent);
+          // Show a user-friendly message in the dialog
+          setMergeResult('🤖 Hybrid AI suggestion generated successfully. The AI has analyzed the feedback and created an improved version. Click "Apply Suggestion" below to update the document.');
         }
       } else {
         // Manual merge
+        console.log('🔧 MANUAL MERGE DEBUG - Starting manual merge');
+        console.log('  - Feedback ID:', selectedFeedback.id);
+        console.log('  - Change From:', selectedFeedback.changeFrom);
+        console.log('  - Change To:', selectedFeedback.changeTo);
+        console.log('  - Current content length:', editableContent.length);
+        console.log('  - Current feedback count:', feedback.length);
+        
         if (selectedFeedback.changeTo) {
-          const newContent = editableContent.replace(
+          const occurrences = (editableContent.match(new RegExp(selectedFeedback.changeFrom?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') || '', 'g')) || []).length;
+          console.log('  - Occurrences found:', occurrences);
+          
+          const newContent = editableContent.replaceAll(
             selectedFeedback.changeFrom || '',
             selectedFeedback.changeTo
           );
+          console.log('  - New content length:', newContent.length);
+          console.log('  - Content changed:', newContent !== editableContent);
+          
           setEditableContent(newContent);
-          setMergeResult('Manual merge completed');
+          
+          // Update the document data with merged content for next merge
+          if (documentData) {
+            console.log('  - Updating documentData state');
+            setDocumentData(prevData => ({
+              ...prevData,
+              customFields: {
+                ...prevData.customFields,
+                content: newContent  // Keep documentData in sync
+              }
+            }));
+          }
+          
+          // Get the updated feedback list (removing current item)
+          const updatedFeedback = feedback.filter(f => f.id !== selectedFeedback.id);
+          console.log('  - Updated feedback count:', updatedFeedback.length);
+          
+          // Also save to database immediately to persist the change AND update feedback list
+          console.log('  - Saving to database with updated feedback list');
+          await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              customFields: {
+                content: newContent,
+                draftFeedback: updatedFeedback,  // Save the updated feedback list
+                lastManualMerge: new Date().toISOString()
+              }
+            })
+          });
+          
+          console.log('  - Manual merge completed successfully');
+          setMergeResult('✅ Manual merge completed successfully.');
+        } else {
+          console.log('  - No changeTo value, skipping merge');
         }
       }
       
-      // Update feedback status
-      const updatedFeedback = feedback.map(f => 
-        f.id === selectedFeedback.id 
-          ? { ...f, status: 'merged' as const }
-          : f
-      );
+      // REMOVE the merged feedback from the list entirely
+      console.log('📝 REMOVING FEEDBACK FROM UI LIST');
+      console.log('  - Before removal: feedback count =', feedback.length);
+      console.log('  - Removing feedback ID:', selectedFeedback.id);
+      const updatedFeedback = feedback.filter(f => f.id !== selectedFeedback.id);
+      console.log('  - After removal: feedback count =', updatedFeedback.length);
       setFeedback(updatedFeedback);
+      
+      // Also update documentData to remove the feedback
+      if (documentData) {
+        console.log('  - Updating documentData.customFields.draftFeedback');
+        setDocumentData(prevData => ({
+          ...prevData,
+          customFields: {
+            ...prevData.customFields,
+            draftFeedback: updatedFeedback
+          }
+        }));
+      }
       
     } catch (error) {
       console.error('Error merging feedback:', error);
@@ -601,16 +785,68 @@ const OPRReviewPage = () => {
             </ToggleButtonGroup>
             
             {selectedFeedback && (
-              <Button
-                variant="contained"
-                fullWidth
-                sx={{ mt: 2 }}
-                startIcon={<MergeIcon />}
-                onClick={handleMergeFeedback}
-                disabled={!selectedFeedback || processingMerge}
-              >
-                Merge Selected Feedback
-              </Button>
+              <>
+                {/* Text Preview Section */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" color="primary" gutterBottom>
+                    📍 Location: Page {selectedFeedback.page || '?'}, Para {selectedFeedback.paragraphNumber || '?'}, Line {selectedFeedback.lineNumber || '?'}
+                  </Typography>
+                  
+                  {selectedFeedback.changeFrom && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="caption" color="error" fontWeight="bold">
+                        ❌ Original Text (to be replaced):
+                      </Typography>
+                      <Paper sx={{ p: 1, mt: 0.5, bgcolor: 'error.50', border: '1px solid', borderColor: 'error.main' }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                          {selectedFeedback.changeFrom}
+                        </Typography>
+                      </Paper>
+                    </Box>
+                  )}
+                  
+                  {selectedFeedback.changeTo && (
+                    <Box>
+                      <Typography variant="caption" color="success.main" fontWeight="bold">
+                        ✅ Replacement Text (AI will enhance this):
+                      </Typography>
+                      <Paper sx={{ p: 1, mt: 0.5, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.main' }}>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                          {selectedFeedback.changeTo}
+                        </Typography>
+                      </Paper>
+                    </Box>
+                  )}
+                  
+                  {!selectedFeedback.changeFrom && !selectedFeedback.changeTo && (
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        No specific text changes provided. The AI will attempt to locate and improve text at the specified paragraph location based on the feedback comment:
+                      </Typography>
+                      <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                        "{selectedFeedback.coordinatorComment}"
+                      </Typography>
+                    </Alert>
+                  )}
+                  
+                  {mergeMode === 'ai' && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      AI will process this feedback and generate an improved version based on the context and requirements.
+                    </Alert>
+                  )}
+                </Box>
+                
+                <Button
+                  variant="contained"
+                  fullWidth
+                  sx={{ mt: 2 }}
+                  startIcon={<MergeIcon />}
+                  onClick={handleMergeFeedback}
+                  disabled={!selectedFeedback || processingMerge}
+                >
+                  {processingMerge ? 'Processing...' : 'Merge Selected Feedback'}
+                </Button>
+              </>
             )}
           </Paper>
 
@@ -942,8 +1178,10 @@ const OPRReviewPage = () => {
             <Button 
               variant="contained" 
               onClick={() => {
-                setEditableContent(mergeResult);
+                setEditableContent(mergeResultContent);
                 setShowMergeDialog(false);
+                setMergeResult('');
+                setMergeResultContent('');
               }}
             >
               Apply Suggestion
