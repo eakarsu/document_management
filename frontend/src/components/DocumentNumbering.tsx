@@ -407,7 +407,7 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: styles }} />
-      <Box ref={containerRef} sx={{ position: 'relative' }} />
+      <Box ref={containerRef} sx={{ position: 'relative' }} data-document-content="true" />
     </>
   );
 };

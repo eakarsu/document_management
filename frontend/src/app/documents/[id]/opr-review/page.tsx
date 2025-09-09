@@ -95,7 +95,8 @@ const OPRReviewPage = () => {
   const [processingMerge, setProcessingMerge] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeResult, setMergeResult] = useState<string>('');
-  const [mergeResultContent, setMergeResultContent] = useState<string>(''); // Store actual content separately
+  const [mergeResultContent, setMergeResultContent] = useState<string>('');
+  const [highlightedText, setHighlightedText] = useState<string>(''); // Store text to highlight // Store actual content separately
   const [savingDocument, setSavingDocument] = useState(false);
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
@@ -223,6 +224,112 @@ const OPRReviewPage = () => {
     
     fetchDocumentAndFeedback();
   }, [documentId, router]);
+
+  // Effect to handle highlighting when text needs to be highlighted
+  useEffect(() => {
+    if (highlightedText && !showMergeDialog) {
+      // Wait for editor to be ready and content to be rendered
+      const attemptHighlight = () => {
+        const editorElement = document.querySelector('.ck-editor__editable');
+        if (editorElement) {
+          // Strip HTML tags from the text to search
+          const searchText = highlightedText.replace(/<[^>]*>/g, '').trim();
+          
+          if (searchText) {
+            // Create a tree walker to find the text node
+            const walker = document.createTreeWalker(
+              editorElement,
+              NodeFilter.SHOW_TEXT,
+              null
+            );
+            
+            let node;
+            let found = false;
+            
+            while (node = walker.nextNode()) {
+              const textNode = node as Text;
+              const nodeText = textNode.textContent || '';
+              
+              if (nodeText.includes(searchText)) {
+                // Found the text, create a range to select it
+                const range = document.createRange();
+                const startIndex = nodeText.indexOf(searchText);
+                
+                range.setStart(textNode, startIndex);
+                range.setEnd(textNode, startIndex + searchText.length);
+                
+                // Create highlight element
+                const highlightSpan = document.createElement('span');
+                highlightSpan.style.backgroundColor = '#ffeb3b';
+                highlightSpan.style.padding = '2px 4px';
+                highlightSpan.style.borderRadius = '3px';
+                highlightSpan.style.transition = 'all 0.3s ease';
+                highlightSpan.className = 'merge-highlight';
+                
+                try {
+                  // Wrap the text in highlight span
+                  range.surroundContents(highlightSpan);
+                  
+                  // Scroll to the highlighted text
+                  highlightSpan.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'center',
+                    inline: 'nearest'
+                  });
+                  
+                  // Also focus the editor
+                  if (editorElement instanceof HTMLElement) {
+                    editorElement.focus();
+                  }
+                  
+                  // Remove highlight after 5 seconds
+                  setTimeout(() => {
+                    highlightSpan.style.backgroundColor = 'transparent';
+                    
+                    setTimeout(() => {
+                      // Unwrap the span
+                      const parent = highlightSpan.parentNode;
+                      while (highlightSpan.firstChild) {
+                        parent?.insertBefore(highlightSpan.firstChild, highlightSpan);
+                      }
+                      parent?.removeChild(highlightSpan);
+                    }, 300);
+                  }, 5000);
+                  
+                  found = true;
+                  break;
+                } catch (e) {
+                  console.log('Could not wrap text, trying alternative method');
+                  
+                  // Alternative: Just scroll to the position
+                  const rect = range.getBoundingClientRect();
+                  window.scrollTo({
+                    top: window.scrollY + rect.top - window.innerHeight / 2,
+                    behavior: 'smooth'
+                  });
+                  
+                  found = true;
+                  break;
+                }
+              }
+            }
+            
+            if (!found) {
+              console.log('Text not found in editor:', searchText);
+            }
+          }
+          
+          // Clear the highlighted text state
+          setHighlightedText('');
+        }
+      };
+      
+      // Try multiple times with delays to ensure content is rendered
+      setTimeout(attemptHighlight, 100);
+      setTimeout(attemptHighlight, 500);
+      setTimeout(attemptHighlight, 1000);
+    }
+  }, [highlightedText, showMergeDialog]);
 
   const handleFeedbackClick = (comment: CRMComment) => {
     setSelectedFeedback(comment);
@@ -363,7 +470,8 @@ const OPRReviewPage = () => {
         }
       } else if (mergeMode === 'hybrid') {
         // Hybrid merge - AI suggestion with manual review
-        const response = await authTokenService.authenticatedFetch('/api/feedback-processor/merge', {
+        // Use the backend proxy to avoid HTML corruption
+        const response = await authTokenService.authenticatedFetch('/api/backend-proxy/feedback-processor/merge', {
           method: 'POST',
           body: JSON.stringify({
             documentContent: documentContentToSend,
@@ -437,24 +545,30 @@ const OPRReviewPage = () => {
         }
       }
       
-      // REMOVE the merged feedback from the list entirely
-      console.log('📝 REMOVING FEEDBACK FROM UI LIST');
-      console.log('  - Before removal: feedback count =', feedback.length);
-      console.log('  - Removing feedback ID:', selectedFeedback.id);
-      const updatedFeedback = feedback.filter(f => f.id !== selectedFeedback.id);
-      console.log('  - After removal: feedback count =', updatedFeedback.length);
-      setFeedback(updatedFeedback);
-      
-      // Also update documentData to remove the feedback
-      if (documentData) {
-        console.log('  - Updating documentData.customFields.draftFeedback');
-        setDocumentData(prevData => ({
-          ...prevData,
-          customFields: {
-            ...prevData.customFields,
-            draftFeedback: updatedFeedback
-          }
-        }));
+      // Only remove feedback immediately for AI and manual modes
+      // For hybrid mode, wait for user decision
+      if (mergeMode !== 'hybrid') {
+        // REMOVE the merged feedback from the list entirely
+        console.log('📝 REMOVING FEEDBACK FROM UI LIST');
+        console.log('  - Before removal: feedback count =', feedback.length);
+        console.log('  - Removing feedback ID:', selectedFeedback.id);
+        const updatedFeedback = feedback.filter(f => f.id !== selectedFeedback.id);
+        console.log('  - After removal: feedback count =', updatedFeedback.length);
+        setFeedback(updatedFeedback);
+        
+        // Also update documentData to remove the feedback
+        if (documentData) {
+          console.log('  - Updating documentData.customFields.draftFeedback');
+          setDocumentData(prevData => ({
+            ...prevData,
+            customFields: {
+              ...prevData.customFields,
+              draftFeedback: updatedFeedback
+            }
+          }));
+        }
+      } else {
+        console.log('📝 HYBRID MODE - Not removing feedback yet, waiting for user decision');
       }
       
     } catch (error) {
@@ -1173,19 +1287,420 @@ const OPRReviewPage = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowMergeDialog(false)}>Close</Button>
-          {mergeMode === 'hybrid' && !processingMerge && (
-            <Button 
-              variant="contained" 
-              onClick={() => {
-                setEditableContent(mergeResultContent);
-                setShowMergeDialog(false);
-                setMergeResult('');
-                setMergeResultContent('');
-              }}
-            >
-              Apply Suggestion
-            </Button>
+          {mergeMode === 'hybrid' && !processingMerge && mergeResultContent ? (
+            <>
+              <Button 
+                onClick={() => {
+                  // Reject - just close without applying
+                  setShowMergeDialog(false);
+                  setMergeResult('');
+                  setMergeResultContent('');
+                }}
+                color="error"
+              >
+                Reject
+              </Button>
+              <Button 
+                onClick={async () => {
+                  // Apply to editor
+                  setEditableContent(mergeResultContent);
+                  
+                  // Store what we need to find and highlight
+                  // For hybrid mode with AI changes, we need to search for the AI-improved text
+                  // which is in mergeResultContent, not the original changeTo
+                  let searchForText = '';
+                  
+                  if (mergeMode === 'hybrid' && mergeResultContent) {
+                    // Extract the actual changed text from the AI result
+                    // The AI returns the improved version, so we need to find what was actually changed
+                    if (selectedFeedback?.changeFrom) {
+                      // Find where the change was made in the result
+                      const startIdx = mergeResultContent.indexOf(selectedFeedback.changeFrom);
+                      if (startIdx >= 0) {
+                        // The AI replaced this text, so find what it was replaced with
+                        // Look for text around the same position
+                        const beforeText = mergeResultContent.substring(Math.max(0, startIdx - 100), startIdx);
+                        const afterText = mergeResultContent.substring(startIdx, Math.min(mergeResultContent.length, startIdx + 200));
+                        searchForText = afterText || selectedFeedback.changeTo || '';
+                      } else {
+                        // The AI might have significantly changed the text
+                        // Try to find any part of the changeTo text
+                        searchForText = selectedFeedback.changeTo || '';
+                      }
+                    } else {
+                      searchForText = selectedFeedback.changeTo || '';
+                    }
+                  } else {
+                    searchForText = selectedFeedback?.changeTo || selectedFeedback?.changeFrom || '';
+                  }
+                  
+                  const feedbackLocation = {
+                    paragraph: selectedFeedback?.paragraphNumber,
+                    line: selectedFeedback?.lineNumber,
+                    page: selectedFeedback?.page
+                  };
+                  
+                  console.log('Edit in Document - Search Info:', {
+                    mode: mergeMode,
+                    searchForText: searchForText.substring(0, 50),
+                    location: feedbackLocation,
+                    hasAIContent: !!mergeResultContent
+                  });
+                  
+                  // Close dialog
+                  setShowMergeDialog(false);
+                  setMergeResult('');
+                  setMergeResultContent('');
+                  
+                  // Function to highlight and scroll
+                  const performHighlightAndScroll = () => {
+                    // Find the DocumentNumbering container or text editor
+                    let editorElement = document.querySelector('[data-document-content]') as HTMLElement;
+                    
+                    // If not found, try other selectors
+                    if (!editorElement) {
+                      // Look for the DocumentNumbering component's container
+                      const docNumberingBox = document.querySelector('.MuiBox-root');
+                      if (docNumberingBox && docNumberingBox.innerHTML.includes('<h1') || docNumberingBox?.innerHTML.includes('<p')) {
+                        editorElement = docNumberingBox as HTMLElement;
+                      }
+                    }
+                    
+                    // If still not found, look for any element with document content
+                    if (!editorElement) {
+                      const allDivs = document.querySelectorAll('div');
+                      for (const div of allDivs) {
+                        if (div.innerHTML.includes('AIR FORCE') || 
+                            div.innerHTML.includes('SECTION') ||
+                            (selectedFeedback?.changeFrom && div.textContent?.includes(selectedFeedback.changeFrom))) {
+                          editorElement = div as HTMLElement;
+                          break;
+                        }
+                      }
+                    }
+                    
+                    if (!editorElement) {
+                      console.log('Editor/Document element not found');
+                      return false;
+                    }
+                    
+                    console.log('Found editor element:', editorElement.className || 'no-class');
+                    
+                    // Remove any existing highlights first
+                    const existingHighlights = editorElement.querySelectorAll('.merge-highlight-mark');
+                    existingHighlights.forEach(el => {
+                      const parent = el.parentNode;
+                      while (el.firstChild) {
+                        parent?.insertBefore(el.firstChild, el);
+                      }
+                      parent?.removeChild(el);
+                    });
+                    
+                    // Clean search text
+                    const cleanSearchText = searchForText.replace(/<[^>]*>/g, '').trim();
+                    if (!cleanSearchText || cleanSearchText.length < 3) {
+                      console.log('Search text too short or empty');
+                      return false;
+                    }
+                    
+                    // Try multiple search strategies
+                    const searchStrategies = [
+                      cleanSearchText, // Full text
+                      cleanSearchText.substring(0, 50), // First 50 chars
+                      cleanSearchText.substring(0, 30), // First 30 chars
+                      cleanSearchText.split('.')[0], // First sentence
+                      cleanSearchText.split(' ').slice(0, 10).join(' '), // First 10 words
+                      cleanSearchText.split(' ').slice(0, 5).join(' '), // First 5 words
+                      cleanSearchText.split(' ').slice(0, 3).join(' '), // First 3 words
+                      // Also try from the end in case AI added text at the beginning
+                      cleanSearchText.split(' ').slice(-10).join(' '), // Last 10 words
+                      cleanSearchText.split(' ').slice(-5).join(' '), // Last 5 words
+                    ].filter(str => str && str.length >= 3); // Filter out empty or too short strings
+                    
+                    console.log('Search strategies to try:', searchStrategies.length);
+                    
+                    for (const searchStr of searchStrategies) {
+                      if (!searchStr || searchStr.length < 3) continue;
+                      
+                      console.log('Trying search strategy:', searchStr.substring(0, Math.min(30, searchStr.length)) + (searchStr.length > 30 ? '...' : ''));
+                      
+                      // Walk through all text nodes
+                      const walker = document.createTreeWalker(
+                        editorElement,
+                        NodeFilter.SHOW_TEXT,
+                        {
+                          acceptNode: (node) => {
+                            // Skip empty text nodes
+                            return node.textContent && node.textContent.trim() 
+                              ? NodeFilter.FILTER_ACCEPT 
+                              : NodeFilter.FILTER_SKIP;
+                          }
+                        }
+                      );
+                      
+                      let textNode;
+                      let found = false;
+                      
+                      while (textNode = walker.nextNode()) {
+                        const nodeText = textNode.textContent || '';
+                        const searchIndex = nodeText.toLowerCase().indexOf(searchStr.toLowerCase());
+                        
+                        if (searchIndex >= 0) {
+                          console.log('Found text in node!');
+                          
+                          try {
+                            // Create range for the found text
+                            const range = document.createRange();
+                            const endIndex = Math.min(searchIndex + searchStr.length, nodeText.length);
+                            
+                            range.setStart(textNode, searchIndex);
+                            range.setEnd(textNode, endIndex);
+                            
+                            // Create highlight element
+                            const highlightMark = document.createElement('mark');
+                            highlightMark.className = 'merge-highlight-mark';
+                            highlightMark.style.cssText = `
+                              background-color: #ffeb3b !important;
+                              padding: 2px 4px !important;
+                              border-radius: 3px !important;
+                              box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+                              animation: pulse 1s ease-in-out !important;
+                            `;
+                            
+                            // Add CSS animation
+                            if (!document.querySelector('#merge-highlight-styles')) {
+                              const style = document.createElement('style');
+                              style.id = 'merge-highlight-styles';
+                              style.textContent = `
+                                @keyframes pulse {
+                                  0% { transform: scale(1); }
+                                  50% { transform: scale(1.05); }
+                                  100% { transform: scale(1); }
+                                }
+                              `;
+                              document.head.appendChild(style);
+                            }
+                            
+                            // Wrap the found text
+                            range.surroundContents(highlightMark);
+                            
+                            // Scroll to the highlighted text with offset for better visibility
+                            setTimeout(() => {
+                              const rect = highlightMark.getBoundingClientRect();
+                              const absoluteTop = window.scrollY + rect.top;
+                              const targetScroll = absoluteTop - (window.innerHeight / 3); // Position at 1/3 from top
+                              
+                              window.scrollTo({
+                                top: targetScroll,
+                                behavior: 'smooth'
+                              });
+                              
+                              // Also ensure horizontal scroll if needed
+                              if (rect.left < 0 || rect.right > window.innerWidth) {
+                                highlightMark.scrollIntoView({ 
+                                  behavior: 'smooth', 
+                                  block: 'center',
+                                  inline: 'center'
+                                });
+                              }
+                            }, 100);
+                            
+                            // Focus the editor and position cursor near the highlight
+                            if (editorElement instanceof HTMLElement) {
+                              editorElement.focus();
+                              
+                              // Try to position cursor at the highlighted text
+                              const selection = window.getSelection();
+                              selection?.removeAllRanges();
+                              const newRange = document.createRange();
+                              newRange.selectNodeContents(highlightMark);
+                              newRange.collapse(false); // Collapse to end
+                              selection?.addRange(newRange);
+                            }
+                            
+                            // Fade out highlight after 5 seconds
+                            setTimeout(() => {
+                              highlightMark.style.transition = 'background-color 2s ease-out';
+                              highlightMark.style.backgroundColor = 'rgba(255, 235, 59, 0.3)';
+                              
+                              setTimeout(() => {
+                                highlightMark.style.backgroundColor = 'transparent';
+                                
+                                // Remove the mark element after fade
+                                setTimeout(() => {
+                                  const parent = highlightMark.parentNode;
+                                  while (highlightMark.firstChild) {
+                                    parent?.insertBefore(highlightMark.firstChild, highlightMark);
+                                  }
+                                  parent?.removeChild(highlightMark);
+                                }, 2000);
+                              }, 3000);
+                            }, 5000);
+                            
+                            found = true;
+                            return true;
+                          } catch (e) {
+                            console.error('Error highlighting text:', e);
+                            
+                            // Fallback: at least scroll to the general area
+                            try {
+                              const tempRange = document.createRange();
+                              tempRange.selectNode(textNode);
+                              const rect = tempRange.getBoundingClientRect();
+                              
+                              window.scrollTo({
+                                top: window.scrollY + rect.top - window.innerHeight / 3,
+                                behavior: 'smooth'
+                              });
+                              
+                              found = true;
+                            } catch (scrollError) {
+                              console.error('Error scrolling:', scrollError);
+                            }
+                          }
+                          
+                          break;
+                        }
+                      }
+                      
+                      if (found) {
+                        console.log('Successfully found and highlighted text');
+                        return true;
+                      }
+                    }
+                    
+                    console.log('Text not found with any strategy');
+                    
+                    // Last resort: scroll to paragraph/line number if available
+                    if (feedbackLocation.paragraph || feedbackLocation.line) {
+                      console.log('Falling back to paragraph/line number scroll:', feedbackLocation);
+                      
+                      // Try to find the paragraph by data-paragraph attribute first
+                      let targetElement = null;
+                      
+                      if (feedbackLocation.paragraph) {
+                        // Look for elements with matching data-paragraph attribute
+                        targetElement = editorElement.querySelector(`[data-paragraph="${feedbackLocation.paragraph}"]`);
+                        
+                        if (!targetElement) {
+                          // Try partial match (e.g., "1.2.3" might be stored as "1.2.3.1")
+                          const allParas = editorElement.querySelectorAll('[data-paragraph]');
+                          for (const para of allParas) {
+                            const paraNum = para.getAttribute('data-paragraph');
+                            if (paraNum && paraNum.startsWith(feedbackLocation.paragraph)) {
+                              targetElement = para;
+                              break;
+                            }
+                          }
+                        }
+                      }
+                      
+                      // If still not found, try by index
+                      if (!targetElement) {
+                        const paragraphs = editorElement.querySelectorAll('p, .numbered-paragraph');
+                        const targetIndex = parseInt(feedbackLocation.line || '1') - 1;
+                        if (paragraphs[targetIndex]) {
+                          targetElement = paragraphs[targetIndex];
+                        }
+                      }
+                      
+                      if (targetElement) {
+                        console.log('Found element to scroll to by paragraph/line number');
+                        targetElement.scrollIntoView({ 
+                          behavior: 'smooth', 
+                          block: 'center' 
+                        });
+                        
+                        // Add a temporary border to show the paragraph
+                        const elem = targetElement as HTMLElement;
+                        elem.style.border = '3px solid #ffeb3b';
+                        elem.style.borderRadius = '4px';
+                        elem.style.padding = '8px';
+                        elem.style.backgroundColor = 'rgba(255, 235, 59, 0.1)';
+                        
+                        setTimeout(() => {
+                          elem.style.transition = 'all 1s ease-out';
+                          elem.style.border = 'none';
+                          elem.style.padding = '0';
+                          elem.style.backgroundColor = 'transparent';
+                        }, 3000);
+                        
+                        // Return false because we didn't actually find and highlight the text
+                        // This is just a fallback scroll
+                        console.log('Scrolled to paragraph/line but text not highlighted');
+                        return false;
+                      }
+                    }
+                    
+                    console.log('Could not find element to scroll to');
+                    return false;
+                  };
+                  
+                  // Try multiple times to ensure content is loaded
+                  let attempts = 0;
+                  const maxAttempts = 5;
+                  
+                  const attemptHighlight = () => {
+                    attempts++;
+                    console.log(`Highlight attempt ${attempts}/${maxAttempts}`);
+                    
+                    if (performHighlightAndScroll()) {
+                      console.log('Successfully highlighted on attempt', attempts);
+                    } else if (attempts < maxAttempts) {
+                      setTimeout(attemptHighlight, 500 * attempts); // Exponential backoff
+                    } else {
+                      console.log('Could not find text after', maxAttempts, 'attempts');
+                      
+                      // Final fallback: just focus the document area
+                      const docArea = document.querySelector('[data-document-content]') || 
+                                      document.querySelector('.MuiBox-root');
+                      if (docArea instanceof HTMLElement) {
+                        docArea.focus();
+                        // Scroll to top of document
+                        docArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }
+                  };
+                  
+                  // Start attempting after a short delay for editor to update
+                  setTimeout(attemptHighlight, 300);
+                }}
+              >
+                Edit in Document
+              </Button>
+              <Button 
+                variant="contained" 
+                onClick={() => {
+                  // Apply and save
+                  setEditableContent(mergeResultContent);
+                  
+                  // Also remove the feedback from the list and save to database
+                  const updatedFeedback = feedback.filter(f => f.id !== selectedFeedback?.id);
+                  setFeedback(updatedFeedback);
+                  
+                  // Save to database
+                  authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                      customFields: {
+                        content: mergeResultContent,
+                        draftFeedback: updatedFeedback,
+                        lastHybridMerge: new Date().toISOString()
+                      }
+                    })
+                  });
+                  
+                  setShowMergeDialog(false);
+                  setMergeResult('');
+                  setMergeResultContent('');
+                }}
+                color="success"
+              >
+                Apply & Save
+              </Button>
+            </>
+          ) : (
+            <Button onClick={() => setShowMergeDialog(false)}>Close</Button>
           )}
         </DialogActions>
       </Dialog>

@@ -319,3 +319,7 @@ Then visit **http://localhost:3000** and login with:
 - **AI Services**: http://localhost:8000/docs for API documentation
 
 **Your enterprise-grade Document Management System is ready! 🚀**
+
+Create doccument witth Feedback Manual 4 pages: 
+
+./backend/create-af-manual-comprehensive.js
