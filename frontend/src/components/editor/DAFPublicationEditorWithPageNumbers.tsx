@@ -184,24 +184,162 @@ export const DAFPublicationEditorWithPageNumbers: React.FC<DAFPublicationEditorW
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Page indicator */}
+      {/* Toolbar with page indicator and formatting buttons */}
       <Box sx={{ 
         p: 2, 
         borderBottom: '1px solid #e0e0e0',
         bgcolor: '#f5f5f5',
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
         gap: 2
       }}>
-        <Chip 
-          label={`Page ${currentPage} of ${totalPages}`}
-          color="primary"
-          variant="outlined"
-          sx={{ fontWeight: 'bold' }}
-        />
-        <Typography variant="caption" color="text.secondary">
-          Estimated pages based on US Letter format (8.5" × 11")
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Chip 
+            label={`Page ${currentPage} of ${totalPages}`}
+            color="primary"
+            variant="outlined"
+            sx={{ fontWeight: 'bold' }}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Estimated pages based on US Letter format (8.5" × 11")
+          </Typography>
+        </Box>
+        
+        {/* Document Formatting Tools */}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <button
+            onClick={() => {
+              // Generate Table of Contents
+              const html = editor.getHTML();
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = html;
+              const headers = tempDiv.querySelectorAll('h1, h2, h3, h4');
+              
+              let toc = '<div class="table-of-contents"><h2>Table of Contents</h2><ul>';
+              headers.forEach((header) => {
+                const level = parseInt(header.tagName.charAt(1));
+                const text = header.textContent || '';
+                const indent = '&nbsp;&nbsp;'.repeat((level - 1) * 2);
+                toc += `<li>${indent}${text}</li>`;
+              });
+              toc += '</ul></div><br/>';
+              
+              // Insert at beginning
+              editor.commands.setContent(toc + html);
+            }}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#1976d2',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+            title="Generate Table of Contents"
+          >
+            Generate TOC
+          </button>
+          
+          <button
+            onClick={() => {
+              // Auto-number chapters and sections
+              let html = editor.getHTML();
+              let chapterNum = 0;
+              let sectionNum = 0;
+              let currentChapter = 0;
+              
+              // Process H1s for chapters
+              html = html.replace(/<h1>(?!Chapter \d+:)(.*?)<\/h1>/gi, (match, title) => {
+                chapterNum++;
+                return `<h1>Chapter ${chapterNum}: ${title}</h1>`;
+              });
+              
+              // Process H2s for sections
+              html = html.replace(/<h([1-2])>(.*?)<\/h\1>/gi, (match, level, title) => {
+                if (level === '1') {
+                  currentChapter++;
+                  sectionNum = 0;
+                  return match;
+                } else if (level === '2' && !title.match(/^\d+\.\d+/)) {
+                  sectionNum++;
+                  return `<h2>${currentChapter}.${sectionNum} ${title}</h2>`;
+                }
+                return match;
+              });
+              
+              editor.commands.setContent(html);
+            }}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#1976d2',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+            title="Number Chapters & Sections"
+          >
+            Number Chapters
+          </button>
+          
+          <button
+            onClick={() => {
+              // Add standard document structure
+              const template = `<h1>Executive Summary</h1>
+<p>Provide a brief overview of the document's purpose and key findings.</p>
+
+<h1>Chapter 1: Introduction</h1>
+<p>Introduction to the document topic.</p>
+
+<h2>1.1 Background</h2>
+<p>Background information and context.</p>
+
+<h2>1.2 Objectives</h2>
+<p>Document objectives and goals.</p>
+
+<h2>1.3 Scope</h2>
+<p>Scope and limitations of the document.</p>
+
+<h1>Chapter 2: Main Content</h1>
+<p>Main content goes here.</p>
+
+<h2>2.1 Section One</h2>
+<p>First main section content.</p>
+
+<h2>2.2 Section Two</h2>
+<p>Second main section content.</p>
+
+<h1>Chapter 3: Conclusion</h1>
+<p>Conclusions and recommendations.</p>
+
+<h1>References</h1>
+<p>List of references and citations.</p>
+
+<h1>Appendices</h1>
+<p>Additional supporting materials.</p>`;
+              
+              if (confirm('Replace current content with document template?')) {
+                editor.commands.setContent(template);
+              }
+            }}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#1976d2',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+            title="Insert Document Template"
+          >
+            Document Template
+          </button>
+        </Box>
       </Box>
 
       {/* Editor with page breaks */}

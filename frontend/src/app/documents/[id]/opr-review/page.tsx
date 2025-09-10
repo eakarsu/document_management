@@ -844,14 +844,150 @@ const OPRReviewPage = () => {
                 
                 {/* Document Content */}
                 {isEditingDocument ? (
-                  <TextField
-                    fullWidth
-                    multiline
-                    value={editableContent}
-                    onChange={(e) => setEditableContent(e.target.value)}
-                    variant="outlined"
-                    sx={{ fontFamily: 'monospace' }}
-                  />
+                  <>
+                    {/* Document Tools for Edit Mode */}
+                    <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<AddIcon />}
+                        onClick={() => {
+                          // Generate Table of Contents from headers
+                          const tempDiv = document.createElement('div');
+                          tempDiv.innerHTML = editableContent;
+                          const headers = tempDiv.querySelectorAll('h1, h2, h3, h4');
+                          
+                          let toc = '<div class="table-of-contents">\n<h2>Table of Contents</h2>\n<ul>\n';
+                          headers.forEach((header) => {
+                            const level = parseInt(header.tagName.charAt(1));
+                            const text = header.textContent || '';
+                            const indent = '  '.repeat(level - 1);
+                            toc += `${indent}<li>${text}</li>\n`;
+                          });
+                          toc += '</ul>\n</div>\n\n';
+                          
+                          // Insert TOC at the beginning
+                          setEditableContent(toc + editableContent);
+                        }}
+                      >
+                        Generate TOC
+                      </Button>
+                      
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<AddIcon />}
+                        onClick={() => {
+                          // Auto-number chapters and sections
+                          let content = editableContent;
+                          
+                          // Add chapter numbers to H1
+                          let chapterNum = 0;
+                          content = content.replace(/<h1>(?!Chapter \d+:)(.*?)<\/h1>/gi, (match, title) => {
+                            chapterNum++;
+                            return `<h1>Chapter ${chapterNum}: ${title}</h1>`;
+                          });
+                          
+                          // Add section numbers to H2
+                          let sectionNum = 0;
+                          let currentChapter = 0;
+                          content = content.replace(/<h([1-2])>(.*?)<\/h\1>/gi, (match, level, title) => {
+                            if (level === '1') {
+                              currentChapter++;
+                              sectionNum = 0;
+                              return match; // Already processed H1s
+                            } else if (level === '2' && !title.match(/^\d+\.\d+/)) {
+                              sectionNum++;
+                              return `<h2>${currentChapter}.${sectionNum} ${title}</h2>`;
+                            }
+                            return match;
+                          });
+                          
+                          setEditableContent(content);
+                        }}
+                      >
+                        Number Chapters
+                      </Button>
+                      
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          // Format as standard document structure
+                          const structure = `<h1>Executive Summary</h1>
+<p>[Provide a brief overview of the document]</p>
+
+<h1>Chapter 1: Introduction</h1>
+<p>[Introduction content]</p>
+
+<h2>1.1 Background</h2>
+<p>[Background information]</p>
+
+<h2>1.2 Objectives</h2>
+<p>[Document objectives]</p>
+
+<h2>1.3 Scope</h2>
+<p>[Scope of the document]</p>
+
+<h1>Chapter 2: Main Content</h1>
+<p>[Main content goes here]</p>
+
+<h2>2.1 Section One</h2>
+<p>[Section content]</p>
+
+<h2>2.2 Section Two</h2>
+<p>[Section content]</p>
+
+<h1>Chapter 3: Conclusion</h1>
+<p>[Conclusions and recommendations]</p>
+
+<h1>References</h1>
+<p>[List of references]</p>
+
+<h1>Appendices</h1>
+<p>[Additional materials]</p>`;
+                          
+                          // Ask user if they want to replace or append
+                          if (editableContent.trim() && !confirm('This will replace the current content with a standard document template. Continue?')) {
+                            return;
+                          }
+                          setEditableContent(structure);
+                        }}
+                      >
+                        Document Template
+                      </Button>
+                      
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          // Add page breaks for printing
+                          let content = editableContent;
+                          // Add page break before each H1 (except the first)
+                          let isFirst = true;
+                          content = content.replace(/<h1>/gi, (match) => {
+                            if (isFirst) {
+                              isFirst = false;
+                              return match;
+                            }
+                            return '<div style="page-break-before: always;"></div>' + match;
+                          });
+                          setEditableContent(content);
+                        }}
+                      >
+                        Add Page Breaks
+                      </Button>
+                    </Box>
+                    
+                    <TextField
+                      fullWidth
+                      multiline
+                      value={editableContent}
+                      onChange={(e) => setEditableContent(e.target.value)}
+                      variant="outlined"
+                      sx={{ fontFamily: 'monospace' }}
+                    />
+                  </>
                 ) : (
                   <DocumentNumbering
                     content={editableContent}

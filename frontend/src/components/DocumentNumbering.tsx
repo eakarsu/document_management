@@ -63,16 +63,12 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
           const existingNumber = header.textContent?.match(/^([\d]+\.[\d]+\.?[\d]*|[\d]+\.?)\s+/);
           
           if (level === 1) {
-            // If header already has a number, extract it
+            // H1 headers - main title, usually no number
             if (existingNumber) {
               const num = existingNumber[1];
               const mainNum = parseInt(num.split('.')[0]);
               currentSection = mainNum;
               sectionCounter = Math.max(sectionCounter, mainNum);
-            } else {
-              sectionCounter++;
-              currentSection = sectionCounter;
-              header.innerHTML = `${sectionCounter}. ${header.innerHTML}`;
             }
             
             currentSubsection = 0;
@@ -82,108 +78,51 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
             paragraphCounter = 0;
             currentLevel = 1;
             
-            header.classList.add('section-heading', 'no-paragraph-number');
+            // Don't modify the header, just mark it
+            header.classList.add('section-heading', 'no-paragraph-number', 'no-number');
             header.setAttribute('data-section', `${currentSection}`);
             header.setAttribute('data-level', '1');
             
           } else if (level === 2) {
-            // If header already has a number like "1.1" or "2.3", extract it
+            // H2 headers like "1. Section" or just section titles
             if (existingNumber) {
               const numStr = existingNumber[1];
               const parts = numStr.split('.');
               
-              // Check if this exact number was already used at this level
-              const numberKey = `h2-${numStr}`;
-              
-              if (parts.length >= 2) {
-                // It's a number like "1.1"
-                const sectionNum = parseInt(parts[0]) || currentSection;
-                const subsectionNum = parseInt(parts[1]);
-                
-                // If we've seen this exact number before at H2 level, it's actually a sub-subsection
-                if (seenNumbers[numberKey]) {
-                  // This is a duplicate, treat as next subsection
-                  subsectionCounter++;
-                  currentSubsection = subsectionCounter;
-                  // Replace the duplicate number with the correct one
-                  header.innerHTML = header.innerHTML.replace(existingNumber[0], `${currentSection}.${subsectionCounter} `);
-                  header.setAttribute('data-section', `${currentSection}.${currentSubsection}`);
-                } else {
-                  // First time seeing this number
-                  currentSection = sectionNum;
-                  currentSubsection = subsectionNum;
-                  subsectionCounter = Math.max(subsectionCounter, currentSubsection);
-                  sectionCounter = Math.max(sectionCounter, currentSection);
-                  seenNumbers[numberKey] = 1;
-                  header.setAttribute('data-section', `${currentSection}.${currentSubsection}`);
-                }
-              } else if (parts.length === 1) {
-                // Just a single number like "1" - treat as new subsection
-                subsectionCounter++;
-                currentSubsection = subsectionCounter;
-                header.innerHTML = `${currentSection}.${subsectionCounter} ${header.textContent?.replace(existingNumber[0], '')}`;
-                header.setAttribute('data-section', `${currentSection}.${currentSubsection}`);
+              if (parts.length >= 1) {
+                currentSection = parseInt(parts[0]) || 1;
+                sectionCounter = Math.max(sectionCounter, currentSection);
               }
-            } else {
-              subsectionCounter++;
-              currentSubsection = subsectionCounter;
-              const sectionNum = `${currentSection}.${subsectionCounter}`;
-              header.innerHTML = `${sectionNum} ${header.innerHTML}`;
-              header.setAttribute('data-section', `${currentSection}.${currentSubsection}`);
             }
             
+            currentSubsection = 0;
             currentSubsubsection = 0;
-            subsubsectionCounter = 0;
+            subsectionCounter = 0;
             paragraphCounter = 0;
             currentLevel = 2;
             
-            header.classList.add('subsection-heading', 'no-paragraph-number');
+            header.classList.add('subsection-heading', 'no-paragraph-number', 'no-number');
+            header.setAttribute('data-section', `${currentSection}`);
             header.setAttribute('data-level', '2');
             
           } else if (level === 3) {
-            // If header already has a number like "1.1.1" or "1.2", extract it
+            // H3 headers like "1.1 Subsection"
             if (existingNumber) {
               const numStr = existingNumber[1];
               const parts = numStr.split('.');
               
-              // Check if this exact number was already used
-              const numberKey = `h3-${numStr}`;
-              
-              if (parts.length >= 3) {
-                // It's a number like "1.1.1"
-                const subsubNum = parseInt(parts[2]);
-                subsubsectionCounter++;
-                currentSubsubsection = subsubsectionCounter;
-                header.setAttribute('data-section', `${currentSection}.${currentSubsection}.${currentSubsubsection}`);
-              } else if (parts.length === 2) {
-                // It's a number like "1.2" at H3 level - this is likely a misplaced subsection
-                // Check if we've seen this number before
-                if (seenNumbers[numberKey]) {
-                  // Duplicate at H3, increment subsubsection
-                  subsubsectionCounter++;
-                  currentSubsubsection = subsubsectionCounter;
-                  header.innerHTML = header.innerHTML.replace(existingNumber[0], `${currentSection}.${currentSubsection}.${subsubsectionCounter} `);
-                } else {
-                  // Treat as subsubsection
-                  subsubsectionCounter++;
-                  currentSubsubsection = subsubsectionCounter;
-                  header.innerHTML = header.innerHTML.replace(existingNumber[0], `${currentSection}.${currentSubsection}.${subsubsectionCounter} `);
-                }
-                seenNumbers[numberKey] = 1;
-                header.setAttribute('data-section', `${currentSection}.${currentSubsection}.${currentSubsubsection}`);
+              if (parts.length >= 2) {
+                currentSection = parseInt(parts[0]) || currentSection;
+                currentSubsection = parseInt(parts[1]) || 0;
+                subsectionCounter = Math.max(subsectionCounter, currentSubsection);
               }
-            } else {
-              subsubsectionCounter++;
-              currentSubsubsection = subsubsectionCounter;
-              const sectionNum = `${currentSection}.${currentSubsection}.${subsubsectionCounter}`;
-              header.innerHTML = `${sectionNum} ${header.innerHTML}`;
-              header.setAttribute('data-section', `${currentSection}.${currentSubsection}.${currentSubsubsection}`);
             }
             
             paragraphCounter = 0;
             currentLevel = 3;
             
-            header.classList.add('subsubsection-heading', 'no-paragraph-number');
+            header.classList.add('subsubsection-heading', 'no-paragraph-number', 'no-number');
+            header.setAttribute('data-section', `${currentSection}.${currentSubsection}`);
             header.setAttribute('data-level', '3');
           }
         });
@@ -229,8 +168,13 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
             // - Inside tables
             // - Inside blockquotes
             // - Special classes
+            // - Immediately after a header (might be subtitle or description)
+            const prevElem = elem.previousElementSibling;
+            const isSubtitle = prevElem && prevElem.tagName && prevElem.tagName.match(/^H[1-4]$/);
+            
             if (!elem.classList.contains('no-number') && 
                 !elem.classList.contains('no-paragraph-number') &&
+                !elem.classList.contains('subtitle') &&
                 !elem.closest('ul') &&
                 !elem.closest('ol') &&
                 !elem.closest('li') &&
@@ -347,12 +291,34 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
 
   // CSS for displaying the numbers
   const styles = `
-    .numbered-paragraph {
+    /* Ensure headers are not numbered */
+    h1, h2, h3, h4, h5, h6 {
       position: relative;
-      ${enableParagraphNumbers && enableLineNumbers ? 'margin-left: 140px;' : enableParagraphNumbers ? 'margin-left: 80px;' : enableLineNumbers ? 'margin-left: 60px;' : ''}
     }
     
-    .numbered-paragraph::before {
+    h1.no-number::before,
+    h2.no-number::before,
+    h3.no-number::before,
+    h4.no-number::before {
+      content: none !important;
+    }
+    
+    /* Ensure proper spacing for headings */
+    h1, h2, h3, h4 {
+      margin-top: 1.5em;
+      margin-bottom: 0.5em;
+      clear: both;
+    }
+    
+    /* Only number actual paragraphs, not headings */
+    p.numbered-paragraph {
+      position: relative;
+      ${enableParagraphNumbers && enableLineNumbers ? 'margin-left: 140px;' : enableParagraphNumbers ? 'margin-left: 80px;' : enableLineNumbers ? 'margin-left: 60px;' : ''}
+      margin-top: 0.5em;
+      margin-bottom: 0.5em;
+    }
+    
+    p.numbered-paragraph::before {
       ${enableParagraphNumbers ? `
         content: attr(data-paragraph);
         position: absolute;
@@ -364,6 +330,7 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
         width: 70px;
         text-align: right;
         padding-right: 10px;
+        display: block;
       ` : ''}
     }
     

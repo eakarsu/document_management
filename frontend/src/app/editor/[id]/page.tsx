@@ -90,7 +90,7 @@ const DocumentEditor: React.FC = () => {
   const params = useParams();
   const documentId = params?.id as string;
   
-  const [document, setDocument] = useState<DocumentDetails | null>(null);
+  const [documentData, setDocumentData] = useState<DocumentDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,16 +166,7 @@ const DocumentEditor: React.FC = () => {
         Math.floor(scrollPercentage * (totalPages - 1)) + 1
       ));
       
-      // Debug logging
-      console.log('Scroll calculation:', {
-        scrollTop,
-        scrollHeight,
-        clientHeight,
-        maxScroll,
-        scrollPercentage: (scrollPercentage * 100).toFixed(2) + '%',
-        calculatedPage,
-        totalPages
-      });
+      // Scroll calculation (debug logging removed)
       
       setCurrentPage(calculatedPage);
     } catch (error) {
@@ -200,7 +191,6 @@ const DocumentEditor: React.FC = () => {
       // Debounce scroll events for performance
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
-        console.log('Scroll event processed');
         if (calculatePageFromScrollRef.current) {
           calculatePageFromScrollRef.current();
         }
@@ -212,7 +202,6 @@ const DocumentEditor: React.FC = () => {
     
     // Calculate initial page position
     setTimeout(() => {
-      console.log('Initial page calculation triggered');
       if (calculatePageFromScrollRef.current) {
         calculatePageFromScrollRef.current();
       }
@@ -340,17 +329,18 @@ const DocumentEditor: React.FC = () => {
       const pagesByBlocks = Math.ceil(blockCount / blocksPerPage);
       const estimatedPages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
       
-      console.log('Page calculation in onUpdate:', {
-        words,
-        chars,
-        blockCount,
-        pagesByWords,
-        pagesByChars,
-        pagesByBlocks,
-        estimatedPages
-      });
+      // Page calculation in onUpdate
       
-      setTotalPages(estimatedPages);
+      // Count actual page divs first
+      const html = editor.getHTML();
+      const pageMatches = html.match(/data-page="/g);
+      const pageCount = pageMatches ? pageMatches.length : 0;
+      
+      if (pageCount > 0) {
+        setTotalPages(pageCount);
+      } else {
+        setTotalPages(estimatedPages);
+      }
       
       // Don't update current page here - let scroll handle it
       // Just recalculate based on scroll after content changes
@@ -392,13 +382,7 @@ const DocumentEditor: React.FC = () => {
       // Calculate page based on position
       const calculatedPage = Math.max(1, Math.min(totalPages, Math.ceil(percentage * totalPages)));
       
-      console.log('Cursor-based page calculation:', {
-        cursorPosition: from,
-        totalSize,
-        percentage: (percentage * 100).toFixed(2) + '%',
-        calculatedPage,
-        totalPages
-      });
+      // Cursor-based page calculation
       
       setCurrentPage(calculatedPage);
     } catch (error) {
@@ -436,19 +420,16 @@ const DocumentEditor: React.FC = () => {
         
         // Wait a bit for editor to be ready
         if (!editor) {
-          console.log('Editor not ready yet, waiting...');
           setTimeout(() => loadDocument(), 100);
           return;
         }
         
         // First get basic document info
-        console.log('Loading document:', documentId, 'Editor ready:', !!editor);
         const docResponse = await api.get(`/api/documents/${documentId}`);
         
         if (docResponse.ok) {
           const docData = await docResponse.json();
-          console.log('Document data:', docData);
-          setDocument(docData.document);
+          setDocumentData(docData.document);
           
           // Then get the editable content
           const contentResponse = await authTokenService.authenticatedFetch(`/api/editor/documents/${documentId}/content`, {
@@ -457,12 +438,10 @@ const DocumentEditor: React.FC = () => {
           
           if (contentResponse.ok) {
             const contentData = await contentResponse.json();
-            console.log('Content data:', contentData);
             
             if (contentData.success && contentData.document.content) {
               // Load actual document content
               let content = contentData.document.content;
-              console.log('Loading content into editor:', content);
               
               // If content is plain text, wrap it in paragraph tags
               if (!content.includes('<') && !content.includes('>')) {
@@ -470,7 +449,6 @@ const DocumentEditor: React.FC = () => {
               }
               
               editor.commands.setContent(content);
-              console.log('Content set in editor, editor has content:', editor.getHTML());
               
               // Trigger page calculation after content is set
               setTimeout(() => {
@@ -484,26 +462,36 @@ const DocumentEditor: React.FC = () => {
                   }
                 });
                 
-                const pagesByWords = Math.ceil(words / 250);
-                const pagesByChars = Math.ceil(chars / 1500);
-                const pagesByBlocks = Math.ceil(blockCount / 25);
-                const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
-                console.log('Initial page calculation after content load:', { 
-                  words, 
-                  chars, 
-                  blockCount,
-                  pagesByWords,
-                  pagesByChars,
-                  pagesByBlocks,
-                  pages 
+                // Count actual page divs first
+                const html = editor.getHTML();
+                const pageMatches = html.match(/data-page="/g);
+                const pageCount = pageMatches ? pageMatches.length : 0;
+                
+                console.log('Page calculation:', {
+                  foundPageDivs: pageCount,
+                  htmlLength: html.length,
+                  words: words,
+                  chars: chars,
+                  blocks: blockCount
                 });
-                setTotalPages(pages);
+                
+                if (pageCount > 0) {
+                  console.log('Using actual page divs:', pageCount);
+                  setTotalPages(pageCount);
+                } else {
+                  // Fall back to estimation if no page divs
+                  const pagesByWords = Math.ceil(words / 250);
+                  const pagesByChars = Math.ceil(chars / 1500);
+                  const pagesByBlocks = Math.ceil(blockCount / 25);
+                  const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
+                  console.log('Using estimation:', pages);
+                  setTotalPages(pages);
+                }
                 calculatePageFromScroll();
               }, 500);
             } else if (docData.document.content) {
               // Try to use content from basic document API
               let content = docData.document.content;
-              console.log('Using content from document API:', content);
               
               // If content is plain text, wrap it in paragraph tags
               if (!content.includes('<') && !content.includes('>')) {
@@ -511,7 +499,6 @@ const DocumentEditor: React.FC = () => {
               }
               
               editor.commands.setContent(content);
-              console.log('Fallback content set in editor');
               
               // Trigger page calculation after content is set
               setTimeout(() => {
@@ -525,24 +512,34 @@ const DocumentEditor: React.FC = () => {
                   }
                 });
                 
-                const pagesByWords = Math.ceil(words / 250);
-                const pagesByChars = Math.ceil(chars / 1500);
-                const pagesByBlocks = Math.ceil(blockCount / 25);
-                const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
-                console.log('Initial page calculation after fallback content:', { 
-                  words, 
-                  chars, 
-                  blockCount,
-                  pagesByWords,
-                  pagesByChars,
-                  pagesByBlocks,
-                  pages 
+                // Count actual page divs first
+                const html = editor.getHTML();
+                const pageMatches = html.match(/data-page="/g);
+                const pageCount = pageMatches ? pageMatches.length : 0;
+                
+                console.log('Page calculation:', {
+                  foundPageDivs: pageCount,
+                  htmlLength: html.length,
+                  words: words,
+                  chars: chars,
+                  blocks: blockCount
                 });
-                setTotalPages(pages);
+                
+                if (pageCount > 0) {
+                  console.log('Using actual page divs:', pageCount);
+                  setTotalPages(pageCount);
+                } else {
+                  // Fall back to estimation if no page divs
+                  const pagesByWords = Math.ceil(words / 250);
+                  const pagesByChars = Math.ceil(chars / 1500);
+                  const pagesByBlocks = Math.ceil(blockCount / 25);
+                  const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
+                  console.log('Using estimation:', pages);
+                  setTotalPages(pages);
+                }
                 calculatePageFromScroll();
               }, 500);
             } else {
-              console.log('No content found, using default');
               // Initialize with default content only if document has no content
               editor.commands.setContent(`
                 <h1>${docData.document.title}</h1>
@@ -575,20 +572,31 @@ const DocumentEditor: React.FC = () => {
                   }
                 });
                 
-                const pagesByWords = Math.ceil(words / 250);
-                const pagesByChars = Math.ceil(chars / 1500);
-                const pagesByBlocks = Math.ceil(blockCount / 25);
-                const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
-                console.log('Page calculation from else path:', { 
-                  words, 
-                  chars, 
-                  blockCount,
-                  pagesByWords,
-                  pagesByChars,
-                  pagesByBlocks,
-                  pages 
+                // Count actual page divs first
+                const html = editor.getHTML();
+                const pageMatches = html.match(/data-page="/g);
+                const pageCount = pageMatches ? pageMatches.length : 0;
+                
+                console.log('Page calculation:', {
+                  foundPageDivs: pageCount,
+                  htmlLength: html.length,
+                  words: words,
+                  chars: chars,
+                  blocks: blockCount
                 });
-                setTotalPages(pages);
+                
+                if (pageCount > 0) {
+                  console.log('Using actual page divs:', pageCount);
+                  setTotalPages(pageCount);
+                } else {
+                  // Fall back to estimation if no page divs
+                  const pagesByWords = Math.ceil(words / 250);
+                  const pagesByChars = Math.ceil(chars / 1500);
+                  const pagesByBlocks = Math.ceil(blockCount / 25);
+                  const pages = Math.max(1, Math.max(pagesByWords, pagesByChars, pagesByBlocks));
+                  console.log('Using estimation:', pages);
+                  setTotalPages(pages);
+                }
                 calculatePageFromScroll();
               }, 500);
             } else {
@@ -618,17 +626,17 @@ const DocumentEditor: React.FC = () => {
 
   // Auto-save functionality
   useEffect(() => {
-    if (!hasUnsavedChanges || !editor || !document) return;
+    if (!hasUnsavedChanges || !editor || !documentData) return;
 
     const autoSave = setTimeout(() => {
       handleSave(false); // Silent save
     }, 30000); // Auto-save after 30 seconds of inactivity
 
     return () => clearTimeout(autoSave);
-  }, [hasUnsavedChanges, editor, document]);
+  }, [hasUnsavedChanges, editor, documentData]);
 
   const handleSave = async (showNotification = true) => {
-    if (!editor || !document) return;
+    if (!editor || !documentData) return;
 
     try {
       setSaving(true);
@@ -638,7 +646,7 @@ const DocumentEditor: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({ 
           content,
-          title: document.title 
+          title: documentData.title 
         }),
       });
 
@@ -647,7 +655,6 @@ const DocumentEditor: React.FC = () => {
         setLastSaved(new Date());
         if (showNotification) {
           // Could add toast notification here
-          console.log('Document saved successfully');
         }
       } else {
         throw new Error('Failed to save document');
@@ -707,7 +714,7 @@ const DocumentEditor: React.FC = () => {
           
           <Box sx={{ flexGrow: 1 }}>
             <Typography variant="h6" noWrap>
-              Editing: {document?.title}
+              Editing: {documentData?.title}
             </Typography>
             <Typography variant="caption">
               {hasUnsavedChanges ? (
@@ -726,13 +733,13 @@ const DocumentEditor: React.FC = () => {
         {/* Document Info */}
         <Paper sx={{ p: 2, mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-            <Typography variant="h5">{document?.title}</Typography>
-            <Chip label={document?.category} size="small" />
-            <Chip label={document?.status} variant="outlined" size="small" />
+            <Typography variant="h5">{documentData?.title}</Typography>
+            <Chip label={documentData?.category} size="small" />
+            <Chip label={documentData?.status} variant="outlined" size="small" />
           </Box>
           <Typography variant="body2" color="text.secondary">
-            Created by {document?.createdBy?.firstName} {document?.createdBy?.lastName} on{' '}
-            {document?.createdAt ? new Date(document.createdAt).toLocaleDateString() : 'Unknown'}
+            Created by {documentData?.createdBy?.firstName} {documentData?.createdBy?.lastName} on{' '}
+            {documentData?.createdAt ? new Date(documentData.createdAt).toLocaleDateString() : 'Unknown'}
           </Typography>
         </Paper>
 
@@ -864,7 +871,7 @@ const DocumentEditor: React.FC = () => {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = `${document?.title || 'document'}.html`;
+                  a.download = `${documentData?.title || 'document'}.html`;
                   a.click();
                   URL.revokeObjectURL(url);
                 }}
@@ -1357,6 +1364,122 @@ const DocumentEditor: React.FC = () => {
                 startIcon={<Functions />}
               >
                 Symbol
+              </Button>
+            </ButtonGroup>
+
+            <Divider orientation="vertical" flexItem />
+
+            {/* Document Formatting Tools */}
+            <ButtonGroup size="small">
+              <Button
+                onClick={() => {
+                  // Generate Table of Contents
+                  const html = editor?.getHTML();
+                  if (!html) return;
+                  
+                  const tempDiv = document.createElement('div');
+                  tempDiv.innerHTML = html;
+                  const headers = tempDiv.querySelectorAll('h1, h2, h3, h4');
+                  
+                  let toc = '<div class="table-of-contents" style="margin: 20px 0; padding: 20px; border: 1px solid #ddd; background: #f9f9f9;"><h2>Table of Contents</h2><ul style="list-style: none; padding-left: 0;">';
+                  headers.forEach((header) => {
+                    const level = parseInt(header.tagName.charAt(1));
+                    const text = header.textContent || '';
+                    const indent = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat((level - 1));
+                    toc += `<li style="margin: 5px 0;">${indent}${text}</li>`;
+                  });
+                  toc += '</ul></div><br/>';
+                  
+                  // Insert at beginning
+                  editor?.commands.setContent(toc + html);
+                }}
+                title="Generate Table of Contents"
+                style={{ backgroundColor: '#4CAF50', color: 'white' }}
+              >
+                📑 TOC
+              </Button>
+              
+              <Button
+                onClick={() => {
+                  // Auto-number chapters and sections
+                  let html = editor?.getHTML();
+                  if (!html) return;
+                  
+                  let chapterNum = 0;
+                  let sectionNum = 0;
+                  let currentChapter = 0;
+                  
+                  // Process H1s for chapters
+                  html = html.replace(/<h1>(?!Chapter \d+:)(.*?)<\/h1>/gi, (match, title) => {
+                    chapterNum++;
+                    return `<h1>Chapter ${chapterNum}: ${title}</h1>`;
+                  });
+                  
+                  // Process H2s for sections
+                  html = html.replace(/<h([1-2])>(.*?)<\/h\1>/gi, (match, level, title) => {
+                    if (level === '1') {
+                      currentChapter++;
+                      sectionNum = 0;
+                      return match;
+                    } else if (level === '2' && !title.match(/^\d+\.\d+/)) {
+                      sectionNum++;
+                      return `<h2>${currentChapter}.${sectionNum} ${title}</h2>`;
+                    }
+                    return match;
+                  });
+                  
+                  editor?.commands.setContent(html);
+                }}
+                title="Number Chapters & Sections"
+                style={{ backgroundColor: '#2196F3', color: 'white' }}
+              >
+                #️⃣ Number
+              </Button>
+              
+              <Button
+                onClick={() => {
+                  // Add standard document structure
+                  const template = `<h1>Executive Summary</h1>
+<p>Provide a brief overview of the document's purpose and key findings.</p>
+
+<h1>Chapter 1: Introduction</h1>
+<p>Introduction to the document topic.</p>
+
+<h2>1.1 Background</h2>
+<p>Background information and context.</p>
+
+<h2>1.2 Objectives</h2>
+<p>Document objectives and goals.</p>
+
+<h2>1.3 Scope</h2>
+<p>Scope and limitations of the document.</p>
+
+<h1>Chapter 2: Main Content</h1>
+<p>Main content goes here.</p>
+
+<h2>2.1 Section One</h2>
+<p>First main section content.</p>
+
+<h2>2.2 Section Two</h2>
+<p>Second main section content.</p>
+
+<h1>Chapter 3: Conclusion</h1>
+<p>Conclusions and recommendations.</p>
+
+<h1>References</h1>
+<p>List of references and citations.</p>
+
+<h1>Appendices</h1>
+<p>Additional supporting materials.</p>`;
+                  
+                  if (confirm('Replace current content with document template?')) {
+                    editor?.commands.setContent(template);
+                  }
+                }}
+                title="Insert Document Template"
+                style={{ backgroundColor: '#FF9800', color: 'white' }}
+              >
+                📋 Template
               </Button>
             </ButtonGroup>
 

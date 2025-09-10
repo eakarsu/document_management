@@ -243,6 +243,119 @@ export const DAFPublicationEditor: React.FC<DAFPublicationEditorProps> = ({
           >
             1. List
           </Button>
+          
+          <Divider orientation="vertical" flexItem />
+          
+          {/* Document Formatting Tools */}
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              // Generate Table of Contents
+              const html = editor.getHTML();
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = html;
+              const headers = tempDiv.querySelectorAll('h1, h2, h3, h4');
+              
+              let toc = '<div class="table-of-contents"><h2>Table of Contents</h2><ul>';
+              headers.forEach((header) => {
+                const level = parseInt(header.tagName.charAt(1));
+                const text = header.textContent || '';
+                const indent = '&nbsp;&nbsp;'.repeat((level - 1) * 2);
+                toc += `<li>${indent}${text}</li>`;
+              });
+              toc += '</ul></div><br/>';
+              
+              // Insert at beginning
+              editor.commands.setContent(toc + html);
+            }}
+            title="Generate Table of Contents"
+          >
+            TOC
+          </Button>
+          
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              // Auto-number chapters and sections
+              let html = editor.getHTML();
+              let chapterNum = 0;
+              let sectionNum = 0;
+              let currentChapter = 0;
+              
+              // Process H1s for chapters
+              html = html.replace(/<h1>(?!Chapter \d+:)(.*?)<\/h1>/gi, (match, title) => {
+                chapterNum++;
+                return `<h1>Chapter ${chapterNum}: ${title}</h1>`;
+              });
+              
+              // Process H2s for sections
+              html = html.replace(/<h([1-2])>(.*?)<\/h\1>/gi, (match, level, title) => {
+                if (level === '1') {
+                  currentChapter++;
+                  sectionNum = 0;
+                  return match;
+                } else if (level === '2' && !title.match(/^\d+\.\d+/)) {
+                  sectionNum++;
+                  return `<h2>${currentChapter}.${sectionNum} ${title}</h2>`;
+                }
+                return match;
+              });
+              
+              editor.commands.setContent(html);
+            }}
+            title="Number Chapters & Sections"
+          >
+            #Ch
+          </Button>
+          
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              // Add standard document structure
+              const template = `<h1>Executive Summary</h1>
+<p>Provide a brief overview of the document's purpose and key findings.</p>
+
+<h1>Chapter 1: Introduction</h1>
+<p>Introduction to the document topic.</p>
+
+<h2>1.1 Background</h2>
+<p>Background information and context.</p>
+
+<h2>1.2 Objectives</h2>
+<p>Document objectives and goals.</p>
+
+<h2>1.3 Scope</h2>
+<p>Scope and limitations of the document.</p>
+
+<h1>Chapter 2: Main Content</h1>
+<p>Main content goes here.</p>
+
+<h2>2.1 Section One</h2>
+<p>First main section content.</p>
+
+<h2>2.2 Section Two</h2>
+<p>Second main section content.</p>
+
+<h1>Chapter 3: Conclusion</h1>
+<p>Conclusions and recommendations.</p>
+
+<h1>References</h1>
+<p>List of references and citations.</p>
+
+<h1>Appendices</h1>
+<p>Additional supporting materials.</p>`;
+              
+              if (editor.isEmpty || confirm('Replace current content with document template?')) {
+                editor.commands.setContent(template);
+              }
+            }}
+            title="Insert Document Template"
+          >
+            Template
+          </Button>
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1 }}>
