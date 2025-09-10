@@ -199,7 +199,7 @@ CRITICAL REQUIREMENTS:
   
   // Parse the content to extract paragraph information
   const paragraphMap = {};
-  const sections = [];
+  const sectionsList = [];
   
   // Extract paragraphs and their numbers
   const lines = content.split('\n');
@@ -207,56 +207,63 @@ CRITICAL REQUIREMENTS:
   let currentSubsection = 0;
   let paragraphInSubsection = 0;
   
-  lines.forEach(line => {
-    if (line.includes('<h2>')) {
-      // New main section (e.g., "1. Section Title")
-      const match = line.match(/>(\d+)\./);
-      if (match) {
-        currentSection = parseInt(match[1]);
+  // Process the entire content as one string to maintain context
+  const fullContent = lines.join('\n');
+  
+  // Split by sections and subsections to properly track context
+  const sections = fullContent.split(/<h2>/);
+  
+  sections.forEach((sectionContent, sectionIndex) => {
+    if (sectionIndex === 0 || !sectionContent.trim()) return; // Skip content before first H2
+    
+    // Extract section number and title
+    const sectionMatch = sectionContent.match(/^(\d+)\.\s*([^<]+)</);
+    if (!sectionMatch) return;
+    
+    currentSection = parseInt(sectionMatch[1]);
+    const sectionTitle = sectionMatch[2];
+    sectionsList.push({ num: currentSection, title: sectionTitle });
+    
+    // Split this section by H3 subsections
+    const subsections = sectionContent.split(/<h3>/);
+    
+    subsections.forEach((subsectionContent, subsectionIndex) => {
+      if (subsectionIndex === 0) {
+        // This is content before first H3 in section
         currentSubsection = 0;
         paragraphInSubsection = 0;
-        const titleMatch = line.match(/<h2>([^<]+)<\/h2>/);
-        if (titleMatch) {
-          sections.push({ num: currentSection, title: titleMatch[1] });
+      } else {
+        // This is a subsection
+        const subsectionMatch = subsectionContent.match(/^(\d+)\.(\d+)\s*([^<]+)</);
+        if (subsectionMatch) {
+          currentSection = parseInt(subsectionMatch[1]) || currentSection;
+          currentSubsection = parseInt(subsectionMatch[2]);
+          paragraphInSubsection = 0;
         }
-      } else {
-        // H2 without number, still reset subsection
-        currentSubsection = 0;
-        paragraphInSubsection = 0;
       }
-    } else if (line.includes('<h3>')) {
-      // New subsection (e.g., "1.1 Subsection Title")
-      const match = line.match(/>(\d+)\.(\d+)/);
-      if (match) {
-        currentSection = parseInt(match[1]) || currentSection;
-        currentSubsection = parseInt(match[2]);
-        paragraphInSubsection = 0;
-      } else {
-        // H3 without proper numbering, increment subsection
-        currentSubsection++;
-        paragraphInSubsection = 0;
-      }
-    } else if (line.includes('<p>') && (currentSection > 0 || currentSubsection > 0)) {
-      // Paragraph in current section/subsection
-      paragraphInSubsection++;
       
-      // Always use three-level numbering when we have a subsection
-      // e.g., 1.1.1, 1.1.2, 1.2.1, etc.
-      const paragraphNumber = currentSubsection > 0 
-        ? `${currentSection}.${currentSubsection}.${paragraphInSubsection}`
-        : currentSection > 0
-        ? `${currentSection}.0.${paragraphInSubsection}` // If no subsection but have section
-        : `0.0.${paragraphInSubsection}`; // Fallback
-      
-      // Extract paragraph text
-      const textMatch = line.match(/<p>([^<]+(?:<[^>]+>[^<]+)*[^<]+)<\/p>/);
-      if (textMatch) {
-        paragraphMap[paragraphNumber] = textMatch[1].replace(/<[^>]+>/g, '');
+      // Extract all paragraphs in this subsection
+      const paragraphs = subsectionContent.match(/<p>([^<]+(?:<[^>]+>[^<]+)*[^<]+)<\/p>/g);
+      if (paragraphs) {
+        paragraphs.forEach(p => {
+          paragraphInSubsection++;
+          
+          const paragraphNumber = currentSubsection > 0 
+            ? `${currentSection}.${currentSubsection}.${paragraphInSubsection}`
+            : `${currentSection}.0.${paragraphInSubsection}`;
+          
+          // Extract text from paragraph
+          const textMatch = p.match(/<p>([^<]+(?:<[^>]+>[^<]+)*[^<]+)<\/p>/);
+          if (textMatch) {
+            const cleanText = textMatch[1].replace(/<[^>]+>/g, '');
+            paragraphMap[paragraphNumber] = cleanText;
+          }
+        });
       }
-    }
+    });
   });
   
-  return { content, paragraphMap, sections };
+  return { content, paragraphMap, sections: sectionsList };
 }
 
 // Generate AI-based feedback
@@ -287,12 +294,24 @@ Example of GOOD feedback:
   "justification": "Removed unnecessary jargon and redundant words to improve clarity"
 }
 
-Example of BAD feedback (DO NOT DO THIS):
+Examples of BAD feedback (ABSOLUTELY FORBIDDEN):
 {
   "originalPhrase": "The system is designed",
-  "improvedPhrase": "The system is designed (improved)",  // WRONG - no actual improvement!
-  "justification": "Made it better"  // WRONG - too vague!
+  "improvedPhrase": "The system is designed (improved)",  // ❌ WRONG - lazy placeholder!
 }
+{
+  "originalPhrase": "The platform provides",
+  "improvedPhrase": "The platform provides (better)",  // ❌ WRONG - lazy addition!
+}
+{
+  "originalPhrase": "The system is designed",
+  "improvedPhrase": "The system is designed",  // ❌ WRONG - exact same text!
+}
+
+CRITICAL RULES:
+1. NEVER add (improved), (better), (enhanced) or ANY word in parentheses
+2. The improvedPhrase MUST be genuinely DIFFERENT - a real rewrite
+3. If you cannot improve something, pick a different sentence to improve
 
 Return ONLY valid JSON array with ${count} items:
 
@@ -307,7 +326,20 @@ Requirements:
   const messages = [
     {
       role: 'system',
-      content: 'You are a professional technical editor. Your job is to analyze document content and provide substantive improvements. NEVER use placeholders like "(improved)" - always provide complete, meaningful rephrasings.'
+      content: `You are a professional technical editor. 
+ABSOLUTE REQUIREMENTS:
+1. NEVER add words like "(improved)", "(better)", "(enhanced)" to text
+2. NEVER return the same text with minor additions
+3. ALWAYS provide COMPLETE REPHRASINGS that are genuinely different
+4. If you cannot improve a phrase, select a different one
+5. The "improvedPhrase" must be a real rewrite, not the original with a word added
+
+FORBIDDEN RESPONSES:
+- "The system is designed (improved)" ❌
+- "The platform provides services (better)" ❌  
+- Adding any parenthetical like (enhanced), (optimized), etc. ❌
+
+REQUIRED: Complete, meaningful rephrasings only.`
     },
     {
       role: 'user',
@@ -324,6 +356,18 @@ Requirements:
     const jsonMatch = response.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       feedbackItems = JSON.parse(jsonMatch[0]);
+      
+      // Filter out any lazy feedback with (improved), (better), etc.
+      feedbackItems = feedbackItems.filter(item => {
+        const hasLazyPattern = /\(improved\)|\(better\)|\(enhanced\)|\(optimized\)|\(updated\)/i.test(item.improvedPhrase);
+        const isSameText = item.originalPhrase === item.improvedPhrase;
+        
+        if (hasLazyPattern || isSameText) {
+          console.warn(`Rejected lazy feedback: "${item.improvedPhrase}"`);
+          return false;
+        }
+        return true;
+      });
     } else {
       throw new Error('No JSON found in response');
     }
@@ -354,16 +398,47 @@ Requirements:
         justification = 'Replace wordy phrase with concise alternative';
       } else {
         // Generic improvement - make more concise
-        improvedSentence = targetSentence.replace(/\b(very|really|quite|rather)\b/gi, '').replace(/\s+/g, ' ').trim();
-        justification = 'Remove unnecessary modifiers for clarity';
+        const modifiedSentence = targetSentence.replace(/\b(very|really|quite|rather|just|simply)\b/gi, '').replace(/\s+/g, ' ').trim();
+        
+        // If no change was made, try other improvements
+        if (modifiedSentence === targetSentence) {
+          // Try to simplify common verbose patterns
+          if (targetSentence.includes('is designed')) {
+            improvedSentence = targetSentence.replace('is designed', 'supports');
+            justification = 'Use more direct language';
+          } else if (targetSentence.includes('provides')) {
+            improvedSentence = targetSentence.replace('provides', 'offers');
+            justification = 'Use varied vocabulary';
+          } else if (targetSentence.includes('system')) {
+            improvedSentence = targetSentence.replace(/\bsystem\b/, 'platform');
+            justification = 'Use more specific terminology';
+          } else {
+            // Last resort - restructure the sentence
+            const words = targetSentence.split(' ');
+            if (words.length > 10) {
+              // Shorten long sentences
+              improvedSentence = words.slice(0, Math.ceil(words.length * 0.8)).join(' ') + '.';
+              justification = 'Simplify lengthy sentence for clarity';
+            } else {
+              // Skip this feedback if we can't improve it
+              continue;
+            }
+          }
+        } else {
+          improvedSentence = modifiedSentence;
+          justification = 'Remove unnecessary modifiers for clarity';
+        }
       }
       
-      feedbackItems.push({
-        paragraphNumber: num,
-        originalPhrase: targetSentence.trim(),
-        improvedPhrase: improvedSentence.trim(),
-        justification: justification
-      });
+      // Only add feedback if we actually made a change
+      if (improvedSentence !== targetSentence) {
+        feedbackItems.push({
+          paragraphNumber: num,
+          originalPhrase: targetSentence.trim(),
+          improvedPhrase: improvedSentence.trim(),
+          justification: justification
+        });
+      }
     }
   }
   
