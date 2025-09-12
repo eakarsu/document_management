@@ -558,6 +558,17 @@ CRITICAL: Create a document with DEEP HIERARCHICAL STRUCTURE using the following
 - Level 4: <h5 style="margin-left: 60px;">1.1.1.1 Detail Level</h5> (60px indent)
 - Level 5: <h6 style="margin-left: 80px;">1.1.1.1.1 Fine Detail</h6> (80px indent)
 
+PARAGRAPH NUMBERING REQUIREMENTS:
+- EACH SECTION (including subsections like "1.1.1.2 Session Handling") MUST have 2-3 numbered paragraphs
+- For a section numbered 1.1.1.2, the paragraphs should be:
+  - 1.1.1.2.1. First paragraph (80-120 words)
+  - 1.1.1.2.2. Second paragraph (80-120 words)  
+  - 1.1.1.2.3. Third paragraph (80-120 words)
+- Format: <p style="margin-left: XXpx;">1.1.1.2.1. [Paragraph content here...]</p>
+- The paragraph number should be at the START of the paragraph text
+- Include a period and space after the paragraph number
+- CRITICAL: Each paragraph MUST be at least 80 words (4-6 sentences)
+
 INDENTATION REQUIREMENTS:
 - Each deeper level MUST be indented 20px more than its parent
 - Paragraphs following each heading must have the SAME indentation as their heading
@@ -572,24 +583,33 @@ STRUCTURE REQUIREMENTS:
    - After 1.1.1.1.1 comes 1.1.1.1.2 (NOT another 1.1.1.1.1)
    - NEVER repeat the same section number
 5. Use proper HTML heading tags (h2 through h6) for hierarchy
-6. Each level should have meaningful content in <p> tags WITH SAME INDENTATION
+6. Each level should have meaningful content in <p> tags WITH SAME INDENTATION and PARAGRAPH NUMBERS
 
-PARAGRAPH REQUIREMENTS:
+PARAGRAPH CONTENT REQUIREMENTS:
 - IMPORTANT: Each paragraph MUST be 4-6 sentences long (approximately 80-120 words)
 - Provide comprehensive details, explanations, and context
 - Include specific examples, requirements, or procedures
 - Use complete, detailed sentences that fully explain the topic
 - Do NOT use short, single-sentence paragraphs
+- Each paragraph starts with its number (e.g., "1.1.1.1. ")
 
-EXAMPLE STRUCTURE WITH PROPER INDENTATION AND LONG PARAGRAPHS:
+EXAMPLE STRUCTURE WITH PROPER INDENTATION AND NUMBERED PARAGRAPHS:
 <h2>1. System Architecture</h2>
-<p>The system architecture provides a comprehensive framework for managing all Air Force personnel and operational requirements across multiple domains. This architecture encompasses both hardware and software components designed to ensure maximum reliability, security, and scalability. The framework has been developed in accordance with Department of Defense guidelines and incorporates industry best practices for military information systems. All components are designed to operate in both connected and disconnected environments, ensuring continuous operational capability.</p>
+<p>1.1. The system architecture provides a comprehensive framework for managing all Air Force personnel and operational requirements across multiple domains. This architecture encompasses both hardware and software components designed to ensure maximum reliability, security, and scalability. The framework has been developed in accordance with Department of Defense guidelines and incorporates industry best practices for military information systems. All components are designed to operate in both connected and disconnected environments, ensuring continuous operational capability.</p>
+<p>1.2. Additional architectural considerations include redundancy, failover mechanisms, and disaster recovery protocols. The system maintains multiple backup pathways for critical operations and automatically switches to secondary systems in case of primary system failure. Load balancing across distributed servers ensures optimal performance during peak usage periods. Regular system health checks and automated diagnostics help identify potential issues before they impact operational readiness.</p>
 
 <h3 style="margin-left: 20px;">1.1 Core Components</h3>
-<p style="margin-left: 20px;">The core components of the system consist of multiple integrated modules that work together to provide comprehensive functionality. Each component has been carefully designed to handle specific aspects of the operational requirements while maintaining seamless integration with other system elements. The modular architecture allows for independent updates and maintenance without affecting overall system availability. Security considerations have been embedded at every level of the component design to ensure data protection and system integrity.</p>
+<p style="margin-left: 20px;">1.1.1. The core components of the system consist of multiple integrated modules that work together to provide comprehensive functionality. Each component has been carefully designed to handle specific aspects of the operational requirements while maintaining seamless integration with other system elements. The modular architecture allows for independent updates and maintenance without affecting overall system availability. Security considerations have been embedded at every level of the component design to ensure data protection and system integrity.</p>
+<p style="margin-left: 20px;">1.1.2. Component interoperability follows established military standards and protocols to ensure compatibility with existing Air Force systems. All interfaces are standardized using common data formats and communication protocols. Real-time synchronization between components ensures data consistency across the entire system. Performance monitoring tools track component health and automatically alert administrators to potential issues.</p>
 
 <h4 style="margin-left: 40px;">1.1.1 Authentication Module</h4>
-<p style="margin-left: 40px;">The authentication module provides robust identity verification and access control mechanisms for all system users. This module implements multi-factor authentication protocols including Common Access Card (CAC) integration, biometric verification, and traditional username/password combinations. The system maintains detailed audit logs of all authentication attempts and automatically locks accounts after multiple failed login attempts. Integration with Active Directory and other enterprise identity management systems ensures consistent user access across all Air Force systems.</p>
+<p style="margin-left: 40px;">1.1.1.1. The authentication module provides robust identity verification and access control mechanisms for all system users. This module implements multi-factor authentication protocols including Common Access Card (CAC) integration, biometric verification, and traditional username/password combinations. The system maintains detailed audit logs of all authentication attempts and automatically locks accounts after multiple failed login attempts. Integration with Active Directory and other enterprise identity management systems ensures consistent user access across all Air Force systems.</p>
+<p style="margin-left: 40px;">1.1.1.2. Advanced security features include real-time threat detection and response capabilities. The module continuously monitors authentication patterns to identify suspicious activities and potential security breaches. Machine learning algorithms analyze user behavior to establish baseline patterns and flag anomalies for investigation. Automated response protocols can temporarily disable accounts or require additional verification steps when suspicious activities are detected.</p>
+
+<h5 style="margin-left: 60px;">1.1.1.2 Session Handling</h5>
+<p style="margin-left: 60px;">1.1.1.2.1. Session management encompasses the complete lifecycle of user sessions from initial authentication through logout or timeout. The system generates cryptographically secure session tokens with configurable expiration times based on user roles and security requirements. All session data is encrypted both at rest and in transit using military-grade encryption standards. The session handler implements automatic timeout mechanisms that require re-authentication after periods of inactivity to prevent unauthorized access from unattended terminals.</p>
+<p style="margin-left: 60px;">1.1.1.2.2. Advanced session features include concurrent session detection and management across multiple devices and locations. The system can enforce policies limiting the number of simultaneous sessions per user and automatically terminate older sessions when new ones are initiated. Geographic and temporal access controls can restrict session creation based on location and time parameters. Session replay protection mechanisms prevent captured session data from being used to gain unauthorized access.</p>
+<p style="margin-left: 60px;">1.1.1.2.3. Session monitoring and analytics provide real-time visibility into active sessions across the entire system. Administrators can view detailed session information including user identity, originating IP address, session duration, and accessed resources. Suspicious session activities trigger automated alerts and can initiate defensive actions such as forced logout or account lockdown. Historical session data is retained for audit purposes and forensic analysis in accordance with Air Force data retention policies.</p>
 
 <h5 style="margin-left: 60px;">1.1.1.1 Token Management</h5>
 <p style="margin-left: 60px;">Token management encompasses the complete lifecycle of security tokens used for session management and API authentication. The system generates cryptographically secure tokens with configurable expiration times based on user roles and security requirements. All tokens are encrypted at rest and in transit, with automatic rotation policies to minimize security risks. The token management system includes mechanisms for immediate revocation in case of security incidents or user deauthorization.</p>
@@ -687,11 +707,13 @@ SPECIFIC REQUIREMENTS:
   const messages = [
     {
       role: 'system',
-      content: `You are a professional technical writer. Generate WELL-FORMATTED HTML documents.
+      content: `You are a professional technical writer. Generate WELL-FORMATTED HTML documents with NUMBERED PARAGRAPHS.
 
 CRITICAL HTML REQUIREMENTS:
 1. EVERY <p> tag MUST have style="margin-bottom: 1.5em; line-height: 1.8;"
-2. Use <h2> through <h6> for hierarchy with proper indentation
+2. EVERY paragraph text MUST START with its paragraph number like "1.1.1.2.1. " at the beginning
+3. Each section MUST have 2-3 numbered paragraphs (minimum 80 words each)
+4. Use <h2> through <h6> for hierarchy with proper indentation
 3. For indented paragraphs, use style="margin-left: XXpx; margin-bottom: 1.5em; line-height: 1.8;"
 4. Level 1 (h2): no indent
 5. Level 2 (h3): margin-left: 20px

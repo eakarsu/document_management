@@ -254,6 +254,10 @@ const DashboardPage: React.FC = () => {
     router.push('/documents/create');
   };
 
+  const handleAIDocumentGenerator = () => {
+    router.push('/ai-document-generator');
+  };
+
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -456,6 +460,21 @@ const DashboardPage: React.FC = () => {
                   onClick={handleCreateDocument}
                 >
                   Create Document
+                </Button>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  startIcon={<SmartIcon />}
+                  size="large"
+                  onClick={handleAIDocumentGenerator}
+                  sx={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                    }
+                  }}
+                >
+                  🤖 AI Document Generator
                 </Button>
                 <Button
                   fullWidth

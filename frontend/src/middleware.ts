@@ -90,7 +90,7 @@ export function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self'",
-    "connect-src 'self' ws: wss:",
+    "connect-src 'self' http://localhost:4000 https://localhost:4000 ws: wss:",
     "frame-src 'self' http://localhost:4000 https://localhost:4000 blob:",
     "media-src 'self'",
     "object-src 'none'",

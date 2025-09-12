@@ -83,25 +83,34 @@ const AIDocumentGenerator: React.FC = () => {
     setError('');
 
     try {
-      // First upload the seal if provided
-      let sealPath = '/images/air-force-seal.png'; // default
+      // Prepare seal image if uploaded
+      let sealImage = null;
       if (sealFile) {
-        const formData = new FormData();
-        formData.append('seal', sealFile);
-        
-        const uploadResponse = await fetch('/api/upload-seal', {
-          method: 'POST',
-          body: formData
+        const reader = new FileReader();
+        sealImage = await new Promise<string>((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(sealFile);
         });
-
-        if (uploadResponse.ok) {
-          const uploadResult = await uploadResponse.json();
-          sealPath = uploadResult.path;
-        }
       }
 
-      // Generate AI document with Air Force header
-      const response = await fetch('/api/generate-ai-document', {
+      // Prepare header data
+      const headerData = {
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        documentType: documentInfo.instructionTitle,
+        secretary: documentInfo.secretaryText,
+        subject: documentInfo.subject,
+        category: documentInfo.responsibilities,
+        opr: documentInfo.opr,
+        certifiedBy: documentInfo.certifiedBy.split('(')[0].trim(),
+        certifiedByName: documentInfo.certifiedBy.includes('(') ? 
+          '(' + documentInfo.certifiedBy.split('(')[1] : '',
+        documentDate: documentInfo.date.toUpperCase(),
+        compliance: documentInfo.complianceText,
+        byOrderOf: documentInfo.byOrderText
+      };
+
+      // Call our backend API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/ai-document-generator`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -109,20 +118,29 @@ const AIDocumentGenerator: React.FC = () => {
         body: JSON.stringify({
           template: documentTemplate,
           pages: documentPages,
-          feedbacks: feedbackCount,
-          documentInfo: {
-            ...documentInfo,
-            sealImagePath: sealPath
-          }
+          feedbackCount: feedbackCount,
+          sealImage: sealImage,
+          headerData: headerData
         })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate document');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate document');
       }
 
       const result = await response.json();
-      setGeneratedDocument(result);
+      setGeneratedDocument({
+        id: result.documentId,
+        pages: documentPages,
+        feedbackCount: result.feedbackCount,
+        title: result.title
+      });
+
+      // Redirect to document after 2 seconds
+      setTimeout(() => {
+        window.location.href = `/documents/${result.documentId}`;
+      }, 2000);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate document');
@@ -186,15 +204,51 @@ const AIDocumentGenerator: React.FC = () => {
 
             <Divider sx={{ my: 2 }} />
 
-            {/* Document Information */}
-            <Typography variant="h6" gutterBottom>Document Information</Typography>
+            {/* Header Authority Section */}
+            <Typography variant="h6" gutterBottom>Header Authority</Typography>
             
+            <TextField
+              label="By Order Of"
+              value={documentInfo.byOrderText}
+              onChange={(e) => handleInputChange('byOrderText', e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+              placeholder="BY ORDER OF THE"
+              helperText="Top line of the header (e.g., BY ORDER OF THE)"
+            />
+
+            <TextField
+              label="Secretary Text"
+              value={documentInfo.secretaryText}
+              onChange={(e) => handleInputChange('secretaryText', e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+              placeholder="SECRETARY OF THE AIR FORCE"
+              helperText="Authority title (e.g., SECRETARY OF THE AIR FORCE)"
+            />
+
+            <TextField
+              label="Compliance Text"
+              value={documentInfo.complianceText}
+              onChange={(e) => handleInputChange('complianceText', e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+              placeholder="COMPLIANCE WITH THIS PUBLICATION IS MANDATORY"
+              helperText="Compliance statement that appears below the header"
+            />
+
+            <Divider sx={{ my: 2 }} />
+
+            {/* Document Details */}
+            <Typography variant="h6" gutterBottom>Document Details</Typography>
+
             <TextField
               label="Instruction Title"
               value={documentInfo.instructionTitle}
               onChange={(e) => handleInputChange('instructionTitle', e.target.value)}
               fullWidth
               sx={{ mb: 2 }}
+              helperText="Document number (e.g., AIR FORCE INSTRUCTION 36-2618)"
             />
 
             <TextField
@@ -203,6 +257,7 @@ const AIDocumentGenerator: React.FC = () => {
               onChange={(e) => handleInputChange('date', e.target.value)}
               fullWidth
               sx={{ mb: 2 }}
+              helperText="Publication date (e.g., December 5, 2023)"
             />
 
             <TextField
@@ -211,14 +266,25 @@ const AIDocumentGenerator: React.FC = () => {
               onChange={(e) => handleInputChange('subject', e.target.value)}
               fullWidth
               sx={{ mb: 2 }}
+              helperText="Document subject (e.g., The Enlisted Force Structure)"
             />
 
             <TextField
-              label="Responsibilities"
+              label="Responsibilities/Category"
               value={documentInfo.responsibilities}
               onChange={(e) => handleInputChange('responsibilities', e.target.value)}
               fullWidth
               sx={{ mb: 2 }}
+              helperText="Department or category (e.g., AIRMAN AND FAMILY READINESS)"
+            />
+
+            <TextField
+              label="Certified By"
+              value={documentInfo.certifiedBy}
+              onChange={(e) => handleInputChange('certifiedBy', e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+              helperText="Certifying official (e.g., AF/CV (General Larry O. Spencer))"
             />
 
             <Grid container spacing={2}>
@@ -228,6 +294,7 @@ const AIDocumentGenerator: React.FC = () => {
                   value={documentInfo.opr}
                   onChange={(e) => handleInputChange('opr', e.target.value)}
                   fullWidth
+                  helperText="Office of Primary Responsibility"
                 />
               </Grid>
               <Grid item xs={6}>
@@ -237,6 +304,7 @@ const AIDocumentGenerator: React.FC = () => {
                   value={documentInfo.pages}
                   onChange={(e) => handleInputChange('pages', parseInt(e.target.value))}
                   fullWidth
+                  helperText="Total page count"
                 />
               </Grid>
             </Grid>
