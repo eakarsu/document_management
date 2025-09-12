@@ -517,3 +517,5 @@ Bash(cd /Users/erolakarsu/projects/document_management/frontend && npx playwrigh
 
   The system now provides both API-based generation (fast, precise) and UI-based testing (realistic, validates frontend) with
    identical command-line interfaces!
+
+https://www.e-publishing.af.mil/

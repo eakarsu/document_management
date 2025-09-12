@@ -28,6 +28,7 @@ interface DAFPublicationEditorProps {
     publicationNumber: string;
     opr: string;
   };
+  customFields?: any;  // Added to access custom fields
   mode?: 'edit' | 'create' | 'review';
   onSave?: (content: string, metadata: any, sections?: any[]) => Promise<void>;
   onExport?: (format: string) => void;
@@ -38,6 +39,7 @@ export const DAFPublicationEditor: React.FC<DAFPublicationEditorProps> = ({
   documentId,
   initialContent,
   initialMetadata,
+  customFields,
   mode = 'edit',
   onSave,
   onExport,
@@ -54,6 +56,13 @@ export const DAFPublicationEditor: React.FC<DAFPublicationEditorProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const editorRef = useRef<any>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Check if document has Air Force header that needs preservation
+  const hasAirForceHeader = customFields?.hasCustomHeader || 
+    (initialContent && initialContent.includes('BY ORDER OF THE') && initialContent.includes('SECRETARY OF THE AIR FORCE'));
+  const headerHtml = customFields?.headerHtml;
+  const documentStyles = customFields?.documentStyles;
+  const editableContent = customFields?.editableContent || initialContent;
 
   // Calculate estimated pages based on content height
   const calculatePages = useCallback(() => {
@@ -124,7 +133,7 @@ export const DAFPublicationEditor: React.FC<DAFPublicationEditorProps> = ({
         }
       })
     ],
-    content: initialContent,
+    content: hasAirForceHeader ? editableContent : initialContent,
     editable: !readOnly,
     onUpdate: ({ editor }) => {
       calculatePages();
@@ -459,6 +468,25 @@ export const DAFPublicationEditor: React.FC<DAFPublicationEditorProps> = ({
             }
           }}
         >
+          {/* Render preserved Air Force header if present */}
+          {hasAirForceHeader && headerHtml && (
+            <>
+              {documentStyles && (
+                <style dangerouslySetInnerHTML={{ __html: documentStyles }} />
+              )}
+              <Box 
+                sx={{ 
+                  backgroundColor: 'white',
+                  marginBottom: 3,
+                  pointerEvents: 'none',
+                  '& img': { maxWidth: '120px', height: 'auto' }
+                }}
+                dangerouslySetInnerHTML={{ __html: headerHtml }}
+              />
+              <Divider sx={{ my: 2, borderColor: 'black', borderWidth: 2 }} />
+            </>
+          )}
+          
           <EditorContent editor={editor} />
           
           {/* Page break indicators */}

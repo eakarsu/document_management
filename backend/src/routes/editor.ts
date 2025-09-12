@@ -271,7 +271,8 @@ router.get('/documents/:id/content', async (req: AuthenticatedRequest, res: Resp
         currentVersion: document.currentVersion,
         createdAt: document.createdAt,
         updatedAt: document.updatedAt,
-        createdBy: document.createdBy
+        createdBy: document.createdBy,
+        customFields: document.customFields // Include customFields for Air Force header
       }
     });
 

@@ -133,9 +133,16 @@ const OPRReviewPage = () => {
           const doc = data.document || data;
           setDocumentData(doc);
           
-          // Get content
+          // Get content - use editableContent to avoid duplicate header
           let content = '';
-          if (doc.customFields?.content) {
+          if (doc.customFields?.editableContent) {
+            // Use editable content (has styles but no header)
+            content = doc.customFields.editableContent;
+          } else if (doc.customFields?.htmlContent) {
+            // Fallback to full HTML if no editableContent
+            content = doc.customFields.htmlContent;
+          } else if (doc.customFields?.content) {
+            // Fallback to plain text content (no styles)
             content = doc.customFields.content;
           } else if (doc.content) {
             content = doc.content;
@@ -151,7 +158,10 @@ const OPRReviewPage = () => {
           setEditableContent(content);
           
           // DEBUG: Log what we're loading
-          console.log('Loading document content:', {
+          console.log('🔍 OPR PAGE - Loading document content:', {
+            hasInlineStyles: content.includes('style='),
+            styleCount: (content.match(/style="/g) || []).length,
+            firstStyle: content.indexOf('style=') > -1 ? content.substring(content.indexOf('style='), content.indexOf('style=') + 150) : 'NO STYLES FOUND',
             contentLength: content.length,
             hasContent: !!content,
             contentSource: doc.customFields?.content ? 'customFields.content' : 
@@ -181,6 +191,12 @@ const OPRReviewPage = () => {
               console.log('Loaded', customFields.draftFeedback.length, 'draft feedback items from database');
               hasFeedbackFromDoc = true;
             } 
+            // Check for CRM feedback (from AI generated documents)
+            else if (customFields.crmFeedback && Array.isArray(customFields.crmFeedback)) {
+              setFeedback(customFields.crmFeedback);
+              console.log('Loaded', customFields.crmFeedback.length, 'CRM feedback items from database');
+              hasFeedbackFromDoc = true;
+            }
             // Also check for submitted feedback
             else if (customFields.feedback && Array.isArray(customFields.feedback)) {
               setFeedback(customFields.feedback);
@@ -989,13 +1005,23 @@ const OPRReviewPage = () => {
                     />
                   </>
                 ) : (
-                  <DocumentNumbering
-                    content={editableContent}
-                    enableLineNumbers={showLineNumbers}
-                    enableParagraphNumbers={showParagraphNumbers}
-                    enablePageNumbers={showPageNumbers}
-                    linesPerPage={50}
-                  />
+                  <>
+                    {/* Display Air Force header if it exists */}
+                    {documentData?.customFields?.headerHtml && (
+                      <Box 
+                        sx={{ mb: 3 }}
+                        dangerouslySetInnerHTML={{ __html: documentData.customFields.headerHtml }}
+                      />
+                    )}
+                    
+                    <DocumentNumbering
+                      content={editableContent}
+                      enableLineNumbers={showLineNumbers}
+                      enableParagraphNumbers={showParagraphNumbers}
+                      enablePageNumbers={showPageNumbers}
+                      linesPerPage={50}
+                    />
+                  </>
                 )}
               </>
             ) : (

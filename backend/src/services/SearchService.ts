@@ -67,10 +67,10 @@ export class SearchService {
       transports: [new winston.transports.Console()]
     });
 
-    this.initializeIndex();
+    // this.initializeIndex() // DISABLED;
   }
 
-  private async initializeIndex(): Promise<void> {
+  private async initializeIndex_DISABLED(): Promise<void> {
     try {
       // Check if index exists
       const indexExists = await this.elasticsearch.indices.exists({

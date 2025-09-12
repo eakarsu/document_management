@@ -125,9 +125,16 @@ const DocumentReviewPage = () => {
           const doc = data.document || data;
           setDocumentData(doc);
           
-          // Try multiple places for content
+          // Try multiple places for content - use editableContent to avoid header
           let content = '';
-          if (doc.customFields?.content) {
+          if (doc.customFields?.editableContent) {
+            // Use editable content (has styles but no header)
+            content = doc.customFields.editableContent;
+          } else if (doc.customFields?.htmlContent) {
+            // Fallback to full HTML if no editableContent
+            content = doc.customFields.htmlContent;
+          } else if (doc.customFields?.content) {
+            // Fallback to plain text content (no styles)
             content = doc.customFields.content;
           } else if (doc.content) {
             content = doc.content;
@@ -443,6 +450,14 @@ const DocumentReviewPage = () => {
                     />
                   </FormGroup>
                 </Box>
+
+                {/* Air Force Header if exists */}
+                {documentData?.customFields?.headerHtml && (
+                  <Box 
+                    sx={{ mb: 3 }}
+                    dangerouslySetInnerHTML={{ __html: documentData.customFields.headerHtml }}
+                  />
+                )}
 
                 {/* Document Content with Numbering */}
                 {documentContent ? (

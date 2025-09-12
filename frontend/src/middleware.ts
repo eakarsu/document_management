@@ -10,8 +10,8 @@ const publicRoutes = ['/login', '/register', '/forgot-password', '/verify-email'
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Allow preview and draft routes without authentication
-  if (pathname.includes('/api/documents/') && (pathname.endsWith('/preview') || pathname.includes('/draft'))) {
+  // Allow preview, draft, and export routes without authentication
+  if (pathname.includes('/api/documents/') && (pathname.endsWith('/preview') || pathname.includes('/draft') || pathname.includes('/export'))) {
     const response = NextResponse.next();
     // Add CORS headers for API routes
     response.headers.set('Access-Control-Allow-Origin', process.env.FRONTEND_URL || `http://localhost:${process.env.PORT || 3000}`);

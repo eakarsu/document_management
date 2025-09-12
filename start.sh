@@ -571,6 +571,8 @@ EOF
     echo ""
     echo "📋 Your System is Running:"
     echo "   🌐 Frontend:     http://localhost:3000"
+    echo "   ⚡ Workflow Builder: http://localhost:3000/workflow-builder-v2"
+    echo "   🤖 AI Document Generator: http://localhost:3000/ai-document-generator"
     echo "   🔧 Backend API:  http://localhost:4000"
     echo "   💾 Database:     PostgreSQL (dms_dev)"
     echo "   🤖 AI Services:  OpenRouter AI Integration"

@@ -24,8 +24,28 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
     const processDocument = () => {
       const container = containerRef.current!;
       
-      // First, set the raw HTML content
+      // Debug: Log the content to see if it has styles
+      console.log('📊 DOCUMENT NUMBERING - Received content:', {
+        contentLength: content.length,
+        hasStyles: content.includes('style='),
+        firstStyleFound: content.indexOf('style=') > -1 ? content.substring(content.indexOf('style='), content.indexOf('style=') + 100) : 'No styles found',
+        first500Chars: content.substring(0, 500)
+      });
+      
+      // First, set the raw HTML content (preserves inline styles)
       container.innerHTML = content;
+      
+      // Debug: Check if styles are preserved after setting innerHTML
+      const firstH3 = container.querySelector('h3');
+      const firstP = container.querySelector('p');
+      console.log('📊 DOCUMENT NUMBERING - After setting innerHTML:', {
+        h3Found: !!firstH3,
+        h3Style: firstH3?.getAttribute('style'),
+        h3ComputedMarginLeft: firstH3 ? window.getComputedStyle(firstH3).marginLeft : 'N/A',
+        pFound: !!firstP,
+        pStyle: firstP?.getAttribute('style'),
+        pComputedMarginLeft: firstP ? window.getComputedStyle(firstP).marginLeft : 'N/A'
+      });
       
       // Mark all tables with a special class to prevent any numbering
       const tables = container.querySelectorAll('table');
@@ -55,12 +75,12 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
         const seenNumbers: {[key: string]: number} = {};
         
         // First, process all headers to establish section structure
-        const headers = container.querySelectorAll('h1, h2, h3, h4');
+        const headers = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
         headers.forEach((header) => {
           const level = parseInt(header.tagName.charAt(1));
           
           // Check if heading already has a number at the start
-          const existingNumber = header.textContent?.match(/^([\d]+\.[\d]+\.?[\d]*|[\d]+\.?)\s+/);
+          const existingNumber = header.textContent?.match(/^([\d]+(?:\.\d+)*)\s+/);
           
           if (level === 1) {
             // H1 headers - main title, usually no number
@@ -85,6 +105,7 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
             
           } else if (level === 2) {
             // H2 headers like "1. Section" or just section titles
+            console.log('Processing H2:', header.textContent, 'Existing number:', existingNumber);
             if (existingNumber) {
               const numStr = existingNumber[1];
               const parts = numStr.split('.');
@@ -92,7 +113,13 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
               if (parts.length >= 1) {
                 currentSection = parseInt(parts[0]) || 1;
                 sectionCounter = Math.max(sectionCounter, currentSection);
+                console.log('H2 has number, setting section to:', currentSection);
               }
+            } else {
+              // No number found, but this is still a section - increment counter
+              sectionCounter++;
+              currentSection = sectionCounter;
+              console.log('H2 no number, incrementing to section:', currentSection);
             }
             
             currentSubsection = 0;
@@ -124,14 +151,38 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
             header.classList.add('subsubsection-heading', 'no-paragraph-number', 'no-number');
             header.setAttribute('data-section', `${currentSection}.${currentSubsection}`);
             header.setAttribute('data-level', '3');
+          } else if (level >= 4) {
+            // H4, H5, H6 headers - deeper subsections like "1.1.1 Authentication Module"
+            if (existingNumber) {
+              const numStr = existingNumber[1];
+              const parts = numStr.split('.');
+              
+              // Parse the full section number (e.g., "1.1.1" or "1.1.1.1")
+              if (parts.length >= 1) currentSection = parseInt(parts[0]) || currentSection;
+              if (parts.length >= 2) currentSubsection = parseInt(parts[1]) || currentSubsection;
+              if (parts.length >= 3) currentSubsubsection = parseInt(parts[2]) || 0;
+              
+              // Store the full section number for this header
+              header.setAttribute('data-full-section', numStr);
+            }
+            
+            paragraphCounter = 0;
+            currentLevel = level;
+            
+            header.classList.add('deep-heading', 'no-paragraph-number', 'no-number');
+            header.setAttribute('data-section', existingNumber ? existingNumber[1] : `${currentSection}.${currentSubsection}.${currentSubsubsection}`);
+            header.setAttribute('data-level', level.toString());
           }
         });
         
         // Now process all elements in order to assign paragraph numbers
-        const allElements = container.querySelectorAll('p, h1, h2, h3, h4');
+        const allElements = container.querySelectorAll('p, h1, h2, h3, h4, h5, h6');
+        
+        // Track the current full section number for deep nesting
+        let currentFullSection = '';
         
         allElements.forEach((elem) => {
-          if (elem.tagName.match(/^H[1-4]$/)) {
+          if (elem.tagName.match(/^H[1-6]$/)) {
             // This is a header - update current section context
             const level = parseInt(elem.tagName.charAt(1));
             const dataSection = elem.getAttribute('data-section');
@@ -142,17 +193,15 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
               currentSubsubsection = 0;
               paragraphCounter = 0;
               currentLevel = 1;
+              currentFullSection = dataSection || '';
             } else if (level === 2) {
               const parts = (dataSection || '').split('.');
-              currentSection = parseInt(parts[0] || '0') || currentSection;
+              currentSection = parseInt(parts[0] || '0') || 1; // Default to 1 if no section
               currentSubsection = parseInt(parts[1] || '0');
-              // Make sure we have valid section context
-              if (currentSection === 0 && currentSubsection > 0) {
-                currentSection = 1; // Default to section 1 if missing
-              }
               currentSubsubsection = 0;
               paragraphCounter = 0;
               currentLevel = 2;
+              currentFullSection = `${currentSection}`; // Ensure we have the section number
             } else if (level === 3) {
               const parts = (dataSection || '').split('.');
               currentSection = parseInt(parts[0] || '0') || currentSection;
@@ -160,6 +209,18 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
               currentSubsubsection = parseInt(parts[2] || '0');
               paragraphCounter = 0;
               currentLevel = 3;
+              currentFullSection = dataSection || '';
+            } else if (level >= 4) {
+              // For h4, h5, h6 - use the full section number
+              currentFullSection = dataSection || '';
+              paragraphCounter = 0;
+              currentLevel = level;
+              
+              // Parse the section parts for context
+              const parts = currentFullSection.split('.');
+              if (parts.length >= 1) currentSection = parseInt(parts[0]) || currentSection;
+              if (parts.length >= 2) currentSubsection = parseInt(parts[1]) || currentSubsection;
+              if (parts.length >= 3) currentSubsubsection = parseInt(parts[2]) || currentSubsubsection;
             }
           } else if (elem.tagName === 'P') {
             // This is a paragraph - give it a paragraph number
@@ -190,8 +251,11 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
               
               let paraNum = '';
               
-              // Build paragraph number based on current section level
-              if (currentLevel === 3 && currentSubsubsection > 0) {
+              // Build paragraph number based on current full section
+              if (currentFullSection && currentFullSection !== '') {
+                // Use the full section number and append the paragraph counter
+                paraNum = `${currentFullSection}.${paragraphCounter}`;
+              } else if (currentLevel === 3 && currentSubsubsection > 0) {
                 // We're in a subsubsection
                 paraNum = `${currentSection}.${currentSubsection}.${currentSubsubsection}.${paragraphCounter}`;
               } else if (currentLevel >= 2 && currentSubsection > 0) {
@@ -291,6 +355,24 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
 
   // CSS for displaying the numbers
   const styles = `
+    /* Preserve inline styles from the original HTML */
+    [style*="line-height"] {
+      /* Preserve line-height */
+    }
+    
+    [style*="margin-bottom"] {
+      /* Preserve margin-bottom */
+    }
+    
+    /* Ensure line-height and margin-bottom from inline styles are preserved */
+    p[style*="line-height: 1.8"] {
+      line-height: 1.8 !important;
+    }
+    
+    p[style*="margin-bottom: 1.5em"] {
+      margin-bottom: 1.5em !important;
+    }
+    
     /* Ensure headers are not numbered */
     h1, h2, h3, h4, h5, h6 {
       position: relative;
@@ -303,19 +385,57 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
       content: none !important;
     }
     
-    /* Ensure proper spacing for headings */
-    h1, h2, h3, h4 {
+    /* Ensure proper spacing for headings - but preserve inline styles */
+    h1:not([style]), h2:not([style]), h3:not([style]), h4:not([style]) {
       margin-top: 1.5em;
       margin-bottom: 0.5em;
       clear: both;
     }
     
+    /* Preserve heading indentation from inline styles */
+    h3[style*="margin-left: 20px"] {
+      margin-left: 20px !important;
+    }
+    
+    h4[style*="margin-left: 40px"] {
+      margin-left: 40px !important;
+    }
+    
+    h5[style*="margin-left: 60px"] {
+      margin-left: 60px !important;
+    }
+    
+    h6[style*="margin-left: 80px"] {
+      margin-left: 80px !important;
+    }
+    
     /* Only number actual paragraphs, not headings */
-    p.numbered-paragraph {
+    p.numbered-paragraph:not([style*="margin-left"]) {
       position: relative;
       ${enableParagraphNumbers && enableLineNumbers ? 'margin-left: 140px;' : enableParagraphNumbers ? 'margin-left: 80px;' : enableLineNumbers ? 'margin-left: 60px;' : ''}
       margin-top: 0.5em;
       margin-bottom: 0.5em;
+    }
+    
+    /* For paragraphs with inline margin-left, add the numbering offset */
+    p.numbered-paragraph[style*="margin-left: 20px"] {
+      position: relative;
+      margin-left: ${enableParagraphNumbers && enableLineNumbers ? '160px' : enableParagraphNumbers ? '100px' : enableLineNumbers ? '80px' : '20px'} !important;
+    }
+    
+    p.numbered-paragraph[style*="margin-left: 40px"] {
+      position: relative;
+      margin-left: ${enableParagraphNumbers && enableLineNumbers ? '180px' : enableParagraphNumbers ? '120px' : enableLineNumbers ? '100px' : '40px'} !important;
+    }
+    
+    p.numbered-paragraph[style*="margin-left: 60px"] {
+      position: relative;
+      margin-left: ${enableParagraphNumbers && enableLineNumbers ? '200px' : enableParagraphNumbers ? '140px' : enableLineNumbers ? '120px' : '60px'} !important;
+    }
+    
+    p.numbered-paragraph[style*="margin-left: 80px"] {
+      position: relative;
+      margin-left: ${enableParagraphNumbers && enableLineNumbers ? '220px' : enableParagraphNumbers ? '160px' : enableLineNumbers ? '140px' : '80px'} !important;
     }
     
     p.numbered-paragraph::before {

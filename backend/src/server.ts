@@ -29,6 +29,8 @@ import eightStageWorkflowRouter from './routes/eightStageWorkflow';
 import editorRouter from './routes/editor';
 import feedbackProcessorRouter from './routes/feedbackProcessor';
 import oprWorkflowFeedbackRouter from './routes/oprWorkflowFeedback';
+import exportRouter from './routes/export';
+import exportPerfectRouter from './routes/export-perfect';
 import { DocumentService } from './services/DocumentService';
 import { AuthService } from './services/AuthService';
 import { SearchService } from './services/SearchService';
@@ -226,6 +228,10 @@ async function startServer() {
     
     // Editor routes
     app.use('/api/editor', editorRouter);
+    
+    // Export routes (PDF, DOCX, etc.)
+    app.use('/api/export', exportRouter);
+    app.use('/api/export-perfect', exportPerfectRouter);
     
     // Feedback Processor routes (OpenRouter AI)
     app.use('/api/feedback-processor', feedbackProcessorRouter);

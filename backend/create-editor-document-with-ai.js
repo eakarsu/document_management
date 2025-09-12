@@ -195,65 +195,144 @@ Requirements:
   };
 }
 
-// Simulate editor formatting (TipTap-style HTML)
-function simulateEditorFormatting(structure) {
-  console.log('✍️ Formatting content as editor HTML...');
+// Write content to editor using Playwright
+async function writeToEditor(structure) {
+  console.log('🌐 Launching browser to write content in editor...');
   
-  let htmlContent = '';
+  const browser = await chromium.launch({ 
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
   
-  // Add title (H1)
-  htmlContent += `<h1>${structure.title}</h1>\n`;
-  
-  // Add sections
-  for (const section of structure.sections) {
-    // Section heading (H2)
-    htmlContent += `<h2>${section.number}. ${section.title}</h2>\n`;
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
     
-    // Add subsections
-    for (const subsection of section.subsections) {
-      // Subsection heading (H3)
-      htmlContent += `<h3>${subsection.number} ${subsection.title}</h3>\n`;
-      
-      // Add paragraphs with proper formatting
-      for (const paragraph of subsection.paragraphs) {
-        // Simulate TipTap formatting with occasional strong/em tags
-        let formattedParagraph = paragraph;
-        
-        // Add some formatting (like TipTap would)
-        const words = paragraph.split(' ');
-        if (words.length > 20) {
-          // Randomly add strong tags to important words
-          const importantWords = ['system', 'critical', 'important', 'essential', 'required', 'must', 'shall'];
-          importantWords.forEach(word => {
-            const regex = new RegExp(`\\b${word}\\b`, 'gi');
-            if (Math.random() > 0.5) {
-              formattedParagraph = formattedParagraph.replace(regex, `<strong>${word}</strong>`);
-            }
-          });
-          
-          // Randomly add emphasis to some phrases
-          if (Math.random() > 0.7) {
-            const startIdx = Math.floor(Math.random() * (words.length - 5));
-            const phrase = words.slice(startIdx, startIdx + 3).join(' ');
-            formattedParagraph = formattedParagraph.replace(phrase, `<em>${phrase}</em>`);
-          }
-        }
-        
-        htmlContent += `<p>${formattedParagraph}</p>\n`;
+    // Navigate to documents page first
+    console.log('📝 Opening documents page...');
+    const ports = [3000, 3001, 3002];
+    let baseUrl = null;
+    
+    for (const port of ports) {
+      try {
+        await page.goto(`http://localhost:${port}/documents`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+        baseUrl = `http://localhost:${port}`;
+        console.log(`✅ Frontend found at port ${port}`);
+        break;
+      } catch (e) {
+        console.log(`❌ Port ${port} not available, trying next...`);
       }
     }
+    
+    if (!baseUrl) {
+      throw new Error('Could not find frontend on any port');
+    }
+    
+    // Click the "Create with Editor" button
+    console.log('🖱️ Clicking Create with Editor button...');
+    await page.waitForSelector('button:has-text("Create with Editor")', { timeout: 5000 });
+    await page.click('button:has-text("Create with Editor")');
+    
+    // Wait for editor to be ready - try different selectors
+    console.log('⏳ Waiting for editor to load...');
+    try {
+      await page.waitForSelector('[data-testid="editor"]', { timeout: 5000 });
+    } catch {
+      try {
+        await page.waitForSelector('.ProseMirror', { timeout: 5000 });
+      } catch {
+        await page.waitForSelector('[contenteditable="true"]', { timeout: 5000 });
+      }
+    }
+    
+    await page.waitForTimeout(2000); // Let editor fully initialize
+    
+    console.log('✍️ Writing AI content to editor...');
+    
+    // Find and click the editor
+    const editorSelector = await page.evaluate(() => {
+      if (document.querySelector('.tiptap.ProseMirror')) return '.tiptap.ProseMirror';
+      if (document.querySelector('.ProseMirror')) return '.ProseMirror';
+      if (document.querySelector('[contenteditable="true"]')) return '[contenteditable="true"]';
+      if (document.querySelector('[data-testid="editor"]')) return '[data-testid="editor"]';
+      return null;
+    });
+    
+    if (!editorSelector) {
+      throw new Error('Could not find editor element on page');
+    }
+    
+    await page.click(editorSelector);
+    
+    // Write title as H1
+    await page.keyboard.type(structure.title);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    
+    // Write sections
+    for (const section of structure.sections) {
+      // Apply H2 formatting for section heading
+      await page.keyboard.down('Control');
+      await page.keyboard.down('Alt');
+      await page.keyboard.press('2');
+      await page.keyboard.up('Alt');
+      await page.keyboard.up('Control');
+      
+      await page.keyboard.type(`${section.number}. ${section.title}`);
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Enter');
+      
+      // Write subsections
+      for (const subsection of section.subsections) {
+        // Apply H3 formatting for subsection heading
+        await page.keyboard.down('Control');
+        await page.keyboard.down('Alt');
+        await page.keyboard.press('3');
+        await page.keyboard.up('Alt');
+        await page.keyboard.up('Control');
+        
+        await page.keyboard.type(`${subsection.number} ${subsection.title}`);
+        await page.keyboard.press('Enter');
+        await page.keyboard.press('Enter');
+        
+        // Write paragraphs
+        for (const paragraph of subsection.paragraphs) {
+          // Type the paragraph
+          await page.keyboard.type(paragraph);
+          
+          // Add some formatting to important words
+          const importantWords = ['critical', 'important', 'essential', 'required', 'must'];
+          for (const word of importantWords) {
+            if (paragraph.toLowerCase().includes(word)) {
+              // Select and bold random important words (simplified for speed)
+              if (Math.random() > 0.7) {
+                // Just continue typing, formatting would be too slow
+                break;
+              }
+            }
+          }
+          
+          await page.keyboard.press('Enter');
+          await page.keyboard.press('Enter');
+        }
+      }
+    }
+    
+    // Get the final HTML content from the editor
+    const htmlContent = await page.evaluate(() => {
+      const editor = document.querySelector('.tiptap.ProseMirror');
+      return editor ? editor.innerHTML : '';
+    });
+    
+    console.log('✅ Content written to editor');
+    await browser.close();
+    
+    return htmlContent;
+    
+  } catch (error) {
+    await browser.close();
+    throw error;
   }
-  
-  // Add some lists and tables like editor would have
-  if (Math.random() > 0.5) {
-    htmlContent += `<ul>\n`;
-    htmlContent += `<li>Configuration parameter 1</li>\n`;
-    htmlContent += `<li>Configuration parameter 2</li>\n`;
-    htmlContent += `<li>Configuration parameter 3</li>\n`;
-    htmlContent += `</ul>\n`;
-  }
-  
-  return htmlContent;
 }
 
 // Extract paragraph map using same logic as AI generator
@@ -423,10 +502,10 @@ async function createEditorDocumentWithAI() {
     const structure = await generateAIStructure(template, pages);
     console.log(`✅ AI generated structure with ${structure.sections.length} sections`);
     
-    // Simulate editor formatting
-    console.log('📝 Simulating editor formatting...');
-    const htmlContent = simulateEditorFormatting(structure);
-    console.log('✅ Content formatted with editor-style HTML');
+    // Write content to editor using Playwright
+    console.log('📝 Writing content to editor with Playwright...');
+    const htmlContent = await writeToEditor(structure);
+    console.log('✅ Content written through real editor');
     
     // Extract paragraph map
     const { paragraphMap, sections } = extractParagraphMap(htmlContent);

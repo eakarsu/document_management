@@ -22,7 +22,15 @@ import {
   Drawer,
   Badge,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  RadioGroup,
+  Radio,
+  FormControl,
+  FormLabel
 } from '@mui/material';
 import {
   ArrowBack,
@@ -66,6 +74,7 @@ import TypographyExtension from '@tiptap/extension-typography';
 import CharacterCount from '@tiptap/extension-character-count';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
+import { Extension } from '@tiptap/core';
 import { api } from '../../../lib/api';
 import { authTokenService } from '../../../lib/authTokenService';
 import { ChangeTracking, type Change } from '../../../lib/tiptap-change-tracking';
@@ -111,6 +120,14 @@ const DocumentEditor: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const [airForceHeader, setAirForceHeader] = useState<{
+    hasHeader: boolean;
+    headerHtml?: string;
+    documentStyles?: string;
+    editableContent?: string;
+  }>({ hasHeader: false });
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'html' | 'pdf' | 'docx' | 'txt'>('html');
 
   // Get user from localStorage
   useEffect(() => {
@@ -215,14 +232,54 @@ const DocumentEditor: React.FC = () => {
 
   const lowlight = createLowlight(common);
 
+  // Custom extension to preserve inline styles
+  const PreserveStyles = Extension.create({
+    name: 'preserveStyles',
+    
+    addGlobalAttributes() {
+      return [
+        {
+          types: ['heading', 'paragraph', 'listItem', 'blockquote'],
+          attributes: {
+            style: {
+              default: null,
+              parseHTML: element => element.getAttribute('style'),
+              renderHTML: attributes => {
+                if (!attributes.style) {
+                  return {};
+                }
+                return {
+                  style: attributes.style,
+                };
+              },
+            },
+          },
+        },
+      ];
+    },
+  });
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
+      PreserveStyles, // Add custom extension to preserve inline styles
       StarterKit.configure({
         history: {
           depth: 100,
         },
         codeBlock: false, // We'll use CodeBlockLowlight instead
+        heading: {
+          HTMLAttributes: {
+            // Allow style attribute on headings
+            style: null,
+          },
+        },
+        paragraph: {
+          HTMLAttributes: {
+            // Allow style attribute on paragraphs
+            style: null,
+          },
+        },
       }),
       Underline,
       Link.configure({
@@ -269,11 +326,17 @@ const DocumentEditor: React.FC = () => {
         multicolor: true,
       }),
       Color,
-      TextStyle,
+      TextStyle.configure({
+        HTMLAttributes: {
+          // Preserve inline styles
+          style: true,
+        },
+      }),
       Subscript,
       Superscript,
       TextAlign.configure({
         types: ['heading', 'paragraph'],
+        alignments: ['left', 'center', 'right', 'justify'],
       }),
       FontFamily.configure({
         types: ['textStyle'],
@@ -442,6 +505,19 @@ const DocumentEditor: React.FC = () => {
             if (contentData.success && contentData.document.content) {
               // Load actual document content
               let content = contentData.document.content;
+              
+              // Check if document has Air Force header
+              const customFields = contentData.document.customFields || {};
+              if (customFields.hasCustomHeader && customFields.headerHtml) {
+                setAirForceHeader({
+                  hasHeader: true,
+                  headerHtml: customFields.headerHtml,
+                  documentStyles: customFields.documentStyles,
+                  editableContent: customFields.editableContent
+                });
+                // Use editable content if available
+                content = customFields.editableContent || content;
+              }
               
               // If content is plain text, wrap it in paragraph tags
               if (!content.includes('<') && !content.includes('>')) {
@@ -674,6 +750,186 @@ const DocumentEditor: React.FC = () => {
     editor?.commands.redo();
   };
 
+  const handleExport = async () => {
+    if (!editor || !documentData) return;
+    
+    const content = editor.getHTML();
+    const title = documentData.title || 'document';
+    
+    switch (exportFormat) {
+      case 'html':
+        // Export as HTML with Air Force header if present
+        let htmlContent = content;
+        if (airForceHeader.hasHeader && airForceHeader.headerHtml) {
+          htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  ${airForceHeader.documentStyles || ''}
+</head>
+<body>
+  ${airForceHeader.headerHtml}
+  <div style="margin-top: 20px;">
+    ${content}
+  </div>
+</body>
+</html>`;
+        } else {
+          htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+</head>
+<body>
+  ${content}
+</body>
+</html>`;
+        }
+        const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+        const htmlUrl = URL.createObjectURL(htmlBlob);
+        const htmlLink = document.createElement('a');
+        htmlLink.href = htmlUrl;
+        htmlLink.download = `${title}.html`;
+        htmlLink.click();
+        URL.revokeObjectURL(htmlUrl);
+        break;
+        
+      case 'txt':
+        // Convert HTML to plain text
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        const textContent = tempDiv.textContent || tempDiv.innerText || '';
+        const txtBlob = new Blob([textContent], { type: 'text/plain' });
+        const txtUrl = URL.createObjectURL(txtBlob);
+        const txtLink = document.createElement('a');
+        txtLink.href = txtUrl;
+        txtLink.download = `${title}.txt`;
+        txtLink.click();
+        URL.revokeObjectURL(txtUrl);
+        break;
+        
+      case 'pdf':
+        // Generate PDF using export-pdf endpoint
+        try {
+          let fullHtmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <style>
+    body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; margin: 1in; }
+    h1 { font-size: 14pt; font-weight: bold; text-transform: uppercase; }
+    h2 { font-size: 12pt; font-weight: bold; margin-top: 18pt; margin-bottom: 12pt; }
+    h3 { font-size: 12pt; font-weight: bold; font-style: italic; }
+    p { margin-bottom: 12pt; text-align: justify; }
+    .air-force-document-header { text-align: center; margin-bottom: 30px; }
+    .by-order, .secretary { font-weight: bold; font-size: 14pt; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; margin: 12pt 0; }
+    table td, table th { border: 1px solid black; padding: 6pt; }
+    table th { background-color: #f0f0f0; font-weight: bold; }
+  </style>
+  ${airForceHeader.documentStyles || ''}
+</head>
+<body>
+  ${airForceHeader.hasHeader && airForceHeader.headerHtml ? airForceHeader.headerHtml : ''}
+  <div style="margin-top: 20px;">
+    ${content}
+  </div>
+</body>
+</html>`;
+
+          const response = await fetch('/api/export-pdf', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              content: fullHtmlContent,
+              title: title
+            })
+          });
+          
+          if (response.ok) {
+            const blob = await response.blob();
+            const pdfUrl = URL.createObjectURL(blob);
+            const pdfLink = document.createElement('a');
+            pdfLink.href = pdfUrl;
+            pdfLink.download = `${title}.pdf`;
+            pdfLink.click();
+            URL.revokeObjectURL(pdfUrl);
+          } else {
+            alert('Failed to generate PDF. Please try again.');
+          }
+        } catch (error) {
+          console.error('PDF export error:', error);
+          alert('Failed to generate PDF. Please try again.');
+        }
+        break;
+        
+      case 'docx':
+        // Generate DOCX using export-docx endpoint
+        try {
+          // Use the same full HTML as PDF for consistency
+          let fullDocxContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <style>
+    body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; margin: 1in; }
+    h1 { font-size: 14pt; font-weight: bold; text-transform: uppercase; }
+    h2 { font-size: 12pt; font-weight: bold; margin-top: 18pt; margin-bottom: 12pt; }
+    h3 { font-size: 12pt; font-weight: bold; font-style: italic; }
+    p { margin-bottom: 12pt; text-align: justify; }
+    .air-force-document-header { text-align: center; margin-bottom: 30px; }
+    .by-order, .secretary { font-weight: bold; font-size: 14pt; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; margin: 12pt 0; }
+    table td, table th { border: 1px solid black; padding: 6pt; }
+    table th { background-color: #f0f0f0; font-weight: bold; }
+  </style>
+  ${airForceHeader.documentStyles || ''}
+</head>
+<body>
+  ${airForceHeader.hasHeader && airForceHeader.headerHtml ? airForceHeader.headerHtml : ''}
+  <div style="margin-top: 20px;">
+    ${content}
+  </div>
+</body>
+</html>`;
+          const response = await fetch('/api/export-docx', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              content: fullDocxContent,
+              title: title
+            })
+          });
+          
+          if (response.ok) {
+            const blob = await response.blob();
+            const docUrl = URL.createObjectURL(blob);
+            const docLink = document.createElement('a');
+            docLink.href = docUrl;
+            docLink.download = `${title}.docx`;
+            docLink.click();
+            URL.revokeObjectURL(docUrl);
+          } else {
+            alert('Failed to generate Word document. Please try again.');
+          }
+        } catch (error) {
+          console.error('DOCX export error:', error);
+          alert('Failed to generate Word document. Please try again.');
+        }
+        break;
+    }
+    
+    setExportDialogOpen(false);
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -865,17 +1121,8 @@ const DocumentEditor: React.FC = () => {
                 Print
               </Button>
               <Button
-                onClick={() => {
-                  const content = editor?.getHTML() || '';
-                  const blob = new Blob([content], { type: 'text/html' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `${documentData?.title || 'document'}.html`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-                title="Export as HTML"
+                onClick={() => setExportDialogOpen(true)}
+                title="Export Document"
                 startIcon={<Download />}
               >
                 Export
@@ -1603,6 +1850,26 @@ const DocumentEditor: React.FC = () => {
               cursor: row-resize !important;
             }
           `}</style>
+          
+          {/* Render preserved Air Force header if present */}
+          {airForceHeader.hasHeader && airForceHeader.headerHtml && (
+            <>
+              {airForceHeader.documentStyles && (
+                <style dangerouslySetInnerHTML={{ __html: airForceHeader.documentStyles }} />
+              )}
+              <Box 
+                sx={{ 
+                  backgroundColor: 'white',
+                  marginBottom: 3,
+                  pointerEvents: 'none',
+                  '& img': { maxWidth: '120px', height: 'auto' }
+                }}
+                dangerouslySetInnerHTML={{ __html: airForceHeader.headerHtml }}
+              />
+              <Divider sx={{ my: 2, borderColor: 'black', borderWidth: 2 }} />
+            </>
+          )}
+          
           <EditorContent 
             editor={editor} 
             style={{ 
@@ -1762,6 +2029,47 @@ const DocumentEditor: React.FC = () => {
           </List>
         </Box>
       </Drawer>
+
+      {/* Export Format Dialog */}
+      <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)}>
+        <DialogTitle>Export Document</DialogTitle>
+        <DialogContent>
+          <FormControl component="fieldset">
+            <FormLabel component="legend">Select export format:</FormLabel>
+            <RadioGroup
+              value={exportFormat}
+              onChange={(e) => setExportFormat(e.target.value as 'html' | 'pdf' | 'docx' | 'txt')}
+            >
+              <FormControlLabel 
+                value="html" 
+                control={<Radio />} 
+                label="HTML - Web Page (preserves all formatting)" 
+              />
+              <FormControlLabel 
+                value="pdf" 
+                control={<Radio />} 
+                label="PDF - Portable Document (best for printing)" 
+              />
+              <FormControlLabel 
+                value="docx" 
+                control={<Radio />} 
+                label="Word Document - Microsoft Word (editable)" 
+              />
+              <FormControlLabel 
+                value="txt" 
+                control={<Radio />} 
+                label="Plain Text - Simple text file (no formatting)" 
+              />
+            </RadioGroup>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleExport} variant="contained" color="primary">
+            Export
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

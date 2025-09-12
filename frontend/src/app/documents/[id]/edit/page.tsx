@@ -105,8 +105,17 @@ export default function EditDocumentPage() {
           setTitle(data.title);
           setCategory(data.category);
           
-          // Load document content if available for rich text editing
-          if (data.content) {
+          // Load document content - use editableContent to avoid header
+          if (data.customFields?.editableContent) {
+            // Use editable content (has styles but no header)
+            setDocumentContent(data.customFields.editableContent);
+          } else if (data.customFields?.htmlContent) {
+            // Fallback to full HTML if no editableContent
+            setDocumentContent(data.customFields.htmlContent);
+          } else if (data.customFields?.content) {
+            // Fallback to plain text content (no styles)
+            setDocumentContent(data.customFields.content);
+          } else if (data.content) {
             setDocumentContent(data.content);
           } else if (data.mimeType === 'text/html' || data.mimeType === 'text/plain') {
             // Try to convert document to HTML for rich text editing
@@ -603,6 +612,14 @@ export default function EditDocumentPage() {
                       </Box>
                     </Box>
                     
+                    {/* Air Force Header if exists */}
+                    {documentData?.customFields?.headerHtml && (
+                      <Box 
+                        sx={{ mb: 3 }}
+                        dangerouslySetInnerHTML={{ __html: documentData.customFields.headerHtml }}
+                      />
+                    )}
+                    
                     {/* Document Preview with Numbering */}
                     <DocumentNumbering
                       content={documentContent || `
@@ -648,6 +665,7 @@ export default function EditDocumentPage() {
                           <h1>${documentData.title || 'Document'}</h1>
                           <p>Start editing your document content here...</p>
                         `}
+                        customFields={(documentData as any)?.customFields}
                         onSave={async (content) => {
                           await handleRichTextSave(content, {
                             title: documentData.title || 'Untitled',

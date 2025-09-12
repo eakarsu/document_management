@@ -12,6 +12,7 @@ import TableHeader from '@tiptap/extension-table-header';
 interface DAFPublicationEditorWithPageNumbersProps {
   documentId: string;
   initialContent: string;
+  customFields?: any;  // Added to pass through custom fields
   onSave?: (content: string) => Promise<void>;
   readOnly?: boolean;
 }
@@ -19,6 +20,7 @@ interface DAFPublicationEditorWithPageNumbersProps {
 export const DAFPublicationEditorWithPageNumbers: React.FC<DAFPublicationEditorWithPageNumbersProps> = ({
   documentId,
   initialContent,
+  customFields,
   onSave,
   readOnly = false
 }) => {
@@ -27,6 +29,13 @@ export const DAFPublicationEditorWithPageNumbers: React.FC<DAFPublicationEditorW
   const [pageBreaks, setPageBreaks] = useState<number[]>([]);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  
+  // Check if document has Air Force header that needs preservation
+  const hasAirForceHeader = customFields?.hasCustomHeader || 
+    (initialContent && initialContent.includes('BY ORDER OF THE') && initialContent.includes('SECRETARY OF THE AIR FORCE'));
+  const headerHtml = customFields?.headerHtml;
+  const documentStyles = customFields?.documentStyles;
+  const editableContent = customFields?.editableContent || initialContent;
 
   // Constants for page calculation (US Letter: 8.5" x 11")
   const PAGE_HEIGHT_PX = 1056; // ~11 inches at 96 DPI
@@ -124,7 +133,7 @@ export const DAFPublicationEditorWithPageNumbers: React.FC<DAFPublicationEditorW
       TableHeader,
       TableCell
     ],
-    content: initialContent,
+    content: hasAirForceHeader ? editableContent : initialContent,
     editable: !readOnly,
     onUpdate: ({ editor }) => {
       // Recalculate page breaks on content change
@@ -475,6 +484,25 @@ export const DAFPublicationEditorWithPageNumbers: React.FC<DAFPublicationEditorW
             }
           }}
         >
+          {/* Render preserved Air Force header if present */}
+          {hasAirForceHeader && headerHtml && (
+            <>
+              {documentStyles && (
+                <style dangerouslySetInnerHTML={{ __html: documentStyles }} />
+              )}
+              <Box 
+                sx={{ 
+                  backgroundColor: 'white',
+                  marginBottom: 3,
+                  pointerEvents: 'none',
+                  '& img': { maxWidth: '120px', height: 'auto' }
+                }}
+                dangerouslySetInnerHTML={{ __html: headerHtml }}
+              />
+              <Box sx={{ borderBottom: '2px solid black', marginY: 2 }} />
+            </>
+          )}
+          
           <EditorContent editor={editor} />
         </Paper>
 
