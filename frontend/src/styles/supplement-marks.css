@@ -1,0 +1,219 @@
+/* Supplement Mark Styles */
+
+/* Base styles for all supplement marks */
+span[data-supplement] {
+  position: relative;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  cursor: help;
+}
+
+/* ADD - Green highlight */
+span.supplement-add {
+  background-color: rgba(76, 175, 80, 0.2);
+  border-bottom: 2px solid #4caf50;
+}
+
+span.supplement-add:hover {
+  background-color: rgba(76, 175, 80, 0.3);
+}
+
+/* MODIFY - Orange/Warning highlight */
+span.supplement-modify {
+  background-color: rgba(255, 152, 0, 0.2);
+  border-bottom: 2px solid #ff9800;
+}
+
+span.supplement-modify:hover {
+  background-color: rgba(255, 152, 0, 0.3);
+}
+
+/* REPLACE - Blue highlight */
+span.supplement-replace {
+  background-color: rgba(33, 150, 243, 0.2);
+  border-bottom: 2px solid #2196f3;
+}
+
+span.supplement-replace:hover {
+  background-color: rgba(33, 150, 243, 0.3);
+}
+
+/* DELETE - Red strikethrough */
+span.supplement-delete {
+  background-color: rgba(244, 67, 54, 0.1);
+  text-decoration: line-through;
+  text-decoration-color: #f44336;
+  text-decoration-thickness: 2px;
+  opacity: 0.7;
+}
+
+span.supplement-delete:hover {
+  background-color: rgba(244, 67, 54, 0.2);
+  opacity: 0.8;
+}
+
+/* Tooltip styling for rationale on hover */
+span[data-supplement]::after {
+  content: attr(data-supplement);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 1000;
+  margin-bottom: 4px;
+}
+
+span[data-supplement]:hover::after {
+  opacity: 1;
+}
+
+/* Label badge for supplement marks */
+span[data-supplement]::before {
+  content: attr(data-action);
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 2px 6px;
+  background-color: currentColor;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  border-radius: 10px;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 1001;
+}
+
+span.supplement-add::before {
+  background-color: #4caf50;
+}
+
+span.supplement-modify::before {
+  background-color: #ff9800;
+}
+
+span.supplement-replace::before {
+  background-color: #2196f3;
+}
+
+span.supplement-delete::before {
+  background-color: #f44336;
+}
+
+span[data-supplement]:hover::before {
+  opacity: 0.9;
+}
+
+/* Print styles */
+@media print {
+  span[data-supplement] {
+    border-bottom-width: 1px !important;
+  }
+  
+  span.supplement-add {
+    background-color: rgba(76, 175, 80, 0.1) !important;
+  }
+  
+  span.supplement-modify {
+    background-color: rgba(255, 152, 0, 0.1) !important;
+  }
+  
+  span.supplement-replace {
+    background-color: rgba(33, 150, 243, 0.1) !important;
+  }
+  
+  span.supplement-delete {
+    background-color: rgba(244, 67, 54, 0.05) !important;
+  }
+  
+  /* Show labels in print */
+  span[data-supplement]::after {
+    content: " [" attr(data-action) "-" attr(data-supplement) "]";
+    position: static;
+    display: inline;
+    color: inherit;
+    font-size: 0.8em;
+    font-style: italic;
+    background: none;
+    padding: 0;
+    margin-left: 4px;
+    opacity: 1;
+  }
+  
+  span[data-supplement]::before {
+    display: none;
+  }
+}
+
+/* Animation for newly added marks */
+@keyframes highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
+}
+
+span[data-supplement].newly-added {
+  animation: highlight-pulse 1s;
+}
+
+/* Supplementable Section Styles (for parent documents) */
+span.supplementable-section {
+  position: relative;
+  background-color: rgba(25, 118, 210, 0.08);
+  border-left: 3px solid #1976d2;
+  padding-left: 8px;
+  margin-left: -8px;
+  display: inline-block;
+}
+
+span.supplementable-section::before {
+  content: "📌";
+  position: absolute;
+  left: -20px;
+  opacity: 0.6;
+  font-size: 14px;
+}
+
+span.supplementable-section:hover {
+  background-color: rgba(25, 118, 210, 0.15);
+}
+
+/* Tooltip for supplementable sections */
+span.supplementable-section::after {
+  content: "Supplementable Section - " attr(data-section-number);
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding: 4px 8px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  font-size: 11px;
+  white-space: nowrap;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 1000;
+  margin-bottom: 4px;
+}
+
+span.supplementable-section:hover::after {
+  opacity: 1;
+}

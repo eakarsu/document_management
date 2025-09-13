@@ -56,7 +56,8 @@ import {
   FormatListNumbered,
   PostAdd,
   Layers,
-  AddCircleOutline
+  AddCircleOutline,
+  AutoAwesome
 } from '@mui/icons-material';
 import { useRouter, useParams } from 'next/navigation';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -85,6 +86,11 @@ import { Extension } from '@tiptap/core';
 import { api } from '../../../lib/api';
 import { authTokenService } from '../../../lib/authTokenService';
 import { ChangeTracking, type Change } from '../../../lib/tiptap-change-tracking';
+import { SupplementMark } from '../../../lib/tiptap-supplement-mark';
+import SupplementSectionManager from '../../../components/editor/SupplementSectionManager';
+import SupplementableSectionMarker from '../../../components/editor/SupplementableSectionMarker';
+import DocumentStructureToolbar from '../../../components/editor/DocumentStructureToolbar';
+import '../../../styles/supplement-marks.css';
 
 interface DocumentDetails {
   id: string;
@@ -127,6 +133,8 @@ const DocumentEditor: React.FC = () => {
   const [supplementOrganization, setSupplementOrganization] = useState('');
   const [viewMode, setViewMode] = useState<'base' | 'integrated' | 'supplement'>('base');
   const [hasSupplements, setHasSupplements] = useState(false);
+  const [isSupplementDocument, setIsSupplementDocument] = useState(false);
+  const [documentOrganization, setDocumentOrganization] = useState('');
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [replaceTerm, setReplaceTerm] = useState('');
@@ -135,6 +143,7 @@ const DocumentEditor: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const isSupplementRef = useRef(false);
   const [airForceHeader, setAirForceHeader] = useState<{
     hasHeader: boolean;
     headerHtml?: string;
@@ -143,6 +152,12 @@ const DocumentEditor: React.FC = () => {
   }>({ hasHeader: false });
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'html' | 'pdf' | 'docx' | 'txt'>('html');
+  const [showSelectionButton, setShowSelectionButton] = useState(false);
+  const [selectionButtonPosition, setSelectionButtonPosition] = useState({ top: 0, left: 0 });
+  const [selectedText, setSelectedText] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
+  const [showAiDialog, setShowAiDialog] = useState(false);
 
   // Get user from localStorage
   useEffect(() => {
@@ -376,6 +391,7 @@ const DocumentEditor: React.FC = () => {
           setChanges(prev => [...prev, change]);
         },
       }),
+      SupplementMark,
     ],
     content: '', // Start with empty content, will be loaded via useEffect
     onUpdate: ({ editor }) => {
@@ -429,8 +445,37 @@ const DocumentEditor: React.FC = () => {
       }, 100);
     },
     onSelectionUpdate: ({ editor }) => {
-      // Don't update page on selection, let scroll handle it
-      // This prevents jumping when just moving cursor
+      // Always track selection
+      const { from, to } = editor.state.selection;
+      if (from !== to) {
+        // Text is selected
+        const text = editor.state.doc.textBetween(from, to, ' ');
+        setSelectedText(text);
+        
+        // Show button for non-supplement documents
+        // Using direct state check since ref might not be updated yet
+        const docTitle = documentData?.title || '';
+        const isSupp = docTitle.includes('SUP-') || docTitle.includes('Supplement');
+        
+        if (!isSupp) {
+          // Get selection coordinates for floating button
+          const coords = editor.view.coordsAtPos(from);
+          const editorElement = editor.view.dom;
+          const editorRect = editorElement.getBoundingClientRect();
+          
+          setSelectionButtonPosition({
+            top: coords.top - editorRect.top - 40, // Position above selection
+            left: coords.left - editorRect.left
+          });
+          setShowSelectionButton(true);
+        } else {
+          setShowSelectionButton(false);
+        }
+      } else {
+        // No selection
+        setShowSelectionButton(false);
+        setSelectedText('');
+      }
     },
     editorProps: {
       attributes: {
@@ -508,6 +553,20 @@ const DocumentEditor: React.FC = () => {
         if (docResponse.ok) {
           const docData = await docResponse.json();
           setDocumentData(docData.document);
+          
+          // Check if this is a supplement document
+          // Check metadata or if title ends with SUP (supplement indicator)
+          const isSupplement = docData.document.metadata?.supplementType || 
+                              docData.document.title?.includes('SUP') ||
+                              docData.document.category === 'SUPPLEMENT';
+          
+          if (isSupplement) {
+            setIsSupplementDocument(true);
+            isSupplementRef.current = true;
+            setDocumentOrganization(docData.document.metadata?.organization || 'test');
+          } else {
+            isSupplementRef.current = false;
+          }
           
           // Then get the editable content
           const contentResponse = await authTokenService.authenticatedFetch(`/api/editor/documents/${documentId}/content`, {
@@ -757,10 +816,114 @@ const DocumentEditor: React.FC = () => {
     }
   };
 
+  const handleCreateSupplementFromSelection = () => {
+    // When creating from selection, pre-fill the dialog and open it
+    setSupplementDialogOpen(true);
+    // The selected content will be captured when the user confirms
+  };
+
+  const handleAIPoweredSupplement = async () => {
+    setShowAiDialog(true);
+    setAiGenerating(true);
+    setAiSuggestions([]);
+    
+    // Make sure we have selected text
+    const textToAnalyze = selectedText || (editor ? editor.state.doc.textBetween(
+      editor.state.selection.from,
+      editor.state.selection.to,
+      ' '
+    ) : '');
+    
+    console.log('Generating AI suggestions for text:', textToAnalyze);
+    
+    try {
+      // Call AI to generate suggestions
+      const response = await authTokenService.authenticatedFetch(
+        `/api/editor/documents/${documentId}/supplement/ai-generate`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            selectedText: textToAnalyze,
+            organization: supplementOrganization || 'PACAF', // Use the org from dialog or default
+            organizationType: supplementType || 'BASE',
+            location: 'Guam', // These could be from user profile
+            climate: 'Tropical',
+            mission: 'Strategic Air Operations',
+            generateComplete: false
+          })
+        }
+      );
+
+      console.log('AI Response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('AI suggestions received:', data);
+        setAiSuggestions(data.suggestions || []);
+        
+        // If no suggestions, create a default one
+        if (!data.suggestions || data.suggestions.length === 0) {
+          setAiSuggestions([{
+            action: 'MODIFY',
+            content: 'Based on the selected content, this section should be modified to include specific guidance for your organization.',
+            rationale: 'Local conditions and requirements necessitate additional clarification.',
+            confidence: 75
+          }]);
+        }
+      } else {
+        const errorData = await response.text();
+        console.error('AI API error:', errorData);
+        setError('Failed to generate AI suggestions');
+      }
+    } catch (error) {
+      console.error('Error generating AI suggestions:', error);
+      setError('Failed to generate AI suggestions');
+      
+      // Provide a fallback suggestion
+      setAiSuggestions([{
+        action: 'MODIFY',
+        content: 'Unable to generate AI suggestion. Please create your supplement manually.',
+        rationale: 'AI service temporarily unavailable.',
+        confidence: 0
+      }]);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const applyAiSuggestion = (suggestion: any) => {
+    // Pre-fill the supplement dialog with AI suggestion
+    setSupplementOrganization(suggestion.organization || 'Your Organization');
+    setSupplementDialogOpen(true);
+    setShowAiDialog(false);
+    // Store the suggestion for use in creation
+    localStorage.setItem('aiSuggestion', JSON.stringify(suggestion));
+  };
+
   const handleCreateSupplement = async () => {
     if (!supplementOrganization) {
       setError('Please enter organization name');
       return;
+    }
+    
+    // Get selected content from editor if any text is selected
+    let selectedContent = '';
+    let selectedSectionNumber = '';
+    
+    if (editor) {
+      const { from, to } = editor.state.selection;
+      if (from !== to) {
+        // Get selected HTML content
+        const selectedNode = editor.state.doc.cut(from, to);
+        selectedContent = editor.storage.html?.getHTML?.(selectedNode) || 
+                         editor.state.doc.textBetween(from, to, '\n');
+        
+        // Try to extract section number from selected text
+        const sectionMatch = selectedContent.match(/^(\d+(?:\.\d+)*)/);
+        if (sectionMatch) {
+          selectedSectionNumber = sectionMatch[1];
+        }
+      }
     }
     
     try {
@@ -769,7 +932,9 @@ const DocumentEditor: React.FC = () => {
         body: JSON.stringify({
           supplementType,
           supplementLevel,
-          organization: supplementOrganization
+          organization: supplementOrganization,
+          selectedContent: selectedContent,
+          selectedSectionNumber: selectedSectionNumber
         }),
       });
       
@@ -1826,6 +1991,9 @@ const DocumentEditor: React.FC = () => {
               📄 Break
             </Button>
           </Box>
+
+          {/* Document Structure Toolbar */}
+          <DocumentStructureToolbar editor={editor} />
         </Paper>
 
         {/* Editor Content */}
@@ -2018,14 +2186,100 @@ const DocumentEditor: React.FC = () => {
             </>
           )}
           
-          <EditorContent 
-            editor={editor} 
-            style={{ 
-              minHeight: 500,
-              padding: '16px',
+          <Box sx={{ position: 'relative' }}>
+            <EditorContent 
+              editor={editor} 
+              style={{ 
+                minHeight: 500,
+                padding: '16px',
+              }}
+            />
+            
+            {/* Floating buttons for creating supplement from selection */}
+            {showSelectionButton && !isSupplementDocument && (
+              <Paper
+                elevation={6}
+                sx={{
+                  position: 'absolute',
+                  top: selectionButtonPosition.top,
+                  left: selectionButtonPosition.left,
+                  zIndex: 1000,
+                  padding: '8px',
+                  backgroundColor: 'white',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1,
+                  border: '2px solid',
+                  borderColor: 'primary.main',
+                  minWidth: '250px'
+                }}
+              >
+                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 0.5 }}>
+                  Create Supplement:
+                </Typography>
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={<PostAdd />}
+                  onClick={handleCreateSupplementFromSelection}
+                  sx={{
+                    backgroundColor: 'primary.main',
+                    color: 'white',
+                    '&:hover': {
+                      backgroundColor: 'primary.dark',
+                    },
+                    fontSize: '0.75rem',
+                    py: 0.5,
+                  }}
+                >
+                  Manual Supplement
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={<AutoAwesome />}
+                  onClick={handleAIPoweredSupplement}
+                  sx={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                    },
+                    fontSize: '0.75rem',
+                    py: 0.5,
+                  }}
+                >
+                  AI-Powered Supplement
+                </Button>
+              </Paper>
+            )}
+          </Box>
+        </Paper>
+
+        {/* Supplement Section Manager - only show for supplement documents */}
+        {editor && isSupplementDocument && (
+          <SupplementSectionManager
+            documentId={documentId}
+            isSupplementDocument={isSupplementDocument}
+            organization={documentOrganization}
+            editor={editor}
+            onSectionMarked={(section) => {
+              console.log('Section marked:', section);
+              // You can handle the marked section here if needed
+              // For example, save it to the database or update local state
             }}
           />
-        </Paper>
+        )}
+
+        {/* Supplementable Section Marker - only show for parent documents */}
+        {editor && !isSupplementDocument && (
+          <SupplementableSectionMarker
+            documentId={documentId}
+            editor={editor}
+            isParentDocument={!isSupplementDocument}
+          />
+        )}
 
       </Container>
 
@@ -2219,6 +2473,98 @@ const DocumentEditor: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* AI Suggestions Dialog */}
+      <Dialog
+        open={showAiDialog}
+        onClose={() => setShowAiDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AutoAwesome color="primary" />
+            <Typography variant="h6">AI Supplement Suggestions</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {aiGenerating ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
+              <CircularProgress size={48} />
+              <Typography variant="body1" sx={{ mt: 2 }}>Analyzing selected text...</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Generating intelligent supplement suggestions</Typography>
+            </Box>
+          ) : (
+            <Box>
+              {aiSuggestions.length > 0 ? (
+                <>
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    Found {aiSuggestions.length} AI-generated suggestion{aiSuggestions.length > 1 ? 's' : ''} for your selected text
+                  </Alert>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {aiSuggestions.map((suggestion, index) => (
+                      <Paper key={index} elevation={2} sx={{ p: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Chip
+                            label={suggestion.action}
+                            color={
+                              suggestion.action === 'ADD' ? 'success' :
+                              suggestion.action === 'MODIFY' ? 'warning' :
+                              suggestion.action === 'REPLACE' ? 'info' : 'error'
+                            }
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            Confidence: {suggestion.confidence || 85}%
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          <strong>Content:</strong> {suggestion.content || 'AI-generated supplement content'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          <strong>Rationale:</strong> {suggestion.rationale || 'Based on organizational context'}
+                        </Typography>
+                        <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            onClick={() => applyAiSuggestion(suggestion)}
+                          >
+                            Use This Suggestion
+                          </Button>
+                        </Box>
+                      </Paper>
+                    ))}
+                  </Box>
+                </>
+              ) : (
+                <Alert severity="info">
+                  No suggestions generated yet. The AI will analyze your selected text and provide context-aware supplement suggestions.
+                </Alert>
+              )}
+              
+              {/* Selected Text Display */}
+              <Paper variant="outlined" sx={{ p: 2, mt: 2, backgroundColor: 'grey.50' }}>
+                <Typography variant="caption" color="text.secondary">Selected Text:</Typography>
+                <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                  "{selectedText.substring(0, 300)}{selectedText.length > 300 ? '...' : ''}"
+                </Typography>
+              </Paper>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowAiDialog(false)}>Close</Button>
+          <Button 
+            onClick={() => {
+              setShowAiDialog(false);
+              setSupplementDialogOpen(true);
+            }}
+            variant="outlined"
+          >
+            Create Manual Supplement Instead
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Supplement Creation Dialog */}
       <Dialog 
         open={supplementDialogOpen} 
@@ -2229,6 +2575,16 @@ const DocumentEditor: React.FC = () => {
         <DialogTitle>Create Supplemental Document</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            {selectedText && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  Creating supplement from selected text:
+                </Typography>
+                <Typography variant="body2" sx={{ fontStyle: 'italic', mt: 1 }}>
+                  "{selectedText.substring(0, 100)}{selectedText.length > 100 ? '...' : ''}"
+                </Typography>
+              </Alert>
+            )}
             <FormControl fullWidth>
               <InputLabel>Supplement Type</InputLabel>
               <Select

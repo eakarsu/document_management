@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import winston from 'winston';
+import AISupplementService from '../services/AISupplementService';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -286,11 +287,159 @@ router.get('/documents/:id/content', async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+// AI-powered supplement generation endpoint
+router.post('/documents/:id/supplement/ai-generate', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const documentId = req.params.id;
+    const { 
+      selectedText, 
+      sectionNumber,
+      organization,
+      organizationType,
+      location,
+      climate,
+      mission
+    } = req.body;
+    
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Get parent document for context
+    const parentDocument = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: { title: true, customFields: true }
+    });
+
+    if (!parentDocument) {
+      return res.status(404).json({
+        success: false,
+        message: 'Parent document not found'
+      });
+    }
+
+    // Initialize AI service
+    const aiService = new AISupplementService();
+
+    // Generate suggestions
+    const suggestions = await aiService.generateSupplementSuggestions(
+      selectedText,
+      parentDocument.title,
+      {
+        name: organization,
+        type: organizationType || 'BASE',
+        location,
+        climate,
+        mission
+      },
+      sectionNumber
+    );
+
+    // If user wants complete content generation for a specific action
+    if (req.body.generateComplete && req.body.action) {
+      const completeContent = await aiService.generateSupplementContent(
+        req.body.action,
+        selectedText,
+        {
+          name: organization,
+          type: organizationType || 'BASE',
+          location,
+          climate,
+          mission
+        },
+        req.body.userGuidance
+      );
+      
+      return res.json({
+        success: true,
+        suggestions,
+        completeContent
+      });
+    }
+
+    res.json({
+      success: true,
+      suggestions
+    });
+  } catch (error: any) {
+    console.error('Error generating AI supplement suggestions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate AI suggestions',
+      error: error.message
+    });
+  }
+});
+
+// Analyze document for supplement opportunities
+router.post('/documents/:id/supplement/analyze', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const documentId = req.params.id;
+    const { organization, organizationType, location, climate, mission } = req.body;
+    
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Get document content
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: { customFields: true }
+    });
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    const content = (document.customFields as any)?.content || '';
+
+    // Initialize AI service
+    const aiService = new AISupplementService();
+
+    // Analyze for supplement opportunities
+    const opportunities = await aiService.analyzeForSupplements(
+      content,
+      {
+        name: organization,
+        type: organizationType || 'BASE',
+        location,
+        climate,
+        mission
+      }
+    );
+
+    res.json({
+      success: true,
+      opportunities
+    });
+  } catch (error: any) {
+    console.error('Error analyzing document for supplements:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to analyze document',
+      error: error.message
+    });
+  }
+});
+
 // Create supplement document
 router.post('/documents/:id/supplement', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const documentId = req.params.id;
-    const { supplementType, supplementLevel, organization } = req.body;
+    const { supplementType, supplementLevel, organization, selectedContent, selectedSectionNumber } = req.body;
     const userId = req.user?.id;
     const organizationId = req.user?.organizationId;
 
@@ -301,7 +450,7 @@ router.post('/documents/:id/supplement', async (req: AuthenticatedRequest, res: 
       });
     }
 
-    // Get parent document
+    // Get parent document with its content
     const parentDocument = await prisma.document.findFirst({
       where: {
         id: documentId,
@@ -309,6 +458,20 @@ router.post('/documents/:id/supplement', async (req: AuthenticatedRequest, res: 
         status: { not: 'DELETED' }
       }
     });
+    
+    // Use selected content if provided, otherwise use full parent content
+    let parentContent = '<p>No content available from parent document</p>';
+    
+    if (selectedContent) {
+      // User selected specific content to supplement
+      parentContent = selectedContent;
+    } else if (parentDocument && parentDocument.customFields && typeof parentDocument.customFields === 'object') {
+      // Use full parent document content
+      const customFields = parentDocument.customFields as any;
+      if (customFields.content) {
+        parentContent = customFields.content;
+      }
+    }
 
     if (!parentDocument) {
       return res.status(404).json({
@@ -321,7 +484,12 @@ router.post('/documents/:id/supplement', async (req: AuthenticatedRequest, res: 
     const supplement = await prisma.document.create({
       data: {
         title: `${parentDocument.title}_${organization}SUP`,
+        originalName: `${parentDocument.originalName}_${organization}SUP`,
         fileName: `${parentDocument.fileName}_supplement`,
+        mimeType: parentDocument.mimeType,
+        fileSize: 0, // Will be updated when content is added
+        checksum: `supplement_${documentId}_${organization}_${Date.now()}`,
+        storagePath: `supplements/${documentId}/${organization}_supplement`,
         category: parentDocument.category,
         status: 'DRAFT',
         parentDocumentId: documentId,
@@ -339,7 +507,58 @@ router.post('/documents/:id/supplement', async (req: AuthenticatedRequest, res: 
             level: supplementLevel,
             organization: organization,
             authority: req.user?.firstName + ' ' + req.user?.lastName
-          }
+          },
+          content: `
+            <div style="background: #e3f2fd; padding: 16px; border-radius: 4px; margin-bottom: 20px;">
+              <h2 style="color: #1976d2; margin-top: 0;">📋 Supplemental Document for ${parentDocument.title}</h2>
+              <p><strong>Supplement Type:</strong> ${supplementType}</p>
+              <p><strong>Organization:</strong> ${organization}</p>
+              <p><strong>Authority Level:</strong> Level ${supplementLevel}</p>
+              ${selectedSectionNumber ? `<p><strong>Section:</strong> ${selectedSectionNumber}</p>` : ''}
+            </div>
+            
+            <div style="background: #fff3e0; padding: 16px; border-radius: 4px; margin-bottom: 20px;">
+              <h3 style="color: #e65100; margin-top: 0;">📝 How to Create Your Supplement</h3>
+              <ol>
+                <li><strong>Review</strong> the parent document content below</li>
+                <li><strong>Select any text</strong> you want to supplement</li>
+                <li><strong>Click the action button</strong> from the floating toolbar:
+                  <ul>
+                    <li>🟢 <strong>ADD</strong> - Add new requirements after this section</li>
+                    <li>🟠 <strong>MODIFY</strong> - Add clarifications or restrictions</li>
+                    <li>🔵 <strong>REPLACE</strong> - Replace with ${organization}-specific content</li>
+                    <li>🔴 <strong>DELETE</strong> - Mark as not applicable to ${organization}</li>
+                  </ul>
+                </li>
+                <li><strong>Fill in the dialog</strong> with section number and rationale</li>
+              </ol>
+            </div>
+            
+            <hr style="margin: 30px 0; border: 3px solid #1976d2;">
+            
+            <h1 style="color: #1976d2;">📄 Parent Document Content</h1>
+            <div style="border: 2px dashed #90caf9; padding: 20px; background: #fafafa; margin: 20px 0;">
+              <div style="background: #e3f2fd; padding: 10px; margin: -20px -20px 20px -20px; border-bottom: 2px solid #90caf9;">
+                <p style="color: #1565c0; font-weight: bold; margin: 0;">
+                  ℹ️ Select text below and use the floating toolbar to mark your supplements
+                </p>
+              </div>
+              ${parentContent}
+            </div>
+            
+            <hr style="margin: 30px 0; border: 3px solid #4caf50;">
+            
+            <h1 style="color: #2e7d32;">➕ Additional Supplement Content</h1>
+            <div style="border: 2px dashed #81c784; padding: 20px; background: #f1f8e9; margin: 20px 0;">
+              <p style="color: #666; font-style: italic;">
+                Use this section for completely new content that doesn't directly modify existing sections:
+              </p>
+              <p><br></p>
+              <h2>Example: Appendix A (Added-${organization}) Local Forms</h2>
+              <p>The following forms are required for ${organization} personnel...</p>
+              <p><strong>Rationale:</strong> Local administrative requirements</p>
+            </div>
+          `
         }
       }
     });
