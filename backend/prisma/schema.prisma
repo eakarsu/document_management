@@ -67,6 +67,7 @@ model User {
   workflow_stage_history                                           workflow_stage_history[]
   assignedTasks                                                    WorkflowTask[]                @relation("TaskAssignee")
   createdTasks                                                     WorkflowTask[]                @relation("TaskCreator")
+  supplementalSections                                             SupplementalSection[]
 
   @@map("users")
 }
@@ -147,6 +148,13 @@ model Document {
   parentDocumentId          String?
   currentVersion            Int                         @default(1)
   ocrProcessed              Boolean                     @default(false)
+  
+  // Supplemental document fields
+  supplementType            String?                     // 'MAJCOM', 'BASE', 'UNIT', 'INTERIM_CHANGE'
+  supplementLevel           Int?                        // 1=Service, 2=MAJCOM, 3=Wing, 4=Squadron
+  supplementOrganization    String?                     // e.g., 'PACAF', 'Kadena AB', '36th Wing'
+  effectiveDate             DateTime?
+  expirationDate            DateTime?
   ocrText                   String?
   aiClassification          String?
   aiTags                    String[]
@@ -171,6 +179,7 @@ model Document {
   childDocuments            Document[]                  @relation("DocumentHierarchy")
   sequential_workflows      sequential_workflows?
   workflow_instances        workflow_instances[]
+  supplementalSections      SupplementalSection[]
 
   @@map("documents")
 }
@@ -1064,6 +1073,30 @@ model workflow_supporting_documents {
   notes                String?
   created_at           DateTime           @default(now())
   workflow_instances   workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
+}
+
+// Supplemental Section model for tracking document supplements
+model SupplementalSection {
+  id                  String    @id @default(cuid())
+  documentId          String
+  document            Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  // Reference to parent document section
+  parentSectionNumber String    // e.g., "2.3.1"
+  parentSectionTitle  String
+  
+  // Supplement content
+  action              String    // 'ADD', 'REPLACE', 'DELETE', 'MODIFY'
+  content             String    @db.Text // The supplemental content
+  rationale           String?   // Why this supplement is needed
+  
+  // Metadata
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdById         String
+  createdBy           User      @relation(fields: [createdById], references: [id])
+  
+  @@map("supplemental_sections")
 }
 
 enum DocumentStatus {

@@ -286,4 +286,342 @@ router.get('/documents/:id/content', async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+// Create supplement document
+router.post('/documents/:id/supplement', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const documentId = req.params.id;
+    const { supplementType, supplementLevel, organization } = req.body;
+    const userId = req.user?.id;
+    const organizationId = req.user?.organizationId;
+
+    if (!userId || !organizationId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Get parent document
+    const parentDocument = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        organizationId: organizationId,
+        status: { not: 'DELETED' }
+      }
+    });
+
+    if (!parentDocument) {
+      return res.status(404).json({
+        success: false,
+        message: 'Parent document not found'
+      });
+    }
+
+    // Create supplement document
+    const supplement = await prisma.document.create({
+      data: {
+        title: `${parentDocument.title}_${organization}SUP`,
+        fileName: `${parentDocument.fileName}_supplement`,
+        category: parentDocument.category,
+        status: 'DRAFT',
+        parentDocumentId: documentId,
+        supplementType: supplementType,
+        supplementLevel: supplementLevel,
+        supplementOrganization: organization,
+        effectiveDate: new Date(),
+        organizationId: organizationId,
+        createdById: userId,
+        currentVersion: 1,
+        customFields: {
+          parentDocumentTitle: parentDocument.title,
+          supplementMetadata: {
+            type: supplementType,
+            level: supplementLevel,
+            organization: organization,
+            authority: req.user?.firstName + ' ' + req.user?.lastName
+          }
+        }
+      }
+    });
+
+    logger.info('Supplement document created', {
+      supplementId: supplement.id,
+      parentId: documentId,
+      type: supplementType,
+      level: supplementLevel,
+      organization
+    });
+
+    res.json({
+      success: true,
+      message: 'Supplement document created successfully',
+      supplement: supplement
+    });
+
+  } catch (error) {
+    logger.error('Error creating supplement document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create supplement document',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Add supplemental section
+router.post('/documents/:id/supplement/section', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const documentId = req.params.id;
+    const { parentSectionNumber, parentSectionTitle, action, content, rationale } = req.body;
+    const userId = req.user?.id;
+    const organizationId = req.user?.organizationId;
+
+    if (!userId || !organizationId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Verify document exists and user has access
+    const document = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        organizationId: organizationId,
+        status: { not: 'DELETED' }
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found or access denied'
+      });
+    }
+
+    // Create supplemental section
+    const section = await prisma.supplementalSection.create({
+      data: {
+        documentId: documentId,
+        parentSectionNumber: parentSectionNumber,
+        parentSectionTitle: parentSectionTitle,
+        action: action,
+        content: content,
+        rationale: rationale,
+        createdById: userId
+      }
+    });
+
+    logger.info('Supplemental section added', {
+      sectionId: section.id,
+      documentId: documentId,
+      action: action,
+      parentSection: parentSectionNumber
+    });
+
+    res.json({
+      success: true,
+      message: 'Supplemental section added successfully',
+      section: section
+    });
+
+  } catch (error) {
+    logger.error('Error adding supplemental section:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add supplemental section',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get integrated document (base + supplements)
+router.get('/documents/:id/integrated', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const documentId = req.params.id;
+    const userId = req.user?.id;
+    const organizationId = req.user?.organizationId;
+
+    if (!userId || !organizationId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Get base document with supplements
+    const document = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        organizationId: organizationId,
+        status: { not: 'DELETED' }
+      },
+      include: {
+        supplementalSections: {
+          include: {
+            createdBy: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          },
+          orderBy: {
+            parentSectionNumber: 'asc'
+          }
+        }
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Get content from customFields
+    let baseContent = '<p>Start editing your document...</p>';
+    if (document.customFields && typeof document.customFields === 'object') {
+      const customFields = document.customFields as any;
+      if (customFields.content) {
+        baseContent = customFields.content;
+      }
+    }
+
+    // Apply supplemental sections to base content
+    let integratedContent = baseContent;
+    
+    for (const section of document.supplementalSections) {
+      const supplementLabel = `${section.action}-${document.supplementOrganization || 'SUP'}`;
+      
+      switch (section.action) {
+        case 'ADD':
+          // Add content after the specified section
+          const addPattern = new RegExp(`(<[^>]+>${section.parentSectionNumber}[^<]*</[^>]+>)`, 'gi');
+          integratedContent = integratedContent.replace(addPattern, `$1\n<div class="supplement-add" data-supplement="${supplementLabel}">${section.content}</div>`);
+          break;
+          
+        case 'MODIFY':
+          // Wrap the modified section
+          const modifyPattern = new RegExp(`(<[^>]+>${section.parentSectionNumber}[^<]*</[^>]+>)`, 'gi');
+          integratedContent = integratedContent.replace(modifyPattern, `<div class="supplement-modify" data-supplement="${supplementLabel}">$1\n${section.content}</div>`);
+          break;
+          
+        case 'REPLACE':
+          // Replace the entire section
+          const replacePattern = new RegExp(`<[^>]+>${section.parentSectionNumber}[^<]*</[^>]+>`, 'gi');
+          integratedContent = integratedContent.replace(replacePattern, `<div class="supplement-replace" data-supplement="${supplementLabel}">${section.content}</div>`);
+          break;
+          
+        case 'DELETE':
+          // Mark section as deleted
+          const deletePattern = new RegExp(`(<[^>]+>${section.parentSectionNumber}[^<]*</[^>]+>)`, 'gi');
+          integratedContent = integratedContent.replace(deletePattern, `<div class="supplement-delete" data-supplement="${supplementLabel}" title="${section.rationale || 'Deleted'}">$1</div>`);
+          break;
+      }
+    }
+
+    res.json({
+      success: true,
+      document: {
+        id: document.id,
+        title: document.title,
+        baseContent: baseContent,
+        integratedContent: integratedContent,
+        supplementalSections: document.supplementalSections,
+        hasSupplements: document.supplementalSections.length > 0
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error getting integrated document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get integrated document',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get supplement tree (hierarchy of supplements)
+router.get('/documents/:id/supplement-tree', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const documentId = req.params.id;
+    const userId = req.user?.id;
+    const organizationId = req.user?.organizationId;
+
+    if (!userId || !organizationId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Get document and all its supplements
+    const document = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        organizationId: organizationId,
+        status: { not: 'DELETED' }
+      },
+      include: {
+        childDocuments: {
+          where: {
+            supplementType: { not: null }
+          },
+          orderBy: {
+            supplementLevel: 'asc'
+          },
+          include: {
+            supplementalSections: {
+              orderBy: {
+                parentSectionNumber: 'asc'
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Build supplement tree
+    const supplementTree = {
+      id: document.id,
+      title: document.title,
+      level: 0,
+      type: 'BASE',
+      supplements: document.childDocuments.map((supplement: any) => ({
+        id: supplement.id,
+        title: supplement.title,
+        type: supplement.supplementType,
+        level: supplement.supplementLevel,
+        organization: supplement.supplementOrganization,
+        effectiveDate: supplement.effectiveDate,
+        expirationDate: supplement.expirationDate,
+        sectionsCount: supplement.supplementalSections.length
+      }))
+    };
+
+    res.json({
+      success: true,
+      tree: supplementTree
+    });
+
+  } catch (error) {
+    logger.error('Error getting supplement tree:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get supplement tree',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

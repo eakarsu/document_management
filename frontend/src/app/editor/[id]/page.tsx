@@ -30,7 +30,11 @@ import {
   RadioGroup,
   Radio,
   FormControl,
-  FormLabel
+  FormLabel,
+  TextField,
+  Select,
+  MenuItem,
+  InputLabel
 } from '@mui/material';
 import {
   ArrowBack,
@@ -49,7 +53,10 @@ import {
   Upload,
   EmojiEmotions,
   Functions,
-  FormatListNumbered
+  FormatListNumbered,
+  PostAdd,
+  Layers,
+  AddCircleOutline
 } from '@mui/icons-material';
 import { useRouter, useParams } from 'next/navigation';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -112,6 +119,14 @@ const DocumentEditor: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [wordCount, setWordCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
+  
+  // Supplement states
+  const [supplementDialogOpen, setSupplementDialogOpen] = useState(false);
+  const [supplementType, setSupplementType] = useState('MAJCOM');
+  const [supplementLevel, setSupplementLevel] = useState(2);
+  const [supplementOrganization, setSupplementOrganization] = useState('');
+  const [viewMode, setViewMode] = useState<'base' | 'integrated' | 'supplement'>('base');
+  const [hasSupplements, setHasSupplements] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [replaceTerm, setReplaceTerm] = useState('');
@@ -742,6 +757,37 @@ const DocumentEditor: React.FC = () => {
     }
   };
 
+  const handleCreateSupplement = async () => {
+    if (!supplementOrganization) {
+      setError('Please enter organization name');
+      return;
+    }
+    
+    try {
+      const response = await authTokenService.authenticatedFetch(`/api/editor/documents/${documentId}/supplement`, {
+        method: 'POST',
+        body: JSON.stringify({
+          supplementType,
+          supplementLevel,
+          organization: supplementOrganization
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSupplementDialogOpen(false);
+        setHasSupplements(true);
+        // Navigate to the new supplement document
+        router.push(`/editor/${data.supplement.id}`);
+      } else {
+        setError('Failed to create supplement');
+      }
+    } catch (error) {
+      console.error('Error creating supplement:', error);
+      setError('Failed to create supplement');
+    }
+  };
+
   const handleUndo = () => {
     editor?.commands.undo();
   };
@@ -1087,6 +1133,42 @@ const DocumentEditor: React.FC = () => {
             >
               {saving ? 'Saving...' : 'Save'}
             </Button>
+            
+            {/* Supplement Button */}
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="small"
+              startIcon={<PostAdd />}
+              onClick={() => setSupplementDialogOpen(true)}
+              sx={{ ml: 1 }}
+            >
+              Create Supplement
+            </Button>
+            
+            {/* View Mode Toggle */}
+            {hasSupplements && (
+              <ButtonGroup size="small" sx={{ ml: 1 }}>
+                <Button
+                  variant={viewMode === 'base' ? 'contained' : 'outlined'}
+                  onClick={() => setViewMode('base')}
+                >
+                  Base
+                </Button>
+                <Button
+                  variant={viewMode === 'integrated' ? 'contained' : 'outlined'}
+                  onClick={() => setViewMode('integrated')}
+                >
+                  Integrated
+                </Button>
+                <Button
+                  variant={viewMode === 'supplement' ? 'contained' : 'outlined'}
+                  onClick={() => setViewMode('supplement')}
+                >
+                  Supplements Only
+                </Button>
+              </ButtonGroup>
+            )}
 
             <Divider orientation="vertical" flexItem />
 
@@ -1849,6 +1931,72 @@ const DocumentEditor: React.FC = () => {
             .ProseMirror table th.resize-cursor-row {
               cursor: row-resize !important;
             }
+            
+            /* Supplemental Document Styles */
+            .supplement-add {
+              background: #e8f5e9 !important;
+              border-left: 4px solid #4caf50 !important;
+              padding-left: 8px !important;
+              margin: 8px 0 !important;
+              position: relative !important;
+            }
+            
+            .supplement-modify {
+              background: #fff3e0 !important;
+              border-left: 4px solid #ff9800 !important;
+              padding-left: 8px !important;
+              margin: 8px 0 !important;
+              position: relative !important;
+            }
+            
+            .supplement-replace {
+              background: #e3f2fd !important;
+              border-left: 4px solid #2196f3 !important;
+              padding-left: 8px !important;
+              margin: 8px 0 !important;
+              position: relative !important;
+            }
+            
+            .supplement-delete {
+              background: #ffebee !important;
+              border-left: 4px solid #f44336 !important;
+              padding-left: 8px !important;
+              margin: 8px 0 !important;
+              text-decoration: line-through !important;
+              opacity: 0.7 !important;
+              position: relative !important;
+            }
+            
+            .supplement-add::after,
+            .supplement-modify::after,
+            .supplement-replace::after,
+            .supplement-delete::after {
+              content: attr(data-supplement);
+              position: absolute;
+              top: -20px;
+              right: 0;
+              color: white;
+              padding: 2px 6px;
+              border-radius: 3px;
+              font-size: 10px;
+              font-weight: bold;
+            }
+            
+            .supplement-add::after {
+              background: #4caf50;
+            }
+            
+            .supplement-modify::after {
+              background: #ff9800;
+            }
+            
+            .supplement-replace::after {
+              background: #2196f3;
+            }
+            
+            .supplement-delete::after {
+              background: #f44336;
+            }
           `}</style>
           
           {/* Render preserved Air Force header if present */}
@@ -2067,6 +2215,71 @@ const DocumentEditor: React.FC = () => {
           <Button onClick={() => setExportDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleExport} variant="contained" color="primary">
             Export
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Supplement Creation Dialog */}
+      <Dialog 
+        open={supplementDialogOpen} 
+        onClose={() => setSupplementDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Create Supplemental Document</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel>Supplement Type</InputLabel>
+              <Select
+                value={supplementType}
+                onChange={(e) => setSupplementType(e.target.value)}
+                label="Supplement Type"
+              >
+                <MenuItem value="MAJCOM">MAJCOM (Major Command)</MenuItem>
+                <MenuItem value="BASE">Base/Wing</MenuItem>
+                <MenuItem value="UNIT">Squadron/Unit</MenuItem>
+                <MenuItem value="INTERIM_CHANGE">Interim Change</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <FormControl fullWidth>
+              <InputLabel>Supplement Level</InputLabel>
+              <Select
+                value={supplementLevel}
+                onChange={(e) => setSupplementLevel(Number(e.target.value))}
+                label="Supplement Level"
+              >
+                <MenuItem value={1}>Level 1 - Service</MenuItem>
+                <MenuItem value={2}>Level 2 - MAJCOM</MenuItem>
+                <MenuItem value={3}>Level 3 - Wing/Base</MenuItem>
+                <MenuItem value={4}>Level 4 - Squadron/Unit</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <TextField
+              fullWidth
+              label="Organization"
+              placeholder="e.g., PACAF, Kadena AB, 36th Wing"
+              value={supplementOrganization}
+              onChange={(e) => setSupplementOrganization(e.target.value)}
+              helperText="Enter the organization creating this supplement"
+            />
+            
+            <Alert severity="info">
+              This will create a supplement document that can add to or modify the base document without changing the original.
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSupplementDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={handleCreateSupplement} 
+            variant="contained" 
+            color="primary"
+            disabled={!supplementOrganization}
+          >
+            Create Supplement
           </Button>
         </DialogActions>
       </Dialog>
