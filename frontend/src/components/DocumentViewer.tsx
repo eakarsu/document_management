@@ -8,10 +8,7 @@ import {
   Button,
   Alert,
   CircularProgress,
-  Chip,
-  FormGroup,
-  FormControlLabel,
-  Switch
+  Chip
 } from '@mui/material';
 import {
   Visibility as ViewIcon,
@@ -20,7 +17,6 @@ import {
   FormatListNumbered
 } from '@mui/icons-material';
 import { api } from '../lib/api';
-import DocumentNumbering from './DocumentNumbering';
 
 interface DocumentViewerProps {
   documentId: string;
@@ -41,9 +37,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showLineNumbers, setShowLineNumbers] = useState(true);
-  const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
-  const [showPageNumbers, setShowPageNumbers] = useState(true);
 
   // Use content directly from props if available
   const htmlContent = document?.content || '';
@@ -171,57 +164,22 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       return html;
     };
 
-    // Render the HTML content with automatic numbering
+    // Render the HTML content directly (paragraph numbers are already embedded)
     return (
-      <>
-        {/* Numbering Controls */}
-        <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Document Numbering Options:
-          </Typography>
-          <FormGroup row>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={showLineNumbers}
-                  onChange={(e) => setShowLineNumbers(e.target.checked)}
-                  size="small"
-                />
-              }
-              label="Line Numbers"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={showParagraphNumbers}
-                  onChange={(e) => setShowParagraphNumbers(e.target.checked)}
-                  size="small"
-                />
-              }
-              label="Paragraph Numbers"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={showPageNumbers}
-                  onChange={(e) => setShowPageNumbers(e.target.checked)}
-                  size="small"
-                />
-              }
-              label="Page Numbers"
-            />
-          </FormGroup>
-        </Box>
-        
-        {/* Document Content with Numbering */}
-        <DocumentNumbering
-          content={extractContent(htmlContent)}
-          enableLineNumbers={showLineNumbers}
-          enableParagraphNumbers={showParagraphNumbers}
-          enablePageNumbers={showPageNumbers}
-          linesPerPage={50}
-        />
-      </>
+      <Box 
+        sx={{ 
+          '& h1, & h2, & h3, & h4, & h5, & h6': {
+            fontWeight: 'bold',
+            marginTop: '1em',
+            marginBottom: '0.5em'
+          },
+          '& p': {
+            marginBottom: '1em',
+            lineHeight: 1.6
+          }
+        }}
+        dangerouslySetInnerHTML={{ __html: extractContent(htmlContent) }}
+      />
     );
   };
 

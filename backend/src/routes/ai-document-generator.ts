@@ -7,6 +7,210 @@ const fetch = require('node-fetch');
 const router = Router();
 const prisma = new PrismaClient();
 
+// Helper function to get template defaults
+function getTemplateDefaults(template: string) {
+  const templateMap: Record<string, any> = {
+    'af-manual': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE INSTRUCTION 36-2903',
+      subject: 'DRESS AND APPEARANCE STANDARDS',
+      category: 'PERSONNEL'
+    },
+    'afi': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE INSTRUCTION',
+      subject: 'OPERATIONAL PROCEDURES',
+      category: 'OPERATIONS'
+    },
+    'afpd': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE POLICY DIRECTIVE',
+      subject: 'POLICY IMPLEMENTATION',
+      category: 'POLICY'
+    },
+    'afman': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE MANUAL',
+      subject: 'PROCEDURES AND GUIDELINES',
+      category: 'OPERATIONS'
+    },
+    'dafi': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'DEPARTMENT OF THE AIR FORCE INSTRUCTION',
+      subject: 'DEPARTMENTAL PROCEDURES',
+      category: 'ADMINISTRATION'
+    },
+    'army': { 
+      organization: 'DEPARTMENT OF THE ARMY',
+      secretary: 'SECRETARY OF THE ARMY',
+      documentType: 'ARMY REGULATION 670-1',
+      subject: 'WEAR AND APPEARANCE OF ARMY UNIFORMS',
+      category: 'PERSONNEL'
+    },
+    'navy': { 
+      organization: 'DEPARTMENT OF THE NAVY',
+      secretary: 'SECRETARY OF THE NAVY',
+      documentType: 'OPNAVINST 3500.39',
+      subject: 'OPERATIONAL RISK MANAGEMENT',
+      category: 'OPERATIONS'
+    },
+    'marine': { 
+      organization: 'UNITED STATES MARINE CORPS',
+      secretary: 'COMMANDANT OF THE MARINE CORPS',
+      documentType: 'MARINE CORPS ORDER 1020.34',
+      subject: 'MARINE CORPS UNIFORM REGULATIONS',
+      category: 'PERSONNEL'
+    },
+    'spaceforce': { 
+      organization: 'UNITED STATES SPACE FORCE',
+      secretary: 'CHIEF OF SPACE OPERATIONS',
+      documentType: 'SPACE FORCE INSTRUCTION 36-2903',
+      subject: 'SPACE OPERATIONS AND PROCEDURES',
+      category: 'SPACE OPERATIONS'
+    },
+    'dodd': { 
+      organization: 'DEPARTMENT OF DEFENSE',
+      secretary: 'SECRETARY OF DEFENSE',
+      documentType: 'DOD DIRECTIVE 5000.01',
+      subject: 'THE DEFENSE ACQUISITION SYSTEM',
+      category: 'ACQUISITION'
+    },
+    'dodi': { 
+      organization: 'DEPARTMENT OF DEFENSE',
+      secretary: 'SECRETARY OF DEFENSE',
+      documentType: 'DOD INSTRUCTION 5000.02',
+      subject: 'OPERATION OF THE DEFENSE ACQUISITION SYSTEM',
+      category: 'ACQUISITION'
+    },
+    'cjcs': { 
+      organization: 'JOINT CHIEFS OF STAFF',
+      secretary: 'CHAIRMAN OF THE JOINT CHIEFS OF STAFF',
+      documentType: 'CJCS INSTRUCTION 3170.01',
+      subject: 'JOINT CAPABILITIES INTEGRATION',
+      category: 'JOINT OPERATIONS'
+    },
+    'technical': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'TECHNICAL MANUAL',
+      subject: 'System Architecture & Implementation',
+      category: 'TECHNICAL DOCUMENTATION'
+    },
+    'policy': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'POLICY DIRECTIVE 13-6',
+      subject: 'Nuclear, Space, Missile, Command and Control Operations',
+      category: 'SPACE POLICY'
+    },
+    'training': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'TRAINING GUIDE',
+      subject: 'Personnel Development',
+      category: 'TRAINING AND EDUCATION'
+    },
+    'sop': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'STANDARD OPERATING PROCEDURE',
+      subject: 'Operational Guidelines',
+      category: 'OPERATIONS'
+    },
+    'oplan': { 
+      organization: 'DEPARTMENT OF DEFENSE',
+      secretary: 'SECRETARY OF DEFENSE',
+      documentType: 'OPERATION PLAN',
+      subject: 'Strategic Operations Planning',
+      category: 'STRATEGIC PLANNING'
+    },
+    'opord': { 
+      organization: 'DEPARTMENT OF DEFENSE',
+      secretary: 'SECRETARY OF DEFENSE',
+      documentType: 'OPERATION ORDER',
+      subject: 'Tactical Operations',
+      category: 'TACTICAL OPERATIONS'
+    },
+    'conops': { 
+      organization: 'DEPARTMENT OF DEFENSE',
+      secretary: 'SECRETARY OF DEFENSE',
+      documentType: 'CONCEPT OF OPERATIONS',
+      subject: 'Operational Concepts',
+      category: 'STRATEGIC PLANNING'
+    },
+    'ttp': { 
+      organization: 'DEPARTMENT OF DEFENSE',
+      secretary: 'SECRETARY OF DEFENSE',
+      documentType: 'TACTICS, TECHNIQUES, AND PROCEDURES',
+      subject: 'Tactical Employment',
+      category: 'TACTICAL OPERATIONS'
+    },
+    'afjqs': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE JOB QUALIFICATION STANDARD',
+      subject: 'Job Qualification Requirements',
+      category: 'TRAINING'
+    },
+    'afto': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE TECHNICAL ORDER',
+      subject: 'Technical Procedures',
+      category: 'TECHNICAL'
+    },
+    'afva': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE VISUAL AID',
+      subject: 'Visual Training Materials',
+      category: 'TRAINING'
+    },
+    'afh': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE HANDBOOK',
+      subject: 'Reference Materials',
+      category: 'REFERENCE'
+    },
+    'afgm': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE GUIDANCE MEMORANDUM',
+      subject: 'Interim Guidance',
+      category: 'POLICY'
+    },
+    'afmd': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'AIR FORCE MISSION DIRECTIVE',
+      subject: 'Mission Requirements',
+      category: 'OPERATIONS'
+    },
+    'dafman': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'DEPARTMENT OF THE AIR FORCE MANUAL',
+      subject: 'Departmental Procedures',
+      category: 'ADMINISTRATION'
+    },
+    'dafpd': { 
+      organization: 'DEPARTMENT OF THE AIR FORCE',
+      secretary: 'SECRETARY OF THE AIR FORCE',
+      documentType: 'DEPARTMENT OF THE AIR FORCE POLICY DIRECTIVE',
+      subject: 'Departmental Policy',
+      category: 'POLICY'
+    }
+  };
+  
+  return templateMap[template] || templateMap['technical'];
+}
+
 // Get OpenRouter API key from environment
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
@@ -805,12 +1009,12 @@ SPECIFIC REQUIREMENTS:
     console.log('Custom header data received:', customHeaderData);
     const headerConfig = {
       byOrderOf: customHeaderData?.byOrderOf || 'BY ORDER OF THE',
-      secretary: customHeaderData?.secretary || 'SECRETARY OF THE AIR FORCE',
-      organization: customHeaderData?.organization || 'DEPARTMENT OF THE AIR FORCE',
-      documentType: customHeaderData?.documentType || (template === 'af-manual' ? 'AIR FORCE INSTRUCTION 36-2903' : template === 'policy' ? 'POLICY DIRECTIVE 13-6' : template === 'technical' ? 'TECHNICAL MANUAL' : template === 'training' ? 'TRAINING GUIDE' : 'STANDARD OPERATING PROCEDURE'),
+      secretary: customHeaderData?.secretary || getTemplateDefaults(template).secretary,
+      organization: customHeaderData?.organization || getTemplateDefaults(template).organization,
+      documentType: customHeaderData?.documentType || getTemplateDefaults(template).documentType,
       documentDate: customHeaderData?.documentDate || new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase(),
-      subject: customHeaderData?.subject || (template === 'af-manual' ? 'DRESS AND APPEARANCE STANDARDS' : template === 'technical' ? 'System Architecture & Implementation' : template === 'policy' ? 'Nuclear, Space, Missile, Command and Control Operations' : template === 'training' ? 'Personnel Development' : 'Operational Guidelines'),
-      category: customHeaderData?.category || (template === 'policy' ? 'SPACE POLICY' : template === 'technical' ? 'TECHNICAL DOCUMENTATION' : template === 'training' ? 'TRAINING AND EDUCATION' : 'OPERATIONS'),
+      subject: customHeaderData?.subject || getTemplateDefaults(template).subject,
+      category: customHeaderData?.category || getTemplateDefaults(template).category,
       compliance: customHeaderData?.compliance || 'COMPLIANCE WITH THIS PUBLICATION IS MANDATORY',
       accessibility: customHeaderData?.accessibility || 'Publications and forms are available on the e-Publishing website at',
       accessibilityUrl: customHeaderData?.accessibilityUrl || 'http://www.e-publishing.af.mil',
@@ -1092,8 +1296,17 @@ router.post('/', async (req: Request, res: Response) => {
       headerData 
     } = req.body;
     
-    // Validate inputs
-    if (!['technical', 'policy', 'training', 'sop', 'af-manual'].includes(template)) {
+    // Validate inputs - include all military templates
+    const validTemplates = [
+      'technical', 'policy', 'training', 'sop', 
+      'af-manual', 'afi', 'afpd', 'afman', 'afjqs', 'afto', 'afva', 'afh', 'afgm', 'afmd',
+      'dafi', 'dafman', 'dafpd',
+      'army', 'navy', 'marine', 'spaceforce',
+      'dodd', 'dodi', 'cjcs',
+      'oplan', 'opord', 'conops', 'ttp'
+    ];
+    
+    if (!validTemplates.includes(template)) {
       return res.status(400).json({ error: 'Invalid template type' });
     }
     

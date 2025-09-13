@@ -99,8 +99,11 @@ const OPRReviewPage = () => {
   const [highlightedText, setHighlightedText] = useState<string>(''); // Store text to highlight // Store actual content separately
   const [savingDocument, setSavingDocument] = useState(false);
   const [showLineNumbers, setShowLineNumbers] = useState(true);
-  const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
   const [showPageNumbers, setShowPageNumbers] = useState(true);
+  const [showCriticalBlockedDialog, setShowCriticalBlockedDialog] = useState(false);
+  const [phoneCallMade, setPhoneCallMade] = useState(false);
+  const [downgradedType, setDowngradedType] = useState<string>('M');
+  const [phoneCallNotes, setPhoneCallNotes] = useState<string>('');
   
   // OPR response fields
   const [currentComment, setCurrentComment] = useState<CRMComment>({
@@ -361,6 +364,15 @@ const OPRReviewPage = () => {
   const handleMergeFeedback = async () => {
     if (!selectedFeedback) return;
     
+    // Check if this is critical feedback - critical feedback cannot be merged without resolution
+    if (selectedFeedback.commentType === 'C') {
+      const pocInfo = selectedFeedback.pocName ? 
+        `${selectedFeedback.pocName}${selectedFeedback.pocPhone ? ' at ' + selectedFeedback.pocPhone : ''}` : 
+        'the feedback submitter';
+      alert(`Critical feedback cannot be merged without proper resolution.\n\nYou must either:\n1. Provide a resolution in the OPR Response Form, OR\n2. Make a phone call to ${pocInfo} to discuss the issue, then downgrade the feedback type.\n\nThe system will require confirmation of the phone call and notes from your discussion.`);
+      return;
+    }
+    
     console.log('=== FRONTEND MERGE DEBUG ===');
     console.log('Selected Feedback:', selectedFeedback);
     console.log('Merge Mode:', mergeMode);
@@ -598,6 +610,12 @@ const OPRReviewPage = () => {
   const handleSaveResponse = async () => {
     if (!selectedFeedback) return;
     
+    // Check if this is critical feedback without resolution (blocked)
+    if (currentComment.commentType === 'C' && !currentComment.resolution) {
+      setShowCriticalBlockedDialog(true);
+      return;
+    }
+    
     try {
       // Update feedback with OPR response
       const updatedFeedback = {
@@ -633,6 +651,70 @@ const OPRReviewPage = () => {
     }
   };
 
+  const handleCriticalBlockedConfirm = async () => {
+    if (!phoneCallMade) {
+      alert('You must confirm that you have made a phone call to discuss this critical feedback.');
+      return;
+    }
+    
+    if (!phoneCallNotes.trim()) {
+      alert('Please provide notes from your phone call discussion.');
+      return;
+    }
+    
+    // Update the feedback with downgraded type and phone call notes
+    const updatedComment = {
+      ...currentComment,
+      commentType: downgradedType,
+      resolution: `[DOWNGRADED FROM CRITICAL] Phone call made. Notes: ${phoneCallNotes}. Original issue could not be resolved as critical.`,
+      originatorJustification: phoneCallNotes
+    };
+    
+    setCurrentComment(updatedComment);
+    
+    // Update local state
+    const updatedList = feedback.map(f => 
+      f.id === selectedFeedback?.id ? updatedComment : f
+    );
+    setFeedback(updatedList);
+    setSelectedFeedback(updatedComment);
+    
+    // Save to database
+    try {
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            draftFeedback: updatedList,
+            lastOPRUpdate: new Date().toISOString(),
+            criticalDowngrades: [
+              ...(documentData?.customFields?.criticalDowngrades || []),
+              {
+                feedbackId: selectedFeedback?.id,
+                originalType: 'C',
+                newType: downgradedType,
+                phoneCallNotes,
+                downgradedAt: new Date().toISOString(),
+                downgradedBy: 'OPR'
+              }
+            ]
+          }
+        })
+      });
+      
+      if (response.ok) {
+        alert('Critical feedback has been downgraded and saved successfully.');
+        setShowCriticalBlockedDialog(false);
+        setPhoneCallMade(false);
+        setPhoneCallNotes('');
+        setDowngradedType('M');
+      }
+    } catch (error) {
+      console.error('Error saving downgraded feedback:', error);
+      alert('Failed to save downgraded feedback');
+    }
+  };
+
   const handleExport = async (format: string) => {
     setExporting(true);
     setExportAnchorEl(null);
@@ -642,7 +724,7 @@ const OPRReviewPage = () => {
         method: 'POST',
         body: JSON.stringify({ 
           format,
-          includeNumbering: showParagraphNumbers 
+          includeNumbering: false 
         })
       });
       
@@ -837,16 +919,6 @@ const OPRReviewPage = () => {
                       <FormControlLabel
                         control={
                           <Switch
-                            checked={showParagraphNumbers}
-                            onChange={(e) => setShowParagraphNumbers(e.target.checked)}
-                            size="small"
-                          />
-                        }
-                        label="Paragraph Numbers"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Switch
                             checked={showPageNumbers}
                             onChange={(e) => setShowPageNumbers(e.target.checked)}
                             size="small"
@@ -1017,7 +1089,6 @@ const OPRReviewPage = () => {
                     <DocumentNumbering
                       content={editableContent}
                       enableLineNumbers={showLineNumbers}
-                      enableParagraphNumbers={showParagraphNumbers}
                       enablePageNumbers={showPageNumbers}
                       linesPerPage={50}
                     />
@@ -1118,10 +1189,21 @@ const OPRReviewPage = () => {
                   sx={{ mt: 2 }}
                   startIcon={<MergeIcon />}
                   onClick={handleMergeFeedback}
-                  disabled={!selectedFeedback || processingMerge}
+                  disabled={!selectedFeedback || processingMerge || selectedFeedback?.commentType === 'C'}
+                  title={selectedFeedback?.commentType === 'C' ? 'Critical feedback must be resolved or downgraded before merging' : ''}
                 >
-                  {processingMerge ? 'Processing...' : 'Merge Selected Feedback'}
+                  {processingMerge ? 'Processing...' : 
+                   selectedFeedback?.commentType === 'C' ? 'Critical - Cannot Merge (Resolve First)' : 
+                   'Merge Selected Feedback'}
                 </Button>
+                
+                {selectedFeedback?.commentType === 'C' && (
+                  <Alert severity="error" sx={{ mt: 1 }}>
+                    Critical feedback cannot be merged. You must either:
+                    <br />• Provide a resolution in the OPR Response Form, OR
+                    <br />• Make a phone call to {selectedFeedback.pocName || 'the submitter'} ({selectedFeedback.pocPhone || 'phone not provided'}) to discuss and then downgrade the feedback type
+                  </Alert>
+                )}
               </>
             )}
           </Paper>
@@ -1386,6 +1468,14 @@ const OPRReviewPage = () => {
                           label={comment.status}
                           color={getStatusColor(comment.status) as any}
                           size="small"
+                        />
+                      )}
+                      {comment.resolution?.includes('[DOWNGRADED FROM CRITICAL]') && (
+                        <Chip 
+                          label="📞 Downgraded"
+                          color="warning"
+                          size="small"
+                          sx={{ ml: 1 }}
                         />
                       )}
                     </Box>
@@ -1864,6 +1954,97 @@ const OPRReviewPage = () => {
           ) : (
             <Button onClick={() => setShowMergeDialog(false)}>Close</Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Critical Feedback Blocked Dialog */}
+      <Dialog open={showCriticalBlockedDialog} onClose={() => setShowCriticalBlockedDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: 'error.main', color: 'white' }}>
+          ⚠️ Critical Feedback Cannot Be Blocked
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Critical feedback cannot remain unresolved. You must:
+            <ol>
+              <li>Call the person who submitted this feedback</li>
+              <li>Discuss the issue to find a resolution</li>
+              <li>Downgrade to a lower priority if it cannot be resolved as critical</li>
+            </ol>
+          </Alert>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Contact Information:
+            </Typography>
+            <Typography variant="body2">
+              <strong>Name:</strong> {currentComment.pocName || 'Not provided'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Phone:</strong> {currentComment.pocPhone || 'Not provided'}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Email:</strong> {currentComment.pocEmail || 'Not provided'}
+            </Typography>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={phoneCallMade}
+                onChange={(e) => setPhoneCallMade(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="I have called and discussed this feedback with the submitter"
+          />
+
+          {phoneCallMade && (
+            <>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Phone Call Notes *"
+                value={phoneCallNotes}
+                onChange={(e) => setPhoneCallNotes(e.target.value)}
+                placeholder="Summarize the discussion and reason for downgrade..."
+                sx={{ mt: 2, mb: 2 }}
+              />
+
+              <FormControl fullWidth required>
+                <InputLabel>Downgrade To *</InputLabel>
+                <Select
+                  value={downgradedType}
+                  onChange={(e) => setDowngradedType(e.target.value)}
+                  label="Downgrade To *"
+                >
+                  <MenuItem value="M">🟠 Major (Significant issue)</MenuItem>
+                  <MenuItem value="S">🔵 Substantive (Important)</MenuItem>
+                  <MenuItem value="A">🟢 Administrative (Minor)</MenuItem>
+                </Select>
+              </FormControl>
+
+              <Alert severity="info" sx={{ mt: 2 }}>
+                This action will be logged and tracked. The feedback will be marked as downgraded from Critical 
+                with your phone call notes attached.
+              </Alert>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowCriticalBlockedDialog(false)}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleCriticalBlockedConfirm}
+            variant="contained"
+            color="warning"
+            disabled={!phoneCallMade || !phoneCallNotes.trim()}
+          >
+            Confirm Downgrade
+          </Button>
         </DialogActions>
       </Dialog>
     </>

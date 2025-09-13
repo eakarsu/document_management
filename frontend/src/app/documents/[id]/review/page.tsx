@@ -85,7 +85,6 @@ const DocumentReviewPage = () => {
   const [showAddForm, setShowAddForm] = useState(true);
   const [token, setToken] = useState<string>('');
   const [showLineNumbers, setShowLineNumbers] = useState(true);
-  const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
   const [showPageNumbers, setShowPageNumbers] = useState(true);
   const [mergeResult, setMergeResult] = useState<string>('');
   const [selectedComment, setSelectedComment] = useState<CRMComment | null>(null);
@@ -384,16 +383,6 @@ const DocumentReviewPage = () => {
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={showParagraphNumbers}
-                          onChange={(e) => setShowParagraphNumbers(e.target.checked)}
-                          size="small"
-                        />
-                      }
-                      label="Paragraph Numbers"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Switch
                           checked={showPageNumbers}
                           onChange={(e) => setShowPageNumbers(e.target.checked)}
                           size="small"
@@ -417,7 +406,6 @@ const DocumentReviewPage = () => {
                   <DocumentNumbering
                     content={documentContent}
                     enableLineNumbers={showLineNumbers}
-                    enableParagraphNumbers={showParagraphNumbers}
                     enablePageNumbers={showPageNumbers}
                     linesPerPage={50}
                   />

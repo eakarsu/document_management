@@ -4,7 +4,6 @@ import { Box } from '@mui/material';
 interface DocumentNumberingProps {
   content: string;
   enableLineNumbers?: boolean;
-  enableParagraphNumbers?: boolean;
   enablePageNumbers?: boolean;
   linesPerPage?: number;
 }
@@ -12,7 +11,6 @@ interface DocumentNumberingProps {
 const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
   content,
   enableLineNumbers = true,
-  enableParagraphNumbers = true,
   enablePageNumbers = true,
   linesPerPage = 50
 }) => {
@@ -58,8 +56,8 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
         });
       });
       
-      // Add section and paragraph numbering
-      if (enableParagraphNumbers) {
+      // Skip paragraph numbering - numbers are now embedded in content
+      if (false) { // Paragraph numbering disabled - numbers are embedded
         let sectionCounter = 0;
         let subsectionCounter = 0;
         let subsubsectionCounter = 0;
@@ -351,7 +349,7 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
     };
     
     processDocument();
-  }, [content, enableLineNumbers, enableParagraphNumbers, enablePageNumbers, linesPerPage]);
+  }, [content, enableLineNumbers, enablePageNumbers, linesPerPage]);
 
   // CSS for displaying the numbers
   const styles = `
@@ -412,7 +410,7 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
     /* Only number actual paragraphs, not headings */
     p.numbered-paragraph:not([style*="margin-left"]) {
       position: relative;
-      ${enableParagraphNumbers && enableLineNumbers ? 'margin-left: 140px;' : enableParagraphNumbers ? 'margin-left: 80px;' : enableLineNumbers ? 'margin-left: 60px;' : ''}
+      ${enableLineNumbers ? 'margin-left: 60px;' : ''}
       margin-top: 0.5em;
       margin-bottom: 0.5em;
     }
@@ -420,26 +418,26 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
     /* For paragraphs with inline margin-left, add the numbering offset */
     p.numbered-paragraph[style*="margin-left: 20px"] {
       position: relative;
-      margin-left: ${enableParagraphNumbers && enableLineNumbers ? '160px' : enableParagraphNumbers ? '100px' : enableLineNumbers ? '80px' : '20px'} !important;
+      margin-left: ${enableLineNumbers ? '80px' : '20px'} !important;
     }
     
     p.numbered-paragraph[style*="margin-left: 40px"] {
       position: relative;
-      margin-left: ${enableParagraphNumbers && enableLineNumbers ? '180px' : enableParagraphNumbers ? '120px' : enableLineNumbers ? '100px' : '40px'} !important;
+      margin-left: ${enableLineNumbers ? '100px' : '40px'} !important;
     }
     
     p.numbered-paragraph[style*="margin-left: 60px"] {
       position: relative;
-      margin-left: ${enableParagraphNumbers && enableLineNumbers ? '200px' : enableParagraphNumbers ? '140px' : enableLineNumbers ? '120px' : '60px'} !important;
+      margin-left: ${enableLineNumbers ? '120px' : '60px'} !important;
     }
     
     p.numbered-paragraph[style*="margin-left: 80px"] {
       position: relative;
-      margin-left: ${enableParagraphNumbers && enableLineNumbers ? '220px' : enableParagraphNumbers ? '160px' : enableLineNumbers ? '140px' : '80px'} !important;
+      margin-left: ${enableLineNumbers ? '140px' : '80px'} !important;
     }
     
     p.numbered-paragraph::before {
-      ${enableParagraphNumbers ? `
+      ${false ? `
         content: attr(data-paragraph);
         position: absolute;
         left: ${enableLineNumbers ? '-75px' : '-75px'};
@@ -462,7 +460,7 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
       ${enableLineNumbers ? `
         content: attr(data-line-start);
         position: absolute;
-        left: ${enableParagraphNumbers ? '-135px' : '-55px'};
+        left: -55px;
         top: 0;
         color: #999;
         font-size: 0.8em;
