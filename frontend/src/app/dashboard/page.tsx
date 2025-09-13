@@ -31,7 +31,8 @@ import {
   Tabs,
   Tab,
   Badge,
-  Collapse
+  Collapse,
+  ListSubheader
 } from '@mui/material';
 import {
   Description as DocumentIcon,
@@ -55,7 +56,9 @@ import {
   Group as TeamIcon,
   Visibility as RealtimeIcon,
   AutoFixHigh as SmartIcon,
-  Create as CreateIcon
+  Create as CreateIcon,
+  AccountTree as WorkflowBuilderIcon,
+  ArrowDropDown as ArrowDropDownIcon
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import WorkflowTasks from '../../components/WorkflowTasks';
@@ -250,12 +253,12 @@ const DashboardPage: React.FC = () => {
     router.push('/ai-workflow');
   };
 
-  const handleCreateDocument = () => {
-    router.push('/documents/create');
-  };
-
   const handleAIDocumentGenerator = () => {
     router.push('/ai-document-generator');
+  };
+
+  const handleWorkflowBuilder = () => {
+    router.push('/workflow-builder-v2');
   };
 
 
@@ -455,15 +458,6 @@ const DashboardPage: React.FC = () => {
                 <Button
                   fullWidth
                   variant="contained"
-                  startIcon={<CreateIcon />}
-                  size="large"
-                  onClick={handleCreateDocument}
-                >
-                  Create Document
-                </Button>
-                <Button
-                  fullWidth
-                  variant="contained"
                   startIcon={<SmartIcon />}
                   size="large"
                   onClick={handleAIDocumentGenerator}
@@ -474,7 +468,22 @@ const DashboardPage: React.FC = () => {
                     }
                   }}
                 >
-                  🤖 AI Document Generator
+                  🤖 Create AI Document
+                </Button>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  startIcon={<WorkflowBuilderIcon />}
+                  size="large"
+                  onClick={handleWorkflowBuilder}
+                  sx={{
+                    background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                    }
+                  }}
+                >
+                  📊 Workflow Builder
                 </Button>
                 <Button
                   fullWidth

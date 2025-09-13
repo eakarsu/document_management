@@ -7,6 +7,7 @@ interface AirForceDocumentHeaderProps {
   secretaryText?: string;
   sealImagePath?: string;
   sealAltText?: string;
+  organizationName?: string;
   instructionTitle: string;
   date: string;
   subject: string;
@@ -27,6 +28,7 @@ const AirForceDocumentHeader: React.FC<AirForceDocumentHeaderProps> = ({
   secretaryText = "SECRETARY OF THE AIR FORCE", 
   sealImagePath = "/images/air-force-seal.svg",
   sealAltText = "Department of the Air Force Seal",
+  organizationName = "DEPARTMENT OF THE AIR FORCE",
   instructionTitle,
   date,
   subject,

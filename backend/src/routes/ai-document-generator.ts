@@ -526,7 +526,179 @@ SPECIFIC REQUIREMENTS:
 - Main procedures at level 1
 - Detailed steps at level 2-3
 - Specific actions at level 4
-- Quality checks at level 5`
+- Quality checks at level 5`,
+
+    // Additional Military Document Templates
+    afi: `Generate exactly ${pages} pages of Air Force Instruction (AFI) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Regulatory guidance and mandatory procedures
+- Compliance requirements and standards
+- Implementation instructions
+- Responsibilities and authorities
+- Use formal military language and terminology`,
+
+    afpd: `Generate exactly ${pages} pages of Air Force Policy Directive (AFPD) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- High-level policy statements
+- Strategic objectives and goals
+- Organizational responsibilities
+- Policy implementation framework
+- Executive-level guidance`,
+
+    afman: `Generate exactly ${pages} pages of Air Force Manual (AFMAN) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Detailed procedural guidance
+- Step-by-step instructions
+- Technical specifications
+- Implementation procedures
+- Operational guidelines`,
+
+    afjqs: `Generate exactly ${pages} pages of Air Force Job Qualification Standard (AFJQS) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Job performance requirements
+- Task qualification criteria
+- Training objectives
+- Evaluation standards
+- Proficiency levels`,
+
+    afto: `Generate exactly ${pages} pages of Air Force Technical Order (AFTO) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Technical maintenance procedures
+- Equipment specifications
+- Safety warnings and cautions
+- Troubleshooting guides
+- Parts identification`,
+
+    afva: `Generate exactly ${pages} pages of Air Force Visual Aid (AFVA) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Visual training materials description
+- Diagram explanations
+- Process flow documentation
+- Reference materials
+- Quick reference guides`,
+
+    afh: `Generate exactly ${pages} pages of Air Force Handbook (AFH) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Comprehensive reference material
+- Best practices and procedures
+- Educational content
+- Examples and case studies
+- Practical applications`,
+
+    afgm: `Generate exactly ${pages} pages of Air Force Guidance Memorandum (AFGM) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Interim guidance and updates
+- Policy clarifications
+- Temporary procedures
+- Implementation timelines
+- Transition instructions`,
+
+    afmd: `Generate exactly ${pages} pages of Air Force Mission Directive (AFMD) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Mission statements and objectives
+- Organizational structure
+- Command relationships
+- Functional responsibilities
+- Authority delegations`,
+
+    dafi: `Generate exactly ${pages} pages of Department of the Air Force Instruction (DAFI) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Department-wide instructions
+- Cross-functional procedures
+- Integration requirements
+- Compliance standards
+- Implementation guidance`,
+
+    dafman: `Generate exactly ${pages} pages of Department of the Air Force Manual (DAFMAN) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Department-level procedures
+- Detailed implementation guides
+- Technical specifications
+- Operational procedures
+- Administrative requirements`,
+
+    dafpd: `Generate exactly ${pages} pages of Department of the Air Force Policy Directive (DAFPD) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Department-level policy
+- Strategic direction
+- Organizational priorities
+- Resource allocation guidance
+- Leadership directives`,
+
+    oplan: `Generate exactly ${pages} pages of Operation Plan (OPLAN) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Mission analysis and objectives
+- Force deployment schedules
+- Logistics requirements
+- Command and control structures
+- Contingency procedures`,
+
+    opord: `Generate exactly ${pages} pages of Operation Order (OPORD) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Situation assessment
+- Mission statement
+- Execution instructions
+- Service support requirements
+- Command and signal procedures`,
+
+    conops: `Generate exactly ${pages} pages of Concept of Operations (CONOPS) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Operational concept overview
+- System capabilities
+- Operational scenarios
+- User interactions
+- Performance requirements`,
+
+    ttp: `Generate exactly ${pages} pages of Tactics, Techniques, and Procedures (TTP) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Tactical employment methods
+- Technical procedures
+- Best practices
+- Lessons learned
+- Combat procedures`,
+
+    cjcs: `Generate exactly ${pages} pages of Chairman Joint Chiefs of Staff Instruction with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- Joint force guidance
+- Inter-service coordination
+- Strategic directives
+- Unified command procedures
+- Joint operational requirements`,
+
+    dodd: `Generate exactly ${pages} pages of Department of Defense Directive (DODD) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- DoD-wide policy
+- Regulatory framework
+- Compliance requirements
+- Implementation responsibilities
+- Oversight procedures`,
+
+    dodi: `Generate exactly ${pages} pages of Department of Defense Instruction (DODI) with DEEP HIERARCHICAL STRUCTURE.
+${deepStructurePrompt}
+SPECIFIC REQUIREMENTS:
+- DoD procedural guidance
+- Implementation instructions
+- Technical standards
+- Reporting requirements
+- Quality assurance procedures`
   };
 
   const prompt = templatePrompts[template] || templatePrompts.technical;
@@ -965,10 +1137,11 @@ router.post('/', async (req: Request, res: Response) => {
           deepNesting: true,
           maxNestingLevel: 5,
           classification: 'UNCLASSIFIED',
+          content: content,
           htmlContent: content,
           editableContent: content.includes('air-force-document-header') ? 
             content.substring(content.indexOf('</div>\n<h1')) : content, // Remove header for editor if exists
-          content: content.replace(/<[^>]*>/g, ''), // Plain text version
+          plainText: content.replace(/<[^>]*>/g, ''), // Plain text version
           headerHtml: content.includes('air-force-document-header') ? 
             content.substring(0, content.indexOf('</div>\n<h1')) : '',
           hasCustomHeader: content.includes('air-force-document-header'),

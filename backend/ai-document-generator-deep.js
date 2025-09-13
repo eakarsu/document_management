@@ -1087,7 +1087,8 @@ async function main() {
             classification: 'UNCLASSIFIED',
             htmlContent: cleanedContent,
             editableContent: afHeader ? cleanedContent.replace(afHeader, '') : cleanedContent, // Remove header for editor if exists
-            content: cleanedContent.replace(/<[^>]*>/g, ''), // Plain text version
+            content: cleanedContent, // Store full HTML content for viewer
+            plainText: cleanedContent.replace(/<[^>]*>/g, ''), // Plain text version
             headerHtml: afHeader,
             hasCustomHeader: !!afHeader, // Only true if header exists
             documentStyles: `

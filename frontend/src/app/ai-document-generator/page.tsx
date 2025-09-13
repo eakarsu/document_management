@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   Box, 
   Typography, 
@@ -34,6 +35,9 @@ interface DocumentInfo {
 }
 
 const AIDocumentGenerator: React.FC = () => {
+  const searchParams = useSearchParams();
+  const templateFromUrl = searchParams.get('template');
+  
   const [sealFile, setSealFile] = useState<File | null>(null);
   const [sealPreview, setSealPreview] = useState<string>('');
   const [documentInfo, setDocumentInfo] = useState<DocumentInfo>({
@@ -52,12 +56,27 @@ const AIDocumentGenerator: React.FC = () => {
     certifiedBy: 'AF/CV (General Larry O. Spencer)',
     pages: 6
   });
-  const [documentTemplate, setDocumentTemplate] = useState('af-manual');
+  const [documentTemplate, setDocumentTemplate] = useState(templateFromUrl || 'af-manual');
   const [documentPages, setDocumentPages] = useState(5);
   const [feedbackCount, setFeedbackCount] = useState(10);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedDocument, setGeneratedDocument] = useState<any>(null);
   const [error, setError] = useState('');
+
+  // Update template when URL parameter changes
+  useEffect(() => {
+    if (templateFromUrl) {
+      setDocumentTemplate(templateFromUrl);
+      
+      // Auto-update header fields based on template
+      const defaults = getTemplateDefaults(templateFromUrl);
+      setDocumentInfo(prev => ({
+        ...prev,
+        secretaryText: defaults.secretary || prev.secretaryText,
+        byOrderText: 'BY ORDER OF THE'
+      }));
+    }
+  }, [templateFromUrl]);
 
   const handleSealUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -78,12 +97,164 @@ const AIDocumentGenerator: React.FC = () => {
     }));
   };
 
+  // Helper function to get seal path and organization based on template
+  const getTemplateDefaults = (template: string) => {
+    const templateMap: Record<string, { seal: string; organization: string; secretary?: string }> = {
+      'af-manual': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afi': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afpd': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afman': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afjqs': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afto': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afva': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afh': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afgm': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'afmd': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'dafi': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'dafman': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'dafpd': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'dodd': { 
+        seal: '/images/dod-seal.png', 
+        organization: 'DEPARTMENT OF DEFENSE',
+        secretary: 'SECRETARY OF DEFENSE'
+      },
+      'dodi': { 
+        seal: '/images/dod-seal.png', 
+        organization: 'DEPARTMENT OF DEFENSE',
+        secretary: 'SECRETARY OF DEFENSE'
+      },
+      'cjcs': { 
+        seal: '/images/joint-chiefs-seal.png', 
+        organization: 'JOINT CHIEFS OF STAFF',
+        secretary: 'CHAIRMAN OF THE JOINT CHIEFS OF STAFF'
+      },
+      'army': { 
+        seal: '/images/army-seal.png', 
+        organization: 'DEPARTMENT OF THE ARMY',
+        secretary: 'SECRETARY OF THE ARMY'
+      },
+      'navy': { 
+        seal: '/images/navy-seal.png', 
+        organization: 'DEPARTMENT OF THE NAVY',
+        secretary: 'SECRETARY OF THE NAVY'
+      },
+      'marine': { 
+        seal: '/images/marine-corps-seal.png', 
+        organization: 'UNITED STATES MARINE CORPS',
+        secretary: 'COMMANDANT OF THE MARINE CORPS'
+      },
+      'spaceforce': { 
+        seal: '/images/space-force-seal.png', 
+        organization: 'UNITED STATES SPACE FORCE',
+        secretary: 'CHIEF OF SPACE OPERATIONS'
+      },
+      // Default for other templates
+      'technical': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'policy': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'training': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'sop': { 
+        seal: '/images/air-force-seal.png', 
+        organization: 'DEPARTMENT OF THE AIR FORCE',
+        secretary: 'SECRETARY OF THE AIR FORCE'
+      },
+      'oplan': { 
+        seal: '/images/dod-seal.png', 
+        organization: 'DEPARTMENT OF DEFENSE',
+        secretary: 'SECRETARY OF DEFENSE'
+      },
+      'opord': { 
+        seal: '/images/dod-seal.png', 
+        organization: 'DEPARTMENT OF DEFENSE',
+        secretary: 'SECRETARY OF DEFENSE'
+      },
+      'conops': { 
+        seal: '/images/dod-seal.png', 
+        organization: 'DEPARTMENT OF DEFENSE',
+        secretary: 'SECRETARY OF DEFENSE'
+      },
+      'ttp': { 
+        seal: '/images/dod-seal.png', 
+        organization: 'DEPARTMENT OF DEFENSE',
+        secretary: 'SECRETARY OF DEFENSE'
+      }
+    };
+    
+    return templateMap[template] || templateMap['technical'];
+  };
+
   const generateAIDocument = async () => {
     setIsGenerating(true);
     setError('');
 
     try {
-      // Prepare seal image if uploaded
+      // Get template defaults
+      const templateDefaults = getTemplateDefaults(documentTemplate);
+      
+      // Prepare seal image if uploaded, otherwise use template default
       let sealImage = null;
       if (sealFile) {
         const reader = new FileReader();
@@ -91,13 +262,22 @@ const AIDocumentGenerator: React.FC = () => {
           reader.onload = (e) => resolve(e.target?.result as string);
           reader.readAsDataURL(sealFile);
         });
+      } else {
+        // Load the default seal for this template
+        const response = await fetch(templateDefaults.seal);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        sealImage = await new Promise<string>((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(blob);
+        });
       }
 
-      // Prepare header data
+      // Prepare header data with template-specific organization
       const headerData = {
-        organization: 'DEPARTMENT OF THE AIR FORCE',
+        organization: templateDefaults.organization,
         documentType: documentInfo.instructionTitle,
-        secretary: documentInfo.secretaryText,
+        secretary: documentInfo.secretaryText || templateDefaults.secretary,
         subject: documentInfo.subject,
         category: documentInfo.responsibilities,
         opr: documentInfo.opr,
@@ -320,11 +500,49 @@ const AIDocumentGenerator: React.FC = () => {
                 value={documentTemplate}
                 onChange={(e) => setDocumentTemplate(e.target.value)}
               >
-                <MenuItem value="af-manual">Air Force Manual</MenuItem>
+                {/* Air Force Documents */}
+                <MenuItem value="af-manual">Air Force Manual (AFM)</MenuItem>
+                <MenuItem value="afi">Air Force Instruction (AFI)</MenuItem>
+                <MenuItem value="afpd">Air Force Policy Directive (AFPD)</MenuItem>
+                <MenuItem value="afman">Air Force Manual (AFMAN)</MenuItem>
+                <MenuItem value="afjqs">Air Force Job Qualification Standard (AFJQS)</MenuItem>
+                <MenuItem value="afto">Air Force Technical Order (AFTO)</MenuItem>
+                <MenuItem value="afva">Air Force Visual Aid (AFVA)</MenuItem>
+                <MenuItem value="afh">Air Force Handbook (AFH)</MenuItem>
+                <MenuItem value="afgm">Air Force Guidance Memorandum (AFGM)</MenuItem>
+                <MenuItem value="afmd">Air Force Mission Directive (AFMD)</MenuItem>
+                <MenuItem value="dafi">Department of the Air Force Instruction (DAFI)</MenuItem>
+                <MenuItem value="dafman">Department of the Air Force Manual (DAFMAN)</MenuItem>
+                <MenuItem value="dafpd">Department of the Air Force Policy Directive (DAFPD)</MenuItem>
+                
+                {/* Space Force Documents */}
+                <MenuItem value="spaceforce">Space Force Instruction (SFI)</MenuItem>
+                
+                {/* Army Documents */}
+                <MenuItem value="army">Army Regulation (AR)</MenuItem>
+                
+                {/* Navy Documents */}
+                <MenuItem value="navy">Navy Instruction (OPNAVINST)</MenuItem>
+                
+                {/* Marine Corps Documents */}
+                <MenuItem value="marine">Marine Corps Order (MCO)</MenuItem>
+                
+                {/* Joint/DoD Documents */}
+                <MenuItem value="dodd">Department of Defense Directive (DODD)</MenuItem>
+                <MenuItem value="dodi">Department of Defense Instruction (DODI)</MenuItem>
+                <MenuItem value="cjcs">Chairman Joint Chiefs of Staff Instruction (CJCSI)</MenuItem>
+                
+                {/* Operational Documents */}
+                <MenuItem value="oplan">Operation Plan (OPLAN)</MenuItem>
+                <MenuItem value="opord">Operation Order (OPORD)</MenuItem>
+                <MenuItem value="conops">Concept of Operations (CONOPS)</MenuItem>
+                
+                {/* Generic Documents */}
                 <MenuItem value="technical">Technical Documentation</MenuItem>
                 <MenuItem value="policy">Policy Document</MenuItem>
                 <MenuItem value="training">Training Manual</MenuItem>
-                <MenuItem value="sop">Standard Operating Procedure</MenuItem>
+                <MenuItem value="sop">Standard Operating Procedure (SOP)</MenuItem>
+                <MenuItem value="ttp">Tactics, Techniques, and Procedures (TTP)</MenuItem>
               </Select>
             </FormControl>
 
@@ -402,12 +620,13 @@ const AIDocumentGenerator: React.FC = () => {
                 subject={documentInfo.subject}
                 responsibilities={documentInfo.responsibilities}
                 byOrderText={documentInfo.byOrderText}
-                secretaryText={documentInfo.secretaryText}
+                secretaryText={documentInfo.secretaryText || getTemplateDefaults(documentTemplate).secretary}
                 complianceText={documentInfo.complianceText}
                 opr={documentInfo.opr}
                 certifiedBy={documentInfo.certifiedBy}
                 pages={documentInfo.pages}
-                sealImagePath={sealPreview || '/images/air-force-seal.png'}
+                sealImagePath={sealPreview || getTemplateDefaults(documentTemplate).seal}
+                organizationName={getTemplateDefaults(documentTemplate).organization}
               />
             </Box>
 

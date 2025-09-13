@@ -60,8 +60,14 @@ import {
   ArrowDownward as ArrowDownIcon,
   ExpandMore as ExpandMoreIcon,
   Close as CloseIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Search as SearchIcon,
+  Help as HelpIcon,
+  Keyboard as KeyboardIcon,
+  Clear as ClearIcon,
+  InfoOutlined as InfoIcon
 } from '@mui/icons-material';
+import { Tooltip, InputAdornment } from '@mui/material';
 
 interface WorkflowStep {
   id: string;
@@ -102,7 +108,12 @@ const WorkflowBuilderV2: React.FC = () => {
   const [dragConnectionFrom, setDragConnectionFrom] = useState<string | null>(null);
   const [dragConnectionTo, setDragConnectionTo] = useState<{ x: number; y: number } | null>(null);
 
-  // Pre-defined task templates for document management
+  // Search state for task templates
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Pre-defined task templates for document management - EXPANDED
   const taskTemplates = [
     // Flow Control Elements
     {
@@ -112,7 +123,8 @@ const WorkflowBuilderV2: React.FC = () => {
       icon: '🚀',
       description: 'Beginning of the workflow process',
       defaultRoles: ['AUTHOR', 'OPR', 'INITIATOR'],
-      category: 'Flow Control'
+      category: 'Flow Control',
+      shortcut: 'S'
     },
     {
       id: 'end',
@@ -402,6 +414,160 @@ const WorkflowBuilderV2: React.FC = () => {
       description: 'Distribute to stakeholders',
       defaultRoles: ['DISTRIBUTION_MANAGER'],
       category: 'Administration'
+    },
+
+    // Data & Integration Tasks
+    {
+      id: 'data_validation',
+      name: 'Data Validation',
+      type: 'review',
+      icon: '🔍',
+      description: 'Validate data accuracy and completeness',
+      defaultRoles: ['DATA_ANALYST', 'VALIDATOR'],
+      category: 'Data Processing'
+    },
+    {
+      id: 'api_integration',
+      name: 'API Integration',
+      type: 'parallel',
+      icon: '🔌',
+      description: 'Integrate with external systems',
+      defaultRoles: ['SYSTEM_ADMIN', 'DEVELOPER'],
+      category: 'Data Processing'
+    },
+    {
+      id: 'data_export',
+      name: 'Data Export',
+      type: 'notification',
+      icon: '📤',
+      description: 'Export data to external format',
+      defaultRoles: ['DATA_MANAGER'],
+      category: 'Data Processing'
+    },
+    {
+      id: 'batch_processing',
+      name: 'Batch Processing',
+      type: 'parallel',
+      icon: '⚡',
+      description: 'Process multiple items in batch',
+      defaultRoles: ['BATCH_PROCESSOR', 'SYSTEM'],
+      category: 'Data Processing'
+    },
+
+    // Collaboration Tasks
+    {
+      id: 'team_meeting',
+      name: 'Team Meeting',
+      type: 'parallel',
+      icon: '👥',
+      description: 'Schedule team synchronization meeting',
+      defaultRoles: ['TEAM_LEAD', 'PROJECT_MANAGER'],
+      category: 'Collaboration'
+    },
+    {
+      id: 'feedback_collection',
+      name: 'Feedback Collection',
+      type: 'parallel',
+      icon: '💬',
+      description: 'Collect feedback from multiple stakeholders',
+      defaultRoles: ['COORDINATOR', 'PM'],
+      category: 'Collaboration'
+    },
+    {
+      id: 'voting_round',
+      name: 'Voting Round',
+      type: 'parallel',
+      icon: '🗳️',
+      description: 'Conduct voting or polling',
+      defaultRoles: ['FACILITATOR'],
+      category: 'Collaboration'
+    },
+
+    // Quality & Testing
+    {
+      id: 'quality_check',
+      name: 'Quality Check',
+      type: 'review',
+      icon: '✔️',
+      description: 'Comprehensive quality assurance',
+      defaultRoles: ['QA_MANAGER', 'QUALITY_REVIEWER'],
+      category: 'Quality Assurance'
+    },
+    {
+      id: 'user_acceptance',
+      name: 'User Acceptance Testing',
+      type: 'approval',
+      icon: '👍',
+      description: 'UAT by end users',
+      defaultRoles: ['END_USER', 'UAT_COORDINATOR'],
+      category: 'Quality Assurance'
+    },
+    {
+      id: 'security_scan',
+      name: 'Security Scan',
+      type: 'review',
+      icon: '🛡️',
+      description: 'Security vulnerability scanning',
+      defaultRoles: ['SECURITY_ANALYST'],
+      category: 'Quality Assurance'
+    },
+
+    // Automation & AI Tasks
+    {
+      id: 'ai_analysis',
+      name: 'AI Analysis',
+      type: 'review',
+      icon: '🤖',
+      description: 'AI-powered content analysis',
+      defaultRoles: ['AI_SYSTEM', 'DATA_SCIENTIST'],
+      category: 'Automation'
+    },
+    {
+      id: 'automated_check',
+      name: 'Automated Check',
+      type: 'condition',
+      icon: '⚙️',
+      description: 'Automated validation and checks',
+      defaultRoles: ['SYSTEM', 'BOT'],
+      category: 'Automation'
+    },
+    {
+      id: 'scheduled_task',
+      name: 'Scheduled Task',
+      type: 'notification',
+      icon: '⏰',
+      description: 'Time-based scheduled execution',
+      defaultRoles: ['SCHEDULER', 'SYSTEM'],
+      category: 'Automation'
+    },
+
+    // Compliance & Audit
+    {
+      id: 'compliance_check',
+      name: 'Compliance Check',
+      type: 'review',
+      icon: '📑',
+      description: 'Verify regulatory compliance',
+      defaultRoles: ['COMPLIANCE_OFFICER', 'AUDITOR'],
+      category: 'Compliance'
+    },
+    {
+      id: 'risk_assessment',
+      name: 'Risk Assessment',
+      type: 'review',
+      icon: '⚠️',
+      description: 'Assess and document risks',
+      defaultRoles: ['RISK_MANAGER', 'ANALYST'],
+      category: 'Compliance'
+    },
+    {
+      id: 'audit_trail',
+      name: 'Audit Trail',
+      type: 'notification',
+      icon: '📜',
+      description: 'Generate audit trail documentation',
+      defaultRoles: ['AUDITOR', 'SYSTEM'],
+      category: 'Compliance'
     }
   ];
 
@@ -907,8 +1073,20 @@ const WorkflowBuilderV2: React.FC = () => {
     'Military', 
     'Notifications', 
     'Emergency', 
-    'Administration'
+    'Administration',
+    'Data Processing',
+    'Collaboration',
+    'Quality Assurance',
+    'Automation',
+    'Compliance'
   ];
+
+  // Filter tasks based on search query
+  const filteredTaskTemplates = taskTemplates.filter(task => 
+    task.name.toLowerCase().includes(taskSearchQuery.toLowerCase()) ||
+    task.description.toLowerCase().includes(taskSearchQuery.toLowerCase()) ||
+    task.category.toLowerCase().includes(taskSearchQuery.toLowerCase())
+  );
 
   return (
     <Box sx={{ flexGrow: 1, bgcolor: 'background.default', minHeight: '100vh' }}>
@@ -1029,11 +1207,63 @@ const WorkflowBuilderV2: React.FC = () => {
               borderRadius: '8px 0 0 8px'
             }}>
               <Box sx={{ p: 2 }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, fontSize: '1rem' }}>
-                  Task Templates
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem', flexGrow: 1 }}>
+                    Task Templates
+                  </Typography>
+                  <Tooltip title="Help">
+                    <IconButton size="small" onClick={() => setShowHelp(true)}>
+                      <HelpIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Keyboard Shortcuts">
+                    <IconButton size="small" onClick={() => setShowShortcuts(true)}>
+                      <KeyboardIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+
+                {/* Search Field */}
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Search tasks..."
+                  value={taskSearchQuery}
+                  onChange={(e) => setTaskSearchQuery(e.target.value)}
+                  sx={{ mb: 2 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: taskSearchQuery && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setTaskSearchQuery('')}>
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    )
+                  }}
+                />
+
+                {/* Task Count */}
+                {taskSearchQuery && (
+                  <Box sx={{ mb: 1, p: 1, bgcolor: 'primary.light', borderRadius: 1 }}>
+                    <Typography variant="caption" color="primary.main">
+                      Found {filteredTaskTemplates.length} matching tasks
+                    </Typography>
+                  </Box>
+                )}
                 
-                {categories.map((category) => (
+                {categories.map((category) => {
+                  const categoryTasks = taskSearchQuery 
+                    ? filteredTaskTemplates.filter(task => task.category === category)
+                    : getTasksByCategory(category);
+                  
+                  if (taskSearchQuery && categoryTasks.length === 0) return null;
+                  
+                  return (
                   <Accordion 
                     key={category} 
                     defaultExpanded={category === 'Flow Control'}
@@ -1055,52 +1285,55 @@ const WorkflowBuilderV2: React.FC = () => {
                     </AccordionSummary>
                     <AccordionDetails sx={{ p: 0 }}>
                       <List dense sx={{ py: 0 }}>
-                        {getTasksByCategory(category).map((template) => (
-                          <ListItemButton
-                            key={template.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, template)}
-                            onClick={() => addStep(template)}
-                            sx={{ 
-                              borderRadius: 1, 
-                              mb: 0.5,
-                              py: 0.5,
-                              cursor: 'grab',
-                              '&:active': { cursor: 'grabbing' },
-                              '&:hover': { 
-                                bgcolor: 'primary.light',
-                                transform: 'scale(1.01)',
-                                transition: 'all 0.2s'
-                              }
-                            }}
-                          >
-                            <ListItemIcon sx={{ minWidth: 28 }}>
-                              <Box 
-                                sx={{ 
-                                  fontSize: '1rem',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                              >
-                                {template.icon}
-                              </Box>
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={template.name}
-                              primaryTypographyProps={{ 
-                                variant: 'body2', 
-                                fontWeight: 500,
-                                fontSize: '0.8rem',
-                                lineHeight: 1.2
+                        {categoryTasks.map((template) => (
+                          <Tooltip title={template.description} placement="right" arrow>
+                            <ListItemButton
+                              key={template.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, template)}
+                              onClick={() => addStep(template)}
+                              sx={{ 
+                                borderRadius: 1, 
+                                mb: 0.5,
+                                py: 0.5,
+                                cursor: 'grab',
+                                '&:active': { cursor: 'grabbing' },
+                                '&:hover': { 
+                                  bgcolor: 'primary.light',
+                                  transform: 'scale(1.01)',
+                                  transition: 'all 0.2s'
+                                }
                               }}
-                            />
-                          </ListItemButton>
+                            >
+                              <ListItemIcon sx={{ minWidth: 28 }}>
+                                <Box 
+                                  sx={{ 
+                                    fontSize: '1rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                >
+                                  {template.icon}
+                                </Box>
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={template.name}
+                                primaryTypographyProps={{ 
+                                  variant: 'body2', 
+                                  fontWeight: 500,
+                                  fontSize: '0.8rem',
+                                  lineHeight: 1.2
+                                }}
+                              />
+                            </ListItemButton>
+                          </Tooltip>
                         ))}
                       </List>
                     </AccordionDetails>
                   </Accordion>
-                ))}
+                  );
+                })}
               </Box>
             </Paper>
 

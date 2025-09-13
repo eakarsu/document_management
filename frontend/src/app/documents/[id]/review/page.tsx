@@ -36,8 +36,6 @@ import {
   FormGroup,
   FormControlLabel,
   Switch,
-  ToggleButton,
-  ToggleButtonGroup,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -55,11 +53,7 @@ import {
   Close as CloseIcon,
   ExpandMore as ExpandIcon,
   ExpandLess as CollapseIcon,
-  FormatListNumbered,
-  Merge as MergeIcon,
-  AutoAwesome as AIIcon,
-  Build as ManualIcon,
-  Psychology as HybridIcon
+  FormatListNumbered
 } from '@mui/icons-material';
 
 interface CRMComment {
@@ -93,9 +87,6 @@ const DocumentReviewPage = () => {
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [showParagraphNumbers, setShowParagraphNumbers] = useState(true);
   const [showPageNumbers, setShowPageNumbers] = useState(true);
-  const [mergeMode, setMergeMode] = useState<'manual' | 'ai' | 'hybrid'>('manual');
-  const [processingMerge, setProcessingMerge] = useState(false);
-  const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeResult, setMergeResult] = useState<string>('');
   const [selectedComment, setSelectedComment] = useState<CRMComment | null>(null);
   const [currentComment, setCurrentComment] = useState<CRMComment>({
@@ -188,47 +179,9 @@ const DocumentReviewPage = () => {
     setShowAddForm(true);
   };
 
-  const handleMergeModeChange = (event: React.MouseEvent<HTMLElement>, newMode: 'manual' | 'ai' | 'hybrid' | null) => {
-    if (newMode !== null) {
-      setMergeMode(newMode);
-    }
-  };
+  // Merge mode functionality removed - no longer needed for Review & CRM page
 
-  const handleMergeFeedback = async () => {
-    if (!selectedComment) return;
-    
-    setProcessingMerge(true);
-    setShowMergeDialog(true);
-    
-    try {
-      if (mergeMode === 'ai' || mergeMode === 'hybrid') {
-        // AI merge
-        const response = await authTokenService.authenticatedFetch('/api/feedback-processor/merge', {
-          method: 'POST',
-          body: JSON.stringify({
-            documentContent: documentContent,
-            feedback: selectedComment,
-            mode: mergeMode
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          setMergeResult(mergeMode === 'ai' ? result.mergedContent : result.suggestedContent);
-        }
-      } else {
-        // Manual merge
-        if (selectedComment.changeTo) {
-          setMergeResult('Manual merge: Replace "' + (selectedComment.changeFrom || '') + '" with "' + selectedComment.changeTo + '"');
-        }
-      }
-    } catch (error) {
-      console.error('Error merging feedback:', error);
-      setMergeResult('Error merging feedback');
-    } finally {
-      setProcessingMerge(false);
-    }
-  };
+  // handleMergeFeedback function removed - merge functionality no longer needed in Review & CRM page
 
 
   const handleAddComment = async () => {
@@ -514,45 +467,6 @@ const DocumentReviewPage = () => {
 
         {/* Right Side: CRM Feedback Form */}
         <Box sx={{ width: '600px', overflow: 'auto', p: 3, bgcolor: 'background.default' }}>
-          {/* Merge Mode Selection */}
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Merge Mode
-            </Typography>
-            <ToggleButtonGroup
-              value={mergeMode}
-              exclusive
-              onChange={handleMergeModeChange}
-              fullWidth
-            >
-              <ToggleButton value="manual">
-                <ManualIcon sx={{ mr: 1 }} />
-                Manual
-              </ToggleButton>
-              <ToggleButton value="ai">
-                <AIIcon sx={{ mr: 1 }} />
-                AI-Assisted
-              </ToggleButton>
-              <ToggleButton value="hybrid">
-                <HybridIcon sx={{ mr: 1 }} />
-                Hybrid
-              </ToggleButton>
-            </ToggleButtonGroup>
-            
-            {selectedComment && (
-              <Button
-                variant="contained"
-                fullWidth
-                sx={{ mt: 2 }}
-                startIcon={<MergeIcon />}
-                onClick={handleMergeFeedback}
-                disabled={!selectedComment || processingMerge}
-              >
-                Merge Selected Feedback
-              </Button>
-            )}
-          </Paper>
-
           {/* Add Comment Form */}
           <Paper sx={{ p: 2, mb: 2, border: selectedComment ? 2 : 1, borderColor: selectedComment ? 'primary.main' : 'divider' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -855,30 +769,7 @@ const DocumentReviewPage = () => {
         </Box>
       </Box>
 
-      {/* Merge Result Dialog */}
-      <Dialog open={showMergeDialog} onClose={() => setShowMergeDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Merge Result</DialogTitle>
-        <DialogContent>
-          {processingMerge ? (
-            <Box sx={{ textAlign: 'center', py: 3 }}>
-              <CircularProgress />
-              <Typography sx={{ mt: 2 }}>Processing merge...</Typography>
-            </Box>
-          ) : (
-            <Box>
-              <Typography variant="body1">{mergeResult}</Typography>
-              {mergeMode === 'hybrid' && (
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  This is an AI suggestion. Please review and apply the changes manually.
-                </Alert>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowMergeDialog(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Merge Result Dialog removed - merge functionality no longer needed */}
     </>
   );
 };
