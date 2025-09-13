@@ -353,10 +353,28 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
 
   // CSS for displaying the numbers
   const styles = `
-    /* Preserve inline styles from the original HTML */
-    [style*="line-height"] {
-      /* Preserve line-height */
+    /* Preserve ALL inline styles from the original HTML */
+    [style*="margin-left"] {
+      /* Keep the original margin-left value */
     }
+    
+    /* Force headers to respect their inline margin-left styles */
+    h2[style*="margin-left: 20px"] { margin-left: 20px !important; }
+    h3[style*="margin-left: 20px"] { margin-left: 20px !important; }
+    h3[style*="margin-left: 40px"] { margin-left: 40px !important; }
+    h4[style*="margin-left: 40px"] { margin-left: 40px !important; }
+    h4[style*="margin-left: 60px"] { margin-left: 60px !important; }
+    h5[style*="margin-left: 60px"] { margin-left: 60px !important; }
+    h5[style*="margin-left: 80px"] { margin-left: 80px !important; }
+    h6[style*="margin-left: 80px"] { margin-left: 80px !important; }
+    h6[style*="margin-left: 100px"] { margin-left: 100px !important; }
+    
+    /* Force paragraphs to respect their inline margin-left styles */
+    p[style*="margin-left: 20px"] { margin-left: 20px !important; }
+    p[style*="margin-left: 40px"] { margin-left: 40px !important; }
+    p[style*="margin-left: 60px"] { margin-left: 60px !important; }
+    p[style*="margin-left: 80px"] { margin-left: 80px !important; }
+    p[style*="margin-left: 100px"] { margin-left: 100px !important; }
     
     [style*="margin-bottom"] {
       /* Preserve margin-bottom */
@@ -407,34 +425,34 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
       margin-left: 80px !important;
     }
     
-    /* Only number actual paragraphs, not headings */
-    p.numbered-paragraph:not([style*="margin-left"]) {
+    /* Only add line number offset to paragraphs */
+    p.numbered-paragraph {
       position: relative;
-      ${enableLineNumbers ? 'margin-left: 60px;' : ''}
       margin-top: 0.5em;
       margin-bottom: 0.5em;
     }
     
-    /* For paragraphs with inline margin-left, add the numbering offset */
-    p.numbered-paragraph[style*="margin-left: 20px"] {
-      position: relative;
-      margin-left: ${enableLineNumbers ? '80px' : '20px'} !important;
-    }
-    
-    p.numbered-paragraph[style*="margin-left: 40px"] {
-      position: relative;
-      margin-left: ${enableLineNumbers ? '100px' : '40px'} !important;
-    }
-    
-    p.numbered-paragraph[style*="margin-left: 60px"] {
-      position: relative;
-      margin-left: ${enableLineNumbers ? '120px' : '60px'} !important;
-    }
-    
-    p.numbered-paragraph[style*="margin-left: 80px"] {
-      position: relative;
-      margin-left: ${enableLineNumbers ? '140px' : '80px'} !important;
-    }
+    /* Adjust margin for line numbers while preserving inline styles */
+    ${enableLineNumbers ? `
+      p.numbered-paragraph:not([style*="margin-left"]) {
+        margin-left: 60px;
+      }
+      p.numbered-paragraph[style*="margin-left: 20px"] {
+        margin-left: 80px !important;
+      }
+      p.numbered-paragraph[style*="margin-left: 40px"] {
+        margin-left: 100px !important;
+      }
+      p.numbered-paragraph[style*="margin-left: 60px"] {
+        margin-left: 120px !important;
+      }
+      p.numbered-paragraph[style*="margin-left: 80px"] {
+        margin-left: 140px !important;
+      }
+      p.numbered-paragraph[style*="margin-left: 100px"] {
+        margin-left: 160px !important;
+      }
+    ` : ''}
     
     p.numbered-paragraph::before {
       ${false ? `

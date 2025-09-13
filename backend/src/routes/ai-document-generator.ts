@@ -628,6 +628,13 @@ CRITICAL: Create a document with DEEP HIERARCHICAL STRUCTURE using the following
 - Level 4: <h5 style="margin-left: 60px;">1.1.1.1 Detail Level</h5> (60px indent)
 - Level 5: <h6 style="margin-left: 80px;">1.1.1.1.1 Fine Detail</h6> (80px indent)
 
+LENGTH REQUIREMENTS - CRITICAL:
+- MINIMUM TOTAL CONTENT: ${pages * 650} words (NOT characters)
+- Each page MUST contain 600-700 words of content
+- Document MUST be ${pages} full pages long
+- If generating 10 pages, you MUST produce at least 6,500 words
+- Continue adding sections and content until you reach the required word count
+
 PARAGRAPH NUMBERING REQUIREMENTS:
 - EACH SECTION (including subsections like "1.1.1.2 Session Handling") MUST have 2-3 numbered paragraphs
 - For a section numbered 1.1.1.2, the paragraphs should be:
@@ -647,13 +654,17 @@ INDENTATION REQUIREMENTS:
 STRUCTURE REQUIREMENTS:
 1. Each main section (1, 2, 3) must have at least 2-3 subsections (1.1, 1.2, 1.3)
 2. Each subsection must have at least 2 sub-subsections (1.1.1, 1.1.2)
-3. Include some sections that go to level 4 (1.1.1.1, 1.1.1.2) and level 5 (1.1.1.1.1, 1.1.1.1.2)
+3. ALL sections MUST go to level 5 depth (1.1.1.1.1) - MANDATORY for every branch
+   - Every main section (1, 2, 3) MUST have subsections down to level 5
+   - Example: 1 → 1.1 → 1.1.1 → 1.1.1.1 → 1.1.1.1.1 (ALL 5 LEVELS REQUIRED)
+   - DO NOT stop at level 3 or 4 - ALWAYS go to level 5
 4. CRITICAL: Numbers must INCREMENT properly:
    - After 1.1.1.1 comes 1.1.1.2 (NOT another 1.1.1.1)
    - After 1.1.1.1.1 comes 1.1.1.1.2 (NOT another 1.1.1.1.1)
    - NEVER repeat the same section number
 5. Use proper HTML heading tags (h2 through h6) for hierarchy
 6. Each level should have meaningful content in <p> tags WITH SAME INDENTATION and PARAGRAPH NUMBERS
+7. Add MORE main sections (4, 5, 6, 7, 8, 9, 10+) as needed to reach ${pages} pages
 
 PARAGRAPH CONTENT REQUIREMENTS:
 - IMPORTANT: Each paragraph MUST be 4-6 sentences long (approximately 80-120 words)
@@ -694,7 +705,7 @@ ${deepStructurePrompt}
 SPECIFIC REQUIREMENTS:
 - Focus on software/system architecture
 - Include implementation details at deeper levels
-- Add configuration examples at level 4-5
+- Add configuration examples at level 5 (mandatory)
 - Use technical terminology
 - Include code snippets in <pre><code> blocks at deeper levels
 - Each paragraph MUST be 4-6 sentences (80-120 words)
@@ -709,7 +720,7 @@ ${deepStructurePrompt}
 SPECIFIC REQUIREMENTS:
 - Include compliance requirements at deeper levels
 - Add specific procedures at levels 3-4
-- Include enforcement details at level 5
+- Include enforcement details at level 5 (mandatory for all branches)
 - Use formal policy language`,
 
     training: `Generate exactly ${pages} pages of training manual with DEEP HIERARCHICAL STRUCTURE.
@@ -720,7 +731,7 @@ SPECIFIC REQUIREMENTS:
 - Learning objectives at level 2
 - Detailed lessons at level 3
 - Exercises at level 4
-- Assessment criteria at level 5`,
+- Assessment criteria at level 5 (mandatory for all branches)`,
 
     sop: `Generate exactly ${pages} pages of SOP with DEEP HIERARCHICAL STRUCTURE.
 
@@ -730,7 +741,7 @@ SPECIFIC REQUIREMENTS:
 - Main procedures at level 1
 - Detailed steps at level 2-3
 - Specific actions at level 4
-- Quality checks at level 5`,
+- Quality checks at level 5 (mandatory for all branches)`,
 
     // Additional Military Document Templates
     afi: `Generate exactly ${pages} pages of Air Force Instruction (AFI) with DEEP HIERARCHICAL STRUCTURE.
@@ -912,7 +923,14 @@ SPECIFIC REQUIREMENTS:
     const messages = [
       {
         role: 'system',
-        content: 'You are an expert technical writer for the US Air Force. Generate well-structured technical documentation with deep hierarchical numbering following military standards. CRITICAL: Every paragraph MUST start with its paragraph number (e.g., "1.1.1.2.1. ") and each section must have 2-3 numbered paragraphs of at least 80 words each.'
+        content: `You are an expert technical writer for the US Air Force. Generate well-structured technical documentation with deep hierarchical numbering following military standards. 
+        
+CRITICAL LENGTH REQUIREMENT: You MUST generate exactly ${pages} pages of content. Each page needs 600-700 words. Total minimum: ${pages * 650} words (not characters). 
+
+For a 10-page document, you MUST produce at least 6,500 words.
+For a 5-page document, you MUST produce at least 3,250 words.
+
+Continue adding sections and detailed paragraphs until you reach the required word count. Every paragraph MUST start with its paragraph number (e.g., "1.1.1.2.1. ") and each section must have 2-3 numbered paragraphs of at least 80-120 words each.`
       },
       {
         role: 'user',
@@ -929,10 +947,10 @@ SPECIFIC REQUIREMENTS:
         'X-Title': 'Document Generator'
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-3-haiku', // Same model as working script
+        model: 'openai/gpt-4o', // Use GPT-4o (ChatGPT 5) for best performance
         messages: messages,
         temperature: 0.7,
-        max_tokens: 8000  // Increased for deeper structure
+        max_tokens: Math.min(16000, pages * 2000)  // Dynamic based on pages, up to 16k tokens
       })
     });
 
@@ -942,6 +960,14 @@ SPECIFIC REQUIREMENTS:
 
     const data = await response.json() as any;
     let content = data.choices[0]?.message?.content || '';
+    
+    // Log the AI response for debugging
+    console.log('=== AI RESPONSE DEBUG ===');
+    console.log('Response length:', content.length);
+    console.log('Has level 5 pattern (X.X.X.X.X):', /\d+\.\d+\.\d+\.\d+\.\d+/.test(content));
+    console.log('Has h6 tags:', content.includes('<h6'));
+    console.log('Has margin-left styles:', content.includes('margin-left:'));
+    console.log('First 500 chars:', content.substring(0, 500));
     
     // Clean up the content
     let cleanedContent = content

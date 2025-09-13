@@ -176,6 +176,22 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           '& p': {
             marginBottom: '1em',
             lineHeight: 1.6
+          },
+          // Respect inline margin-left styles from AI-generated documents
+          '& [style*="margin-left: 20px"]': {
+            marginLeft: '20px !important'
+          },
+          '& [style*="margin-left: 40px"]': {
+            marginLeft: '40px !important'
+          },
+          '& [style*="margin-left: 60px"]': {
+            marginLeft: '60px !important'
+          },
+          '& [style*="margin-left: 80px"]': {
+            marginLeft: '80px !important'
+          },
+          '& [style*="margin-left: 100px"]': {
+            marginLeft: '100px !important'
           }
         }}
         dangerouslySetInnerHTML={{ __html: extractContent(htmlContent) }}

@@ -577,7 +577,10 @@ INDENTATION REQUIREMENTS:
 STRUCTURE REQUIREMENTS:
 1. Each main section (1, 2, 3) must have at least 2-3 subsections (1.1, 1.2, 1.3)
 2. Each subsection must have at least 2 sub-subsections (1.1.1, 1.1.2)
-3. Include some sections that go to level 4 (1.1.1.1, 1.1.1.2) and level 5 (1.1.1.1.1, 1.1.1.1.2)
+3. ALL sections MUST go to level 5 depth (1.1.1.1.1) - MANDATORY for every branch
+   - Every main section (1, 2, 3) MUST have subsections down to level 5
+   - Example: 1 → 1.1 → 1.1.1 → 1.1.1.1 → 1.1.1.1.1 (ALL 5 LEVELS REQUIRED)
+   - DO NOT stop at level 3 or 4 - ALWAYS go to level 5
 4. CRITICAL: Numbers must INCREMENT properly:
    - After 1.1.1.1 comes 1.1.1.2 (NOT another 1.1.1.1)
    - After 1.1.1.1.1 comes 1.1.1.1.2 (NOT another 1.1.1.1.1)
