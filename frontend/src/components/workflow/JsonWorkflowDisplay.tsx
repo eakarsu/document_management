@@ -185,7 +185,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       clearInterval(interval);
       if (isFirstInstance.current) {
         globalInstances.delete(instanceKey);
-        console.log(`🧹 Cleaned up workflow instance: ${instanceKey}`);
       }
     };
   }, [documentId]);
@@ -203,12 +202,10 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       const response = await api.get('/api/workflows');
       if (response.ok) {
         const workflows = await response.json();
-        console.log('📚 Available workflows:', workflows);
         setAvailableWorkflows(workflows);
         
         // ALWAYS force OPR workflow as selected
         setSelectedWorkflowId('opr-review-workflow');
-        console.log('📚 Forced workflow to: opr-review-workflow');
       }
     } catch (err) {
       console.error('Error fetching available workflows:', err);
@@ -223,8 +220,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       setProcessing(true);
       setError(null);
 
-      console.log('🚀 Starting workflow with ID:', workflowId);
-      console.log('🚀 Selected workflow ID:', selectedWorkflowId);
       
       const response = await api.post(`/api/workflow-instances/${documentId}/start`, {
         workflowId
@@ -340,34 +335,24 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   // Get available actions for current stage
   const getAvailableActions = (): Array<{ id: string; label: string; target: string }> => {
     if (!workflowDef || !workflowInstance?.currentStageId) {
-      console.log('❌ No workflow def or instance');
       return [];
     }
 
     const currentStage = workflowDef.stages.find(s => s.id === workflowInstance.currentStageId);
     if (!currentStage) {
-      console.log('❌ Current stage not found');
       return [];
     }
     
-    console.log('🔍 Workflow ID:', workflowDef.id);
-    console.log('🔍 Current Stage:', currentStage.name, currentStage.id);
-    console.log('🔍 Stage Actions:', currentStage.actions);
-    console.log('🔍 User Role:', userRole);
     
     // Check if user has permission for this stage
     const normalizedRole = userRole?.toUpperCase();
     const isAdmin = normalizedRole === 'ADMIN';
-    console.log('🔍 Is Admin:', isAdmin);
-    console.log('🔍 Stage Roles:', currentStage.roles);
     
     const userCanAct = isAdmin || 
                        currentStage.roles.some(r => r.toUpperCase() === normalizedRole);
     
-    console.log('🔍 User Can Act:', userCanAct);
     
     if (!userCanAct) {
-      console.log('❌ User cannot act on this stage');
       return [];
     }
 
@@ -380,12 +365,9 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       (t: any) => t.from === workflowInstance.currentStageId
     );
     
-    console.log('🔍 Available Transitions:', availableTransitions);
-    console.log('🔍 Initial Actions:', actions);
     
     // For admins, ALWAYS add a "Move to Next Stage" button for all transitions
     if (isAdmin) {
-      console.log('✅ Admin detected - adding override buttons');
       availableTransitions.forEach((transition: any) => {
         const targetStage = workflowDef.stages.find((s: any) => s.id === transition.to);
         
@@ -395,7 +377,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
           label: `Admin: Move to ${targetStage?.name || 'Next Stage'}`,
           target: transition.to
         });
-        console.log('✅ Added admin button:', `Admin: Move to ${targetStage?.name || 'Next Stage'}`);
       });
     } else {
       // For non-admin users, only add transitions that aren't already in actions
@@ -457,23 +438,15 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   // Debug logging only in development
   if (process.env.NODE_ENV === 'development') {
     const componentId = Math.random().toString(36).substr(2, 9);
-    console.log(`🔍 COMPONENT ${componentId} - Workflow completion check:`, {
-      active: workflowInstance?.isActive,
-      isCompleted: isWorkflowCompleted,
-      currentStageId: workflowInstance?.currentStageId,
-      stageOrder: workflowInstance?.stageOrder
-    });
   }
 
   // Only log duplicate detection in development
   if (isDuplicate && process.env.NODE_ENV === 'development') {
-    console.log(`ℹ️ Duplicate instance prevention for ${instanceKey} - this is normal in React StrictMode`);
   }
 
   // FORCE workflow completion screen - override any inactive status
   if (isWorkflowCompleted) {
     if (process.env.NODE_ENV === 'development') {
-      console.log('🎉 Workflow completed - Showing completion screen');
     }
     return (
       <Card sx={{
@@ -517,7 +490,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   const isActive = workflowInstance?.isActive ?? workflowInstance?.active;
   if (!isActive && !isWorkflowCompleted) {
     if (process.env.NODE_ENV === 'development') {
-      console.log('ℹ️ Workflow inactive - showing start workflow screen');
     }
     return (
       <>
@@ -607,9 +579,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
   // If workflow is completed but no workflow def, show completion screen anyway
   if (!workflowDef && isWorkflowCompleted) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🎉 Workflow completed - Showing completion screen (no workflow def)');
-    }
     return (
       <Card sx={{
         mb: 3,
@@ -656,16 +625,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   // Stage 8 means document is published - show completion regardless of available actions
   const isWorkflowComplete = isFinalStage;
   
-  console.log('📊 STAGE 8 DEBUG - Workflow Def loaded:', !!workflowDef);
-  console.log('📊 STAGE 8 DEBUG - Current Stage:', currentStage?.name, 'ID:', currentStage?.id, 'Order:', currentStage?.order, 'Type:', currentStage?.type);
-  console.log('📊 STAGE 8 DEBUG - Workflow Instance:', workflowInstance?.isActive, 'CurrentStageId:', workflowInstance?.currentStageId);
-  console.log('📊 STAGE 8 DEBUG - isFinalStage calculation:', currentStage?.order === 8, '||', currentStage?.type === 'AFDPO_FINAL', '=', isFinalStage);
-  console.log('📊 STAGE 8 DEBUG - isWorkflowComplete:', isWorkflowComplete);
-  console.log('📊 STAGE 8 DEBUG - Available Actions:', availableActions);
-  console.log('📊 STAGE 8 DEBUG - Is Admin:', userRole?.toUpperCase() === 'ADMIN');
 
-  console.log('🎨 RENDER DEBUG - About to render main card with isWorkflowComplete:', isWorkflowComplete);
-  console.log('🎨 RENDER DEBUG - Background color should be:', isWorkflowComplete ? 'GREEN (completion)' : 'PURPLE (normal)');
 
   return (
     <Card sx={{
@@ -690,7 +650,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
               <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ color: '#1a1a2e' }}>
                 {(() => {
                   const headerText = isWorkflowComplete ? '✅ Document Published' : workflowDef.name;
-                  console.log('📝 HEADER DEBUG - Rendering header text:', headerText, 'isWorkflowComplete:', isWorkflowComplete);
                   return headerText;
                 })()}
               </Typography>
@@ -699,7 +658,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                   const descText = isWorkflowComplete
                     ? 'This document has been successfully published to AFDPO and is now complete.'
                     : workflowDef.description;
-                  console.log('📝 DESC DEBUG - Rendering description:', descText);
                   return descText;
                 })()}
               </Typography>
