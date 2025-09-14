@@ -87,9 +87,15 @@ import { api } from '../../../lib/api';
 import { authTokenService } from '../../../lib/authTokenService';
 import { ChangeTracking, type Change } from '../../../lib/tiptap-change-tracking';
 import { SupplementMark } from '../../../lib/tiptap-supplement-mark';
+import { CommentMark, type Comment } from '../../../lib/tiptap-comments';
+import { FootnoteReference, FootnoteContent, Footnotes, type Footnote } from '../../../lib/tiptap-footnotes';
+import { CrossReferences } from '../../../lib/tiptap-cross-references';
 import SupplementSectionManager from '../../../components/editor/SupplementSectionManager';
 import SupplementableSectionMarker from '../../../components/editor/SupplementableSectionMarker';
 import DocumentStructureToolbar from '../../../components/editor/DocumentStructureToolbar';
+import AppendixFormatter from '../../../components/editor/AppendixFormatter';
+import CommentsPanel from '../../../components/editor/CommentsPanel';
+import AdvancedSearchReplace from '../../../components/editor/AdvancedSearchReplace';
 import '../../../styles/supplement-marks.css';
 
 interface DocumentDetails {
@@ -155,6 +161,12 @@ const DocumentEditor: React.FC = () => {
   const [showSelectionButton, setShowSelectionButton] = useState(false);
   const [selectionButtonPosition, setSelectionButtonPosition] = useState({ top: 0, left: 0 });
   const [selectedText, setSelectedText] = useState('');
+  
+  // New feature states
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [footnotes, setFootnotes] = useState<Footnote[]>([]);
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [showAiDialog, setShowAiDialog] = useState(false);
@@ -1212,185 +1224,190 @@ const DocumentEditor: React.FC = () => {
 
         {/* Advanced Editor Toolbar */}
         <Paper sx={{ p: 2, mb: 2 }}>
-          {/* Control Row - Navigation, Save, Track Changes */}
+          {/* Control Row - Reorganized for Better UX */}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 2, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-            {/* Navigation */}
-            <ButtonGroup size="small">
+            {/* Primary Actions - Save & Undo/Redo */}
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
               <Button
-                onClick={() => router.back()}
-                startIcon={<ArrowBack />}
-                title="Back to Document"
+                variant="contained"
+                color="primary"
+                size="small"
+                startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+                onClick={() => handleSave(true)}
+                disabled={saving || !hasUnsavedChanges}
+                sx={{ minWidth: 80 }}
               >
-                Back
+                {saving ? 'Saving' : 'Save'}
               </Button>
-              <Button
-                onClick={() => router.push(`/documents/${documentId}`)}
-                startIcon={<PreviewIcon />}
-                title="Preview Document"
-              >
-                Preview
-              </Button>
-            </ButtonGroup>
-
-            <Divider orientation="vertical" flexItem />
-
-            {/* Undo/Redo */}
-            <ButtonGroup size="small">
-              <Button
-                onClick={handleUndo}
-                disabled={!editor?.can().undo()}
-                title="Undo (Ctrl+Z)"
-              >
-                <Undo />
-              </Button>
-              <Button
-                onClick={handleRedo}
-                disabled={!editor?.can().redo()}
-                title="Redo (Ctrl+Y)"
-              >
-                <Redo />
-              </Button>
-            </ButtonGroup>
-
-            <Divider orientation="vertical" flexItem />
-
-            {/* Track Changes */}
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={trackChanges}
-                  onChange={(e) => {
-                    setTrackChanges(e.target.checked);
-                    editor?.commands.toggleChangeTracking();
-                  }}
+              <ButtonGroup size="small" variant="outlined">
+                <IconButton
+                  onClick={handleUndo}
+                  disabled={!editor?.can().undo()}
+                  title="Undo (Ctrl+Z)"
                   size="small"
-                />
-              }
-              label="Track Changes"
-              sx={{ mr: 1 }}
-            />
-            
-            <IconButton 
-              size="small"
-              onClick={() => setChangesDrawerOpen(true)}
-              title="View Changes"
-              sx={{ 
-                border: changes.length > 0 ? '1px solid #1976d2' : '1px solid #ccc',
-                borderRadius: '4px',
-                padding: '4px 8px'
-              }}
-            >
-              <Badge badgeContent={changes.length} color="error">
-                <Comment fontSize="small" />
-              </Badge>
-            </IconButton>
-
-            <Divider orientation="vertical" flexItem />
-
-            {/* Save */}
-            <Button
-              variant="contained"
-              color="primary"
-              size="small"
-              startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
-              onClick={() => handleSave(true)}
-              disabled={saving || !hasUnsavedChanges}
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-            
-            {/* Supplement Button */}
-            <Button
-              variant="outlined"
-              color="secondary"
-              size="small"
-              startIcon={<PostAdd />}
-              onClick={() => setSupplementDialogOpen(true)}
-              sx={{ ml: 1 }}
-            >
-              Create Supplement
-            </Button>
-            
-            {/* View Mode Toggle */}
-            {hasSupplements && (
-              <ButtonGroup size="small" sx={{ ml: 1 }}>
-                <Button
-                  variant={viewMode === 'base' ? 'contained' : 'outlined'}
-                  onClick={() => setViewMode('base')}
                 >
-                  Base
-                </Button>
-                <Button
-                  variant={viewMode === 'integrated' ? 'contained' : 'outlined'}
-                  onClick={() => setViewMode('integrated')}
+                  <Undo fontSize="small" />
+                </IconButton>
+                <IconButton
+                  onClick={handleRedo}
+                  disabled={!editor?.can().redo()}
+                  title="Redo (Ctrl+Y)"
+                  size="small"
                 >
-                  Integrated
-                </Button>
-                <Button
-                  variant={viewMode === 'supplement' ? 'contained' : 'outlined'}
-                  onClick={() => setViewMode('supplement')}
-                >
-                  Supplements Only
-                </Button>
+                  <Redo fontSize="small" />
+                </IconButton>
               </ButtonGroup>
-            )}
+            </Box>
 
             <Divider orientation="vertical" flexItem />
 
-            {/* Advanced Tools */}
-            <ButtonGroup size="small">
+            {/* Document Tools */}
+            <ButtonGroup size="small" variant="outlined">
               <Button
-                onClick={() => {
-                  const searchTerm = window.prompt('Find text:');
-                  if (searchTerm) {
-                    const replaceTerm = window.prompt('Replace with (leave empty to just find):');
-                    if (replaceTerm) {
-                      // Replace all occurrences
-                      const content = editor?.getHTML() || '';
-                      const newContent = content.replaceAll(searchTerm, replaceTerm);
-                      editor?.commands.setContent(newContent);
-                    } else {
-                      // Just highlight search
-                      editor?.chain().focus().setSearchTerm(searchTerm).run();
-                    }
-                  }
-                }}
-                title="Find & Replace"
-                startIcon={<FindReplace />}
+                onClick={() => setAdvancedSearchOpen(true)}
+                title="Find & Replace (Ctrl+F)"
+                startIcon={<FindReplace fontSize="small" />}
               >
                 Find
               </Button>
               <Button
-                onClick={() => window.print()}
-                title="Print Document"
-                startIcon={<Print />}
-              >
-                Print
-              </Button>
-              <Button
                 onClick={() => setExportDialogOpen(true)}
                 title="Export Document"
-                startIcon={<Download />}
+                startIcon={<Download fontSize="small" />}
               >
                 Export
               </Button>
+              <Button
+                onClick={() => window.print()}
+                title="Print (Ctrl+P)"
+              >
+                <Print fontSize="small" />
+              </Button>
             </ButtonGroup>
 
-            {/* Status on the right */}
-            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Chip 
-                label={`Page ${currentPage} of ${totalPages}`}
-                size="small" 
-                color="primary" 
-                variant="outlined"
-                icon={<FormatListNumbered />}
+            <Divider orientation="vertical" flexItem />
+
+            {/* Review & Collaboration */}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={trackChanges}
+                    onChange={(e) => {
+                      setTrackChanges(e.target.checked);
+                      editor?.commands.toggleChangeTracking();
+                    }}
+                    size="small"
+                  />
+                }
+                label={<Typography variant="body2">Track</Typography>}
+                sx={{ mr: 0 }}
               />
-              <Typography variant="caption" color="text.secondary">
-                Words: {wordCount} | Characters: {charCount}
-              </Typography>
-              {hasUnsavedChanges && (
-                <Chip label="Unsaved changes" size="small" color="warning" />
+              <IconButton 
+                size="small"
+                onClick={() => setChangesDrawerOpen(true)}
+                title="View Changes"
+                sx={{ 
+                  border: changes.length > 0 ? '2px solid #1976d2' : '1px solid #ddd',
+                  borderRadius: 1
+                }}
+              >
+                <Badge badgeContent={changes.length} color="error">
+                  <TrackChanges fontSize="small" />
+                </Badge>
+              </IconButton>
+              <IconButton
+                size="small"
+                onClick={() => setCommentsOpen(true)}
+                title="Comments"
+                sx={{ 
+                  border: comments.filter(c => !c.resolved).length > 0 ? '2px solid #ff9800' : '1px solid #ddd',
+                  borderRadius: 1
+                }}
+              >
+                <Badge badgeContent={comments.filter(c => !c.resolved).length} color="warning">
+                  <Comment fontSize="small" />
+                </Badge>
+              </IconButton>
+            </Box>
+
+            <Divider orientation="vertical" flexItem />
+
+            {/* View Options */}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => router.push(`/documents/${documentId}`)}
+                startIcon={<PreviewIcon fontSize="small" />}
+                title="Preview Document"
+              >
+                Preview
+              </Button>
+              {hasSupplements && (
+                <ButtonGroup size="small" variant="outlined">
+                  <Button
+                    variant={viewMode === 'base' ? 'contained' : 'outlined'}
+                    onClick={() => setViewMode('base')}
+                    sx={{ minWidth: 50, fontSize: '0.75rem' }}
+                  >
+                    Base
+                  </Button>
+                  <Button
+                    variant={viewMode === 'integrated' ? 'contained' : 'outlined'}
+                    onClick={() => setViewMode('integrated')}
+                    sx={{ minWidth: 70, fontSize: '0.75rem' }}
+                  >
+                    Integrated
+                  </Button>
+                  <Button
+                    variant={viewMode === 'supplement' ? 'contained' : 'outlined'}
+                    onClick={() => setViewMode('supplement')}
+                    sx={{ minWidth: 80, fontSize: '0.75rem' }}
+                  >
+                    Supplement
+                  </Button>
+                </ButtonGroup>
               )}
+            </Box>
+
+            {/* Status on the right - Optimized */}
+            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              {/* Save Status */}
+              {hasUnsavedChanges ? (
+                <Chip 
+                  label="Unsaved" 
+                  size="small" 
+                  color="warning" 
+                  variant="filled"
+                  sx={{ fontWeight: 'bold' }}
+                />
+              ) : (
+                <Chip 
+                  label="Saved" 
+                  size="small" 
+                  color="success" 
+                  variant="outlined"
+                  icon={<Check />}
+                />
+              )}
+              
+              <Divider orientation="vertical" flexItem sx={{ height: 20, alignSelf: 'center' }} />
+              
+              {/* Document Stats - Compact */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                  Page {currentPage}/{totalPages}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">•</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {wordCount.toLocaleString()} words
+                </Typography>
+                <Typography variant="caption" color="text.secondary">•</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {charCount.toLocaleString()} chars
+                </Typography>
+              </Box>
             </Box>
           </Box>
 
@@ -1976,24 +1993,13 @@ const DocumentEditor: React.FC = () => {
                 📋 Template
               </Button>
             </ButtonGroup>
-
-            <Divider orientation="vertical" flexItem />
-
-            {/* Page Break */}
-            <Button
-              size="small"
-              onClick={() => {
-                editor?.chain().focus().setHardBreak().run();
-                editor?.chain().focus().insertContent('<div style="page-break-after: always; margin: 20px 0; border-top: 2px dashed #ccc; text-align: center; color: #999;">--- Page Break ---</div>').run();
-              }}
-              title="Insert Page Break"
-            >
-              📄 Break
-            </Button>
           </Box>
 
           {/* Document Structure Toolbar */}
           <DocumentStructureToolbar editor={editor} />
+          
+          {/* Appendix Formatter Toolbar */}
+          <AppendixFormatter editor={editor} />
         </Paper>
 
         {/* Editor Content */}

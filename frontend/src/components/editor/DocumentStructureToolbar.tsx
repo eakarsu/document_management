@@ -254,6 +254,21 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
 
       <Divider orientation="vertical" flexItem />
 
+      {/* Page Break */}
+      <Button
+        variant="outlined"
+        size="small"
+        onClick={() => {
+          editor?.chain().focus().setHardBreak().run();
+          editor?.chain().focus().insertContent('<div style="page-break-after: always; margin: 20px 0; border-top: 2px dashed #ccc; text-align: center; color: #999;">--- Page Break ---</div>').run();
+        }}
+        title="Insert Page Break"
+      >
+        Page Break
+      </Button>
+
+      <Divider orientation="vertical" flexItem />
+
       {/* Quick Templates */}
       <Button
         variant="contained"
