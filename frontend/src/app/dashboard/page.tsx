@@ -60,7 +60,8 @@ import {
   AutoFixHigh as SmartIcon,
   Create as CreateIcon,
   AccountTree as WorkflowBuilderIcon,
-  ArrowDropDown as ArrowDropDownIcon
+  ArrowDropDown as ArrowDropDownIcon,
+  AdminPanelSettings as AdminIcon
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import WorkflowTasks from '../../components/WorkflowTasks';
@@ -351,6 +352,10 @@ const DashboardPage: React.FC = () => {
 
   const handleWorkflowBuilder = () => {
     router.push('/workflow-builder');
+  };
+
+  const handleUsersManagement = () => {
+    router.push('/users');
   };
 
 
@@ -658,6 +663,23 @@ const DashboardPage: React.FC = () => {
                   onClick={handleViewAnalytics}
                 >
                   View Analytics
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<AdminIcon />}
+                  size="large"
+                  onClick={handleUsersManagement}
+                  sx={{
+                    color: 'warning.main',
+                    borderColor: 'warning.main',
+                    '&:hover': {
+                      borderColor: 'warning.dark',
+                      backgroundColor: 'rgba(237, 108, 2, 0.04)'
+                    }
+                  }}
+                >
+                  Users Management
                 </Button>
                 <Button
                   fullWidth

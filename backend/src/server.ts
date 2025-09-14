@@ -34,6 +34,7 @@ import exportPerfectRouter from './routes/export-perfect';
 import aiDocumentGeneratorRouter from './routes/ai-document-generator';
 import workflowRouter from './routes/workflow';
 import workflowsRouter from './routes/workflows';
+import usersRouter from './routes/users';
 import { DocumentService } from './services/DocumentService';
 import { AuthService } from './services/AuthService';
 import { SearchService } from './services/SearchService';
@@ -250,6 +251,9 @@ async function startServer() {
     
     // Register JSON workflows route
     app.use('/api', workflowsRouter);
+
+    // User management routes
+    app.use('/api', usersRouter);
 
     // ===== AUTHENTICATION ENDPOINTS =====
     
@@ -898,9 +902,8 @@ async function startServer() {
         });
         
         const userCount = await prisma.user.count({
-          where: { 
-            organizationId: req.user.organizationId,
-            isActive: true
+          where: {
+            organizationId: req.user.organizationId
           }
         });
         
