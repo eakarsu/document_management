@@ -331,7 +331,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   };
 
   // Get available actions for current stage
-  const getAvailableActions = (): Array<{ id: string; label: string; target: string }> => {
+  const getAvailableActions = (): Array<{ id: string; label: string; target: string; disabled: boolean; disabledReason?: string }> => {
     if (!workflowDef || !workflowInstance?.currentStageId) {
       return [];
     }
@@ -340,22 +340,22 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     if (!currentStage) {
       return [];
     }
-    
-    
+
+
     // Check if user has permission for this stage
     const normalizedRole = userRole?.toUpperCase();
     const isAdmin = normalizedRole === 'ADMIN';
-    
-    const userCanAct = isAdmin || 
+
+    const userCanAct = isAdmin ||
                        currentStage.roles.some(r => r.toUpperCase() === normalizedRole);
-    
-    
-    if (!userCanAct) {
-      return [];
-    }
 
     // Get all defined actions for this stage
-    const actions = [...(currentStage.actions || [])];
+    const actions: Array<{ id: string; label: string; target: string; disabled: boolean; disabledReason?: string }> =
+      [...(currentStage.actions || [])].map(action => ({
+        ...action,
+        disabled: !userCanAct,
+        disabledReason: !userCanAct ? `This action requires ${currentStage.roles.join(' or ')} role` : undefined
+      }));
     
     // For users with appropriate roles, ensure all transitions are available
     // This includes both defined actions and any additional transitions
@@ -364,34 +364,33 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     );
     
     
-    // For admins, ALWAYS add a "Move to Next Stage" button for all transitions
-    if (isAdmin) {
-      availableTransitions.forEach((transition: any) => {
-        const targetStage = workflowDef.stages.find((s: any) => s.id === transition.to);
-        
-        // Add admin override button (even if action already exists)
+    // Add transition buttons for all users (but disabled if no permission)
+    availableTransitions.forEach((transition: any) => {
+      const targetStage = workflowDef.stages.find((s: any) => s.id === transition.to);
+      const hasAction = actions.some(a => a.target === transition.to);
+
+      if (isAdmin && !hasAction) {
+        // Admin override button (always enabled for admins)
         actions.push({
           id: `admin-override-${transition.to}`,
           label: `Admin: Move to ${targetStage?.name || 'Next Stage'}`,
-          target: transition.to
+          target: transition.to,
+          disabled: false,
+          disabledReason: undefined
         });
-      });
-    } else {
-      // For non-admin users, only add transitions that aren't already in actions
-      availableTransitions.forEach((transition: any) => {
-        const hasAction = actions.some(a => a.target === transition.to);
-        
-        if (!hasAction && currentStage.roles.some(r => r.toUpperCase() === normalizedRole)) {
-          const targetStage = workflowDef.stages.find((s: any) => s.id === transition.to);
-          actions.push({
-            id: `user-transition-${transition.to}`,
-            label: transition.label || `Submit to ${targetStage?.name || 'Next Stage'}`,
-            target: transition.to
-          });
-        }
-      });
-    }
-    
+      } else if (!hasAction) {
+        // Regular user transition button (may be disabled)
+        const canPerformAction = userCanAct && currentStage.roles.some(r => r.toUpperCase() === normalizedRole);
+        actions.push({
+          id: `user-transition-${transition.to}`,
+          label: transition.label || `Submit to ${targetStage?.name || 'Next Stage'}`,
+          target: transition.to,
+          disabled: !canPerformAction,
+          disabledReason: !canPerformAction ? `This action requires ${currentStage.roles.join(' or ')} role` : undefined
+        });
+      }
+    });
+
     return actions;
   };
 
@@ -807,8 +806,8 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
           </Box>
         )}
 
-        {/* Actions Section - Hide when workflow is complete */}
-        {availableActions.length > 0 && !isWorkflowComplete && (
+        {/* Actions Section - Hide only when workflow is complete */}
+        {!isWorkflowComplete && (
           <Box sx={{ 
             background: 'white',
             p: 3,
@@ -859,34 +858,49 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                   hoverGradient = 'linear-gradient(45deg, #F57C00 30%, #FF9800 90%)';
                 }
                 
-                const isButtonDisabled = processing || isButtonClicked || (workflowDef.settings.requireComments && !comment);
-                
+                const isButtonDisabled = processing || isButtonClicked || (workflowDef.settings.requireComments && !comment) || action.disabled;
+
+                // Determine the disabled reason
+                let disabledTooltip = '';
+                if (action.disabled && action.disabledReason) {
+                  disabledTooltip = action.disabledReason;
+                } else if (workflowDef.settings.requireComments && !comment) {
+                  disabledTooltip = 'Please add a comment before proceeding';
+                } else if (processing) {
+                  disabledTooltip = 'Processing...';
+                } else if (isButtonClicked) {
+                  disabledTooltip = 'Action already performed';
+                }
+
                 return (
-                  <Button
-                    key={action.id}
-                    variant="contained"
-                    size="large"
-                    startIcon={<NavigateNext />}
-                    onClick={() => advanceWorkflow(action.target, action.label)}
-                    disabled={isButtonDisabled}
-                    sx={{
-                      background: isButtonDisabled ? disabledGradient : buttonGradient,
-                      boxShadow: '0 3px 5px 2px rgba(0, 0, 0, .2)',
-                      fontWeight: 'bold',
-                      minWidth: '150px',
-                      opacity: isButtonClicked ? 0.7 : 1,
-                      '&:hover': {
-                        background: isButtonDisabled ? disabledGradient : hoverGradient,
-                        transform: isButtonDisabled ? 'none' : 'translateY(-2px)',
-                        boxShadow: isButtonDisabled ? '0 3px 5px 2px rgba(0, 0, 0, .2)' : '0 5px 10px 2px rgba(0, 0, 0, .3)',
-                      },
-                      transition: 'all 0.3s ease'
-                    }}
-                  >
-                    {isButtonClicked ? 'Processing...' : action.label}
-                  </Button>
+                  <Tooltip key={action.id} title={disabledTooltip} arrow>
+                    <span>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        startIcon={<NavigateNext />}
+                        onClick={() => advanceWorkflow(action.target, action.label)}
+                        disabled={isButtonDisabled}
+                        sx={{
+                          background: isButtonDisabled ? disabledGradient : buttonGradient,
+                          boxShadow: '0 3px 5px 2px rgba(0, 0, 0, .2)',
+                          fontWeight: 'bold',
+                          minWidth: '150px',
+                          opacity: isButtonClicked ? 0.7 : 1,
+                          '&:hover': {
+                            background: isButtonDisabled ? disabledGradient : hoverGradient,
+                            transform: isButtonDisabled ? 'none' : 'translateY(-2px)',
+                            boxShadow: isButtonDisabled ? '0 3px 5px 2px rgba(0, 0, 0, .2)' : '0 5px 10px 2px rgba(0, 0, 0, .3)',
+                          },
+                          transition: 'all 0.3s ease'
+                        }}
+                      >
+                        {isButtonClicked ? 'Processing...' : action.label}
+                      </Button>
+                    </span>
+                  </Tooltip>
                 );
-              })}}
+              })}
             </Box>
           </Box>
         )}
