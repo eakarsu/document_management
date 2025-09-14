@@ -177,12 +177,10 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   useEffect(() => {
     fetchWorkflow();
     fetchAvailableWorkflows();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchWorkflow, 30000);
+    // Removed auto-refresh - workflow updates will be fetched on user actions
 
     // Cleanup function to remove instance from global tracker
     return () => {
-      clearInterval(interval);
       if (isFirstInstance.current) {
         globalInstances.delete(instanceKey);
       }
