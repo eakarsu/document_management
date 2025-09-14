@@ -55,6 +55,8 @@ import OPRFeedbackProcessor from '../../../components/feedback/OPRFeedbackProces
 import { api } from '../../../lib/api';
 import { authTokenService } from '../../../lib/authTokenService';
 import CRMFeedbackForm from '../../../components/feedback/CRMFeedbackForm';
+import { JsonWorkflowDisplay } from '../../../components/workflow/JsonWorkflowDisplay';
+import { useRef } from 'react';
 
 interface DocumentDetails {
   id: string;
@@ -126,6 +128,7 @@ const DocumentViewPage: React.FC = () => {
   const [currentWorkflow, setCurrentWorkflow] = useState<any>(null);
   const [canMoveBackward, setCanMoveBackward] = useState(false);
   const [workflowId, setWorkflowId] = useState<string>('');
+  const jsonWorkflowResetRef = useRef<(() => Promise<void>) | null>(null);
 
   // Define the 8-stage workflow steps
   const workflowSteps = [
@@ -1002,21 +1005,40 @@ const DocumentViewPage: React.FC = () => {
 
         case 'AFDPO Publish':
         case 'FINAL_PUBLISHING':
-          return canAdvance ? (
-            <Button
-              variant="contained"
-              color="success"
-              onClick={() => {
-                setIsDocumentPublished(true);
-                alert('Document published successfully!');
-              }}
-            >
-              🎉 Publish Document
-            </Button>
-          ) : (
-            <Alert severity="info">
-              Waiting for Publisher approval. {getStageRequirementMessage(8)}
-            </Alert>
+          // Stage 8 means the document is completed - show completion screen for all users
+          return (
+            <Card sx={{
+              bgcolor: 'success.light',
+              color: 'white',
+              p: 3,
+              textAlign: 'center',
+              border: '2px solid #4caf50'
+            }}>
+              <CardContent>
+                <Typography variant="h4" sx={{ mb: 2, fontWeight: 'bold' }}>
+                  ✅ Document Published
+                </Typography>
+                <Typography variant="h6" sx={{ mb: 2, color: 'success.dark' }}>
+                  🎉 Published & Complete
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'success.dark' }}>
+                  This document has been successfully published to AFDPO and is now complete.
+                </Typography>
+                {canAdvance && !isDocumentPublished && (
+                  <Button
+                    variant="outlined"
+                    color="success"
+                    onClick={() => {
+                      setIsDocumentPublished(true);
+                      alert('Document publication status updated!');
+                    }}
+                    sx={{ mt: 2 }}
+                  >
+                    Mark as Published
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
           );
 
         default:
@@ -1197,73 +1219,7 @@ const DocumentViewPage: React.FC = () => {
                   </Button>
                 )}
 
-                {/* Start/Continue Workflow */}
-                {isWorkflowNotStarted() ? (
-                  <Button
-                    variant="contained"
-                    color="success"
-                    size="large"
-                    startIcon={<StartWorkflowIcon />}
-                    onClick={startWorkflow}
-                    sx={{ minWidth: 150 }}
-                  >
-                    Start Workflow
-                  </Button>
-                ) : workflowActive && (canSubmitForCoordination() || userRole?.role === 'ADMIN' || userRole?.role === 'Admin' || userRole?.role === 'WORKFLOW_ADMIN') ? (
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    size="large"
-                    disabled={workflowProcessing}
-                    startIcon={workflowProcessing ? <CircularProgress size={16} color="inherit" /> : <SubmitIcon />}
-                    onClick={async () => {
-                      if (!canSubmitForCoordination()) return;
-                      try {
-                        setWorkflowProcessing(true);
-                        let targetStage = '';
-                        let targetStep = 0;
-                        const currentBackendStage = getBackendStage(workflowStage);
-                        
-                        switch(currentBackendStage) {
-                          case 'DRAFT_CREATION':
-                          case 'OPR Creates':
-                            targetStage = '1st Coordination';
-                            targetStep = 2;
-                            break;
-                          case 'OPR_REVISIONS':
-                          case 'OPR Revisions':
-                            targetStage = '2nd Coordination';
-                            targetStep = 4;
-                            break;
-                          case 'OPR_FINAL':
-                          case 'OPR Final':
-                            targetStage = 'Legal Review';
-                            targetStep = 6;
-                            break;
-                          case 'OPR_LEGAL':
-                          case 'OPR Legal':
-                            targetStage = 'AFDPO Publish';
-                            targetStep = 8;
-                            break;
-                          default:
-                            console.error('Unknown stage for coordination:', currentBackendStage);
-                            alert('Cannot submit from this stage');
-                            setWorkflowProcessing(false);
-                            return;
-                        }
-                        
-                        await handleWorkflowAdvancement(targetStage, targetStep);
-                      } catch (error) {
-                        console.error('Quick Actions advancement failed:', error);
-                        alert('Failed to advance workflow. Please try again.');
-                        setWorkflowProcessing(false);
-                      }
-                    }}
-                    sx={{ minWidth: 150 }}
-                  >
-                    Submit to Next
-                  </Button>
-                ) : null}
+                {/* Start/Continue Workflow - Removed (Using JSON workflows) */}
 
                 {/* Version History */}
                 <Button
@@ -1362,11 +1318,30 @@ const DocumentViewPage: React.FC = () => {
 
               <Divider sx={{ my: 3 }} />
 
-              {/* Workflow Progress */}
-              {renderWorkflowProgress()}
+              {/* JSON-Based Workflow System */}
+              <JsonWorkflowDisplay 
+                documentId={documentId}
+                userRole={userRole?.roleType || userRole?.role || 'USER'}
+                onWorkflowChange={(instance) => {
+                  // Update old workflow state to maintain compatibility
+                  if (instance.isActive) {
+                    setWorkflowActive(true);
+                    setWorkflowStage(instance.currentStageName || '');
+                  } else {
+                    setWorkflowActive(false);
+                    setWorkflowStage('');
+                  }
+                }}
+                onResetRef={(resetFn) => {
+                  jsonWorkflowResetRef.current = resetFn;
+                }}
+              />
+              
+              {/* OLD 8-Stage Workflow (Disabled - using JSON workflows now) */}
+              {/* {renderWorkflowProgress()} */}
 
-              {/* Workflow Action Buttons */}
-              {renderWorkflowButtons()}
+              {/* Workflow Action Buttons - Disabled for JSON workflows */}
+              {/* {renderWorkflowButtons()} */}
 
               {/* Feedback Display */}
               {renderFeedbackDisplay()}
@@ -1396,29 +1371,16 @@ const DocumentViewPage: React.FC = () => {
               <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
                 📄 Document Preview
               </Typography>
-              {(() => {
-                const content = documentData.content || documentData.customFields?.content || '';
-                console.log('📄 Document content for viewer:', {
-                  hasContent: !!content,
-                  contentLength: content.length,
-                  contentPreview: content.substring(0, 100),
-                  hasDocumentData: !!documentData,
-                  hasCustomFields: !!documentData.customFields,
-                  workflowStage
-                });
-                return (
-                  <DocumentViewer 
-                    documentId={documentId} 
-                    document={{
-                      title: documentData.title,
-                      mimeType: documentData.mimeType || 'text/html',
-                      category: documentData.category,
-                      fileSize: documentData.fileSize,
-                      content: content
-                    }}
-                  />
-                );
-              })()}
+              <DocumentViewer 
+                documentId={documentId} 
+                document={{
+                  title: documentData.title,
+                  mimeType: documentData.mimeType || 'text/html',
+                  category: documentData.category,
+                  fileSize: documentData.fileSize,
+                  content: documentData.content || documentData.customFields?.content || ''
+                }}
+              />
             </Paper>
 
             {/* OPR Feedback Processor - Only visible to OPR users */}
@@ -1497,609 +1459,90 @@ const DocumentViewPage: React.FC = () => {
                 </Box>
               </Box>
 
-              {/* OPR ROLE ACTIONS */}
+              {/* OPR ROLE ACTIONS - Disabled (Using JSON workflows) */}
               {userRole?.role === 'OPR' && (
                 <Box>
-                  {/* Start Workflow */}
-                  {isWorkflowNotStarted() && (
-                    <Box sx={{ mb: 2 }}>
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        color="primary"
-                        startIcon={<StartWorkflowIcon />}
-                        onClick={startWorkflow}
-                        sx={{ mb: 1 }}
-                      >
-                        📝 Start 8-Stage Workflow
-                      </Button>
-                      <Typography variant="caption" color="text.secondary">
-                        Begin Air Force publication workflow (DRAFT_CREATION)
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {/* Submit for Coordination */}
-                  <Box sx={{ mb: 2 }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      color={canSubmitForCoordination() ? "success" : "inherit"}
-                      disabled={workflowProcessing || !canSubmitForCoordination()}
-                      startIcon={workflowProcessing ? <CircularProgress size={16} color="inherit" /> : <SubmitIcon />}
-                      onClick={async () => {
-                        if (!canSubmitForCoordination()) return;
-                        try {
-                          setWorkflowProcessing(true);
-                          // console.log('🔄 WORKFLOW: Quick Actions - Submitting for coordination');
-                          
-                          // Determine which stage to go to based on current stage
-                          let targetStage = '';
-                          let targetStep = 0;
-                          const currentBackendStage = getBackendStage(workflowStage);
-                          
-                          switch(currentBackendStage) {
-                            case 'DRAFT_CREATION':
-                            case 'OPR Creates':
-                              targetStage = '1st Coordination';
-                              targetStep = 2;
-                              break;
-                            case 'OPR_REVISIONS':
-                            case 'OPR Revisions':
-                              targetStage = '2nd Coordination';
-                              targetStep = 4;
-                              break;
-                            case 'OPR_FINAL':
-                            case 'OPR Final':
-                              targetStage = 'Legal Review';
-                              targetStep = 6;
-                              break;
-                            case 'OPR_LEGAL':
-                            case 'OPR Legal':
-                              targetStage = 'AFDPO Publish';
-                              targetStep = 8;
-                              break;
-                            default:
-                              console.error('Unknown stage for coordination:', currentBackendStage);
-                              alert('Cannot submit from this stage');
-                              setWorkflowProcessing(false);
-                              return;
-                          }
-                          
-                          // console.log('🔄 Advancing from', currentBackendStage, 'to', targetStage);
-                          await handleWorkflowAdvancement(targetStage, targetStep);
-                          
-                        } catch (error) {
-                          console.error('❌ WORKFLOW: Quick Actions advancement failed:', error);
-                          alert('Failed to advance workflow. Please try again.');
-                          setWorkflowProcessing(false);
-                        }
-                      }}
-                      sx={{ mb: 1 }}
-                    >
-                      {workflowProcessing ? '⏳ Processing...' : 
-                       canSubmitForCoordination() ? '🔄 Submit to Next Stage' : 
-                       '✅ Waiting for Review'}
-                    </Button>
-                    <Typography variant="caption" color="text.secondary">
-                      {(() => {
-                        if (!canSubmitForCoordination()) return 'Document is under review';
-                        const currentBackendStage = getBackendStage(workflowStage);
-                        switch(currentBackendStage) {
-                          case 'DRAFT_CREATION': return 'Send to 1st Coordination (Internal)';
-                          case 'OPR_REVISIONS': return 'Send to 2nd Coordination (External)';
-                          case 'OPR_FINAL': return 'Send to Legal Review';
-                          case 'OPR_LEGAL': return 'Send to Final Publishing';
-                          default: return 'Ready to advance';
-                        }
-                      })()}
-                    </Typography>
-                  </Box>
+                  <Alert severity="info">
+                    OPR actions are managed through the JSON workflow system above.
+                  </Alert>
                 </Box>
               )}
 
-              {/* ICU REVIEWER ACTIONS */}
+              {/* ICU REVIEWER ACTIONS - Disabled (Using JSON workflows) */}
               {userRole?.role === 'ICU_REVIEWER' && (workflowStage === 'INTERNAL_COORDINATION' || workflowStage === '1st Coordination') && (
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom color="primary">
-                    🔄 Internal Coordination Review
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mb: 2, flexDirection: 'column' }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      color="success"
-                      onClick={async () => {
-                        try {
-                          const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              fromStage: 'INTERNAL_COORDINATION',
-                              toStage: 'OPR_REVISIONS',
-                              transitionData: { reviewedBy: userRole?.email, decision: 'approved' }
-                            })
-                          });
-                          if (response.ok) {
-                            alert('Document sent to OPR for revisions!');
-                            window.location.reload();
-                          } else {
-                            const errorData = await response.json();
-                            alert(`Failed to approve document: ${errorData.message || 'Unknown error'}`);
-                          }
-                        } catch (error) {
-                          console.error('Error approving document:', error);
-                          alert('Error approving document');
-                        }
-                      }}
-                      sx={{ mb: 1 }}
-                    >
-                      ✅ Approve
-                    </Button>
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      color="warning"
-                      onClick={async () => {
-                        try {
-                          const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              fromStage: 'INTERNAL_COORDINATION',
-                              toStage: 'OPR_REVISIONS',
-                              transitionData: { reviewedBy: userRole?.email, decision: 'changes_requested' }
-                            })
-                          });
-                          if (response.ok) {
-                            alert('Document sent back for OPR revisions!');
-                            window.location.reload();
-                          } else {
-                            const errorData = await response.json();
-                            alert(`Failed to request changes: ${errorData.message || 'Unknown error'}`);
-                          }
-                        } catch (error) {
-                          console.error('Error requesting changes:', error);
-                          alert('Error requesting changes');
-                        }
-                      }}
-                    >
-                      📝 Request Changes
-                    </Button>
-                  </Box>
+                  <Alert severity="info">
+                    Review actions are managed through the JSON workflow system above.
+                  </Alert>
                 </Box>
               )}
 
-              {/* TECHNICAL REVIEWER ACTIONS */}
+              {/* TECHNICAL REVIEWER ACTIONS - Disabled (Using JSON workflows) */}
               {userRole?.role === 'TECHNICAL_REVIEWER' && (workflowStage === 'INTERNAL_COORDINATION' || workflowStage === '1st Coordination' || workflowStage === 'EXTERNAL_COORDINATION' || workflowStage === '2nd Coordination') && (
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom color="primary">
-                    ⚙️ Technical Review
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mb: 2, flexDirection: 'column' }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      color="success"
-                      onClick={async () => {
-                        try {
-                          const currentBackendStage = getBackendStage(workflowStage);
-                          const nextStage = currentBackendStage === 'INTERNAL_COORDINATION' ? 'EXTERNAL_COORDINATION' : 'OPR_FINAL';
-                          const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              fromStage: currentBackendStage,
-                              toStage: nextStage,
-                              transitionData: { reviewedBy: userRole?.email, decision: 'technical_approved' }
-                            })
-                          });
-                          if (response.ok) {
-                            alert(`Document advanced to ${nextStage}!`);
-                            window.location.reload();
-                          } else {
-                            alert('Failed to approve document');
-                          }
-                        } catch (error) {
-                          alert('Error approving document');
-                        }
-                      }}
-                    >
-                      ⚙️ Technical Approve
-                    </Button>
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      color="warning"
-                      onClick={async () => {
-                        try {
-                          const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              fromStage: getBackendStage(workflowStage),
-                              toStage: 'OPR_REVISIONS',
-                              transitionData: { reviewedBy: userRole?.email, decision: 'technical_changes_requested' }
-                            })
-                          });
-                          if (response.ok) {
-                            alert('Document sent back for technical revisions!');
-                            window.location.reload();
-                          } else {
-                            alert('Failed to request changes');
-                          }
-                        } catch (error) {
-                          alert('Error requesting changes');
-                        }
-                      }}
-                    >
-                      🔧 Request Technical Changes
-                    </Button>
-                  </Box>
+                  <Alert severity="info">
+                    Technical review actions are managed through the JSON workflow system above.
+                  </Alert>
                 </Box>
               )}
 
-              {/* LEGAL REVIEWER ACTIONS */}
+              {/* LEGAL REVIEWER ACTIONS - Disabled (Using JSON workflows) */}
               {userRole?.role === 'LEGAL_REVIEWER' && (workflowStage === 'LEGAL_REVIEW' || workflowStage === 'Legal Review') && (
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom color="primary">
-                    ⚖️ Legal Review
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mb: 2, flexDirection: 'column' }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      color="success"
-                      onClick={async () => {
-                        try {
-                          const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              fromStage: 'LEGAL_REVIEW',
-                              toStage: 'FINAL_PUBLISHING',
-                              transitionData: { reviewedBy: userRole?.email, decision: 'legal_approved' }
-                            })
-                          });
-                          if (response.ok) {
-                            alert('Document approved for final publishing!');
-                            window.location.reload();
-                          } else {
-                            alert('Failed to approve document');
-                          }
-                        } catch (error) {
-                          alert('Error approving document');
-                        }
-                      }}
-                    >
-                      ⚖️ Legal Approve
-                    </Button>
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      color="warning"
-                      onClick={async () => {
-                        try {
-                          const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              fromStage: 'LEGAL_REVIEW',
-                              toStage: 'OPR_LEGAL',
-                              transitionData: { reviewedBy: userRole?.email, decision: 'legal_changes_requested' }
-                            })
-                          });
-                          if (response.ok) {
-                            alert('Document sent back for legal revisions!');
-                            window.location.reload();
-                          } else {
-                            alert('Failed to request changes');
-                          }
-                        } catch (error) {
-                          alert('Error requesting changes');
-                        }
-                      }}
-                    >
-                      📝 Request Legal Changes
-                    </Button>
-                  </Box>
+                  <Alert severity="info">
+                    Legal review actions are managed through the JSON workflow system above.
+                  </Alert>
                 </Box>
               )}
 
-              {/* PUBLISHER ACTIONS */}
+              {/* PUBLISHER ACTIONS - Disabled (Using JSON workflows) */}
               {userRole?.role === 'PUBLISHER' && workflowStage === 'FINAL_PUBLISHING' && (
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom color="primary">
-                    📰 Final Publishing
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mb: 2, flexDirection: 'column' }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      color="success"
-                      onClick={async () => {
-                        try {
-                          const response = await fetch('/api/workflow/8-stage/advance', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({
-                              workflowId: workflowId || documentId,
-                              fromStage: 'FINAL_PUBLISHING',
-                              toStage: 'PUBLISHED',
-                              transitionData: { publishedBy: userRole?.email, publishDate: new Date().toISOString() }
-                            })
-                          });
-                          if (response.ok) {
-                            alert('Document published successfully!');
-                            window.location.reload();
-                          } else {
-                            alert('Failed to publish document');
-                          }
-                        } catch (error) {
-                          alert('Error publishing document');
-                        }
-                      }}
-                    >
-                      📰 Publish Document
-                    </Button>
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      color="info"
-                    >
-                      📅 Schedule Publishing
-                    </Button>
-                  </Box>
+                  <Alert severity="info">
+                    Publishing actions are managed through the JSON workflow system above.
+                  </Alert>
                 </Box>
               )}
 
-              {/* ADMIN ACTIONS */}
-              {/* console.log('🔐 ADMIN CHECK:', { userRole: userRole?.role, isAdmin: userRole?.role === 'WORKFLOW_ADMIN' || userRole?.role === 'ADMIN' || userRole?.role === 'Admin' }) */}
+              {/* ADMIN ACTIONS - Simplified for JSON Workflows */}
               {(userRole?.role === 'WORKFLOW_ADMIN' || userRole?.role === 'ADMIN' || userRole?.role === 'Admin') && (
                 <Box>
                   <Typography variant="subtitle2" gutterBottom color="secondary">
                     👑 Admin Controls
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1, mb: 2, flexDirection: 'column' }}>
-                    {/* Admin can advance to next stage from any stage */}
-                    {(() => {
-                      const currentBackendStage = getBackendStage(workflowStage);
-                      let nextStage = '';
-                      let nextStageLabel = '';
-                      
-                      switch(currentBackendStage) {
-                        case 'DRAFT_CREATION':
-                          nextStage = 'INTERNAL_COORDINATION';
-                          nextStageLabel = '1st Coordination';
-                          break;
-                        case 'INTERNAL_COORDINATION':
-                          nextStage = 'OPR_REVISIONS';
-                          nextStageLabel = 'OPR Revisions';
-                          break;
-                        case 'OPR_REVISIONS':
-                          nextStage = 'EXTERNAL_COORDINATION';
-                          nextStageLabel = '2nd Coordination';
-                          break;
-                        case 'EXTERNAL_COORDINATION':
-                          nextStage = 'OPR_FINAL';
-                          nextStageLabel = 'OPR Final';
-                          break;
-                        case 'OPR_FINAL':
-                          nextStage = 'LEGAL_REVIEW';
-                          nextStageLabel = 'Legal Review';
-                          break;
-                        case 'LEGAL_REVIEW':
-                          nextStage = 'OPR_LEGAL';
-                          nextStageLabel = 'OPR Legal';
-                          break;
-                        case 'OPR_LEGAL':
-                          nextStage = 'FINAL_PUBLISHING';
-                          nextStageLabel = 'Final Publishing';
-                          break;
-                        case 'FINAL_PUBLISHING':
-                          nextStage = 'PUBLISHED';
-                          nextStageLabel = 'Published';
-                          break;
-                      }
-                      
-                      if (nextStage && currentBackendStage !== 'PUBLISHED') {
-                        return (
-                          <Button
-                            fullWidth
-                            variant="contained"
-                            color="success"
-                            onClick={async () => {
-                              try {
-                                const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
-                                  method: 'POST',
-                                  body: JSON.stringify({
-                                    fromStage: currentBackendStage,
-                                    toStage: nextStage,
-                                    transitionData: { 
-                                      adminOverride: true,
-                                      advancedBy: userRole?.email,
-                                      reason: 'Admin advancement'
-                                    }
-                                  })
-                                });
-                                if (response.ok) {
-                                  alert(`Workflow advanced to ${nextStageLabel}!`);
-                                  window.location.reload();
-                                } else {
-                                  const errorData = await response.json();
-                                  alert(`Failed to advance workflow: ${errorData.message || 'Unknown error'}`);
-                                }
-                              } catch (error) {
-                                alert('Error advancing workflow');
-                              }
-                            }}
-                          >
-                            ➡️ Advance to {nextStageLabel}
-                          </Button>
-                        );
-                      }
-                      return null;
-                    })()}
+                    {/* Admin controls are now handled by the JSON workflow system */}
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Workflow controls are managed through the JSON workflow system above.
+                      Use the workflow actions in the main workflow display.
+                    </Alert>
                     
-                    {/* Move to Previous Stage */}
-                    {workflowStage !== 'OPR Creates' && workflowStage !== 'DRAFT_CREATION' && (
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        color="warning"
-                        onClick={async () => {
-                          const currentBackendStage = getBackendStage(workflowStage);
-                          let previousStage = '';
-                          let previousStageLabel = '';
-                          
-                          switch(currentBackendStage) {
-                            case 'INTERNAL_COORDINATION':
-                              previousStage = 'DRAFT_CREATION';
-                              previousStageLabel = 'Draft Creation';
-                              break;
-                            case 'OPR_REVISIONS':
-                              previousStage = 'INTERNAL_COORDINATION';
-                              previousStageLabel = '1st Coordination';
-                              break;
-                            case 'EXTERNAL_COORDINATION':
-                              previousStage = 'OPR_REVISIONS';
-                              previousStageLabel = 'OPR Revisions';
-                              break;
-                            case 'OPR_FINAL':
-                              previousStage = 'EXTERNAL_COORDINATION';
-                              previousStageLabel = '2nd Coordination';
-                              break;
-                            case 'LEGAL_REVIEW':
-                              previousStage = 'OPR_FINAL';
-                              previousStageLabel = 'OPR Final';
-                              break;
-                            case 'OPR_LEGAL':
-                              previousStage = 'LEGAL_REVIEW';
-                              previousStageLabel = 'Legal Review';
-                              break;
-                            case 'FINAL_PUBLISHING':
-                              previousStage = 'OPR_LEGAL';
-                              previousStageLabel = 'OPR Legal';
-                              break;
-                            case 'PUBLISHED':
-                              previousStage = 'FINAL_PUBLISHING';
-                              previousStageLabel = 'Final Publishing';
-                              break;
-                          }
-                          
-                          if (!previousStage) return;
-                          
-                          try {
-                            const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/move-backward/${workflowId || documentId}`, {
-                              method: 'POST',
-                              body: JSON.stringify({
-                                fromStage: currentBackendStage,
-                                toStage: previousStage,
-                                reason: 'Admin moved workflow backward',
-                                adminOverride: true
-                              })
-                            });
-                            if (response.ok) {
-                              alert(`Workflow moved back to ${previousStageLabel}!`);
-                              window.location.reload();
-                            } else {
-                              const errorData = await response.json();
-                              alert(`Failed to move backward: ${errorData.message || 'Unknown error'}`);
-                            }
-                          } catch (error) {
-                            alert('Error moving workflow backward');
-                          }
-                        }}
-                      >
-                        ⬅️ Move to Previous Stage
-                      </Button>
-                    )}
-                    
-                    {/* Reset Workflow */}
+                    {/* Reset Workflow - Now uses JSON workflow reset */}
                     <Button
                       fullWidth
                       variant="contained"
                       color="error"
                       onClick={async () => {
-                        if (!confirm('Are you sure you want to reset this workflow? This will move the document back to Draft Creation stage and clear all feedback.')) {
+                        if (!confirm('Are you sure you want to reset this workflow? This will move the document back to the beginning.')) {
                           return;
                         }
-                        try {
-                          const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/reset/${workflowId || documentId}`, {
-                            method: 'POST'
-                          });
-                          if (response.ok) {
-                            alert('Workflow has been reset to Draft Creation stage!');
+                        if (jsonWorkflowResetRef.current) {
+                          try {
+                            await jsonWorkflowResetRef.current();
+                            alert('Workflow has been reset to the beginning!');
+                            // Force page refresh to show updated workflow state
                             window.location.reload();
-                          } else {
-                            const errorData = await response.json();
-                            alert(`Failed to reset workflow: ${errorData.message || 'Unknown error'}`);
+                          } catch (error) {
+                            console.error('Error resetting workflow:', error);
+                            alert('Failed to reset workflow. Please try again.');
                           }
-                        } catch (error) {
-                          alert('Error resetting workflow');
+                        } else {
+                          alert('Reset function not available. Please refresh the page.');
                         }
                       }}
                     >
                       🔄 Reset to Start
                     </Button>
-                    
-                    {/* Quick Jump to Any Stage - Dropdown buttons */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                        Quick Jump to Stage:
-                      </Typography>
-                      {[
-                        { value: 'DRAFT_CREATION', label: 'Draft Creation' },
-                        { value: 'INTERNAL_COORDINATION', label: '1st Coordination' },
-                        { value: 'OPR_REVISIONS', label: 'OPR Revisions' },
-                        { value: 'EXTERNAL_COORDINATION', label: '2nd Coordination' },
-                        { value: 'OPR_FINAL', label: 'OPR Final' },
-                        { value: 'LEGAL_REVIEW', label: 'Legal Review' },
-                        { value: 'OPR_LEGAL', label: 'OPR Legal' },
-                        { value: 'FINAL_PUBLISHING', label: 'Final Publishing' },
-                        { value: 'PUBLISHED', label: 'Published' }
-                      ].map((stage) => {
-                        const currentBackendStage = getBackendStage(workflowStage);
-                        const isCurrent = stage.value === currentBackendStage;
-                        
-                        return (
-                          <Button
-                            key={stage.value}
-                            size="small"
-                            variant={isCurrent ? "contained" : "outlined"}
-                            color={isCurrent ? "primary" : "secondary"}
-                            disabled={isCurrent}
-                            onClick={async () => {
-                              try {
-                                const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
-                                  method: 'POST',
-                                  body: JSON.stringify({
-                                    fromStage: currentBackendStage,
-                                    toStage: stage.value,
-                                    transitionData: { 
-                                      adminOverride: true,
-                                      jumpedBy: userRole?.email,
-                                      reason: 'Admin direct jump'
-                                    }
-                                  })
-                                });
-                                if (response.ok) {
-                                  alert(`Workflow jumped to ${stage.label}!`);
-                                  window.location.reload();
-                                } else {
-                                  const errorData = await response.json();
-                                  alert(`Failed to jump to stage: ${errorData.message || 'Unknown error'}`);
-                                }
-                              } catch (error) {
-                                alert('Error jumping to stage');
-                              }
-                            }}
-                            sx={{ 
-                              justifyContent: 'flex-start',
-                              fontSize: '0.75rem',
-                              py: 0.5
-                            }}
-                          >
-                            {isCurrent ? '✓ ' : '→ '}{stage.label}
-                          </Button>
-                        );
-                      })}
-                    </Box>
                   </Box>
                 </Box>
               )}

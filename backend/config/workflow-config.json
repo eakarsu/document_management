@@ -1,0 +1,15 @@
+{
+  "defaultWorkflowId": "opr-review-workflow",
+  "workflows": {
+    "opr-review-workflow": {
+      "name": "OPR Review Workflow (8 Stages)",
+      "description": "Complete 8-stage OPR document review workflow with multiple coordination rounds",
+      "isDefault": true,
+      "priority": 1
+    }
+  },
+  "settings": {
+    "autoSelectDefault": true,
+    "allowWorkflowOverride": false
+  }
+}

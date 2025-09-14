@@ -254,19 +254,22 @@ const LoginPage: React.FC = () => {
 
         <Divider sx={{ my: 3 }} />
 
-        {/* Workflow Test Users */}
+        {/* OPR Workflow Test Users */}
         <Card variant="outlined" sx={{ mt: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom color="primary">
-              🎯 Workflow Test Users
+              🎯 OPR Workflow Test Users
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Air Force Publication Workflow - Role-Based Access Control
+              8-Stage Air Force Document Review Workflow - Role-Based Access Control
             </Typography>
             <Stack spacing={2}>
               <Box>
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   📝 <strong>OPR (Office of Primary Responsibility):</strong> opr@demo.mil
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Can act on stages: 1, 3, 5, 7 (Initial Draft, Review & Revision, Final Revision, Pre-Publication)
                 </Typography>
                 <Button 
                   size="small" 
@@ -281,37 +284,28 @@ const LoginPage: React.FC = () => {
 
               <Box>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  🔄 <strong>ICU Reviewer:</strong> icu@demo.mil
+                  🤝 <strong>Coordinator:</strong> coordinator.test@af.mil
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Can act on stages: 2, 4 (First & Second Coordination Review)
                 </Typography>
                 <Button 
                   size="small" 
                   variant="outlined" 
-                  onClick={() => quickLogin('icu@demo.mil', 'password123')}
+                  onClick={() => quickLogin('coordinator.test@af.mil', 'password123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.75rem' }}
                 >
-                  Quick Login as ICU
-                </Button>
-              </Box>
-
-              <Box>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  ⚙️ <strong>Technical Reviewer:</strong> technical@demo.mil
-                </Typography>
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  onClick={() => quickLogin('technical@demo.mil', 'password123')}
-                  disabled={isLoading}
-                  sx={{ fontSize: '0.75rem' }}
-                >
-                  Quick Login as Technical
+                  Quick Login as Coordinator
                 </Button>
               </Box>
 
               <Box>
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   ⚖️ <strong>Legal Reviewer:</strong> legal@demo.mil
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Can act on stage: 6 (Legal Review & Approval)
                 </Typography>
                 <Button 
                   size="small" 
@@ -326,22 +320,28 @@ const LoginPage: React.FC = () => {
 
               <Box>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  📰 <strong>Publisher:</strong> publisher@demo.mil
+                  🏛️ <strong>AFDPO (Air Force Publishing Office):</strong> afdpo.analyst@demo.mil
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Can act on stage: 8 (AFDPO Publication Review)
                 </Typography>
                 <Button 
                   size="small" 
                   variant="outlined" 
-                  onClick={() => quickLogin('publisher@demo.mil', 'password123')}
+                  onClick={() => quickLogin('afdpo.analyst@demo.mil', 'password123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.75rem' }}
                 >
-                  Quick Login as Publisher
+                  Quick Login as AFDPO
                 </Button>
               </Box>
 
               <Box>
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   👑 <strong>Workflow Admin:</strong> admin@demo.mil
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Can override any stage (1-8) with red admin buttons
                 </Typography>
                 <Button 
                   size="small" 
@@ -355,9 +355,21 @@ const LoginPage: React.FC = () => {
                 </Button>
               </Box>
             </Stack>
+            
+            {/* Workflow Stages Info */}
+            <Box sx={{ mt: 2, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                🔄 OPR Workflow Stages:
+              </Typography>
+              <Typography variant="caption" display="block" sx={{ lineHeight: 1.4 }}>
+                1→ Initial Draft Preparation → 2→ First Coordination Review → 3→ OPR Review & Revision → 4→ Second Coordination Review → 
+                5→ OPR Final Revision → 6→ Legal Review & Approval → 7→ OPR Pre-Publication Review → 8→ AFDPO Publication Review (Complete)
+              </Typography>
+            </Box>
+            
             <Box sx={{ mt: 2, p: 1, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
               <Typography variant="caption" color="text.secondary">
-                💡 Each user has different role-based permissions and UI elements for the 8-stage Air Force publication workflow
+                💡 Each user sees different buttons and capabilities based on their role and current workflow stage
               </Typography>
             </Box>
           </CardContent>

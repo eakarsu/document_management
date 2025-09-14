@@ -1,0 +1,173 @@
+{
+  "id": "opr-review-workflow",
+  "name": "OPR Review Workflow (8 Stages)",
+  "description": "Complete 8-stage OPR document review workflow with multiple coordination rounds",
+  "version": "1.0.0",
+  "type": "opr-review",
+  "stages": [
+    {
+      "id": "1",
+      "name": "Initial Draft Preparation",
+      "type": "OPR_AUTHOR",
+      "order": 1,
+      "required": true,
+      "roles": ["OPR", "Admin"],
+      "actions": [
+        {
+          "id": "send-to-coordinators",
+          "label": "Submit for Coordination",
+          "target": "2"
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "name": "First Coordination Review",
+      "type": "COORDINATOR_REVIEW_1",
+      "order": 2,
+      "required": true,
+      "roles": ["Coordinator", "Admin"],
+      "actions": [
+        {
+          "id": "send-back-to-opr",
+          "label": "Return for Revision",
+          "target": "3"
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "name": "OPR Review & Revision",
+      "type": "OPR_REVIEW_1",
+      "order": 3,
+      "required": true,
+      "roles": ["OPR", "Admin"],
+      "actions": [
+        {
+          "id": "send-to-coordinators-2",
+          "label": "Submit for Second Coordination",
+          "target": "4"
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "name": "Second Coordination Review",
+      "type": "COORDINATOR_REVIEW_2",
+      "order": 4,
+      "required": true,
+      "roles": ["Coordinator", "Admin"],
+      "actions": [
+        {
+          "id": "send-back-to-opr-2",
+          "label": "Return for Revision",
+          "target": "5"
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "name": "OPR Final Revision",
+      "type": "OPR_REVIEW_2",
+      "order": 5,
+      "required": true,
+      "roles": ["OPR", "Admin"],
+      "actions": [
+        {
+          "id": "send-to-legal",
+          "label": "Submit for Legal Review",
+          "target": "6"
+        }
+      ]
+    },
+    {
+      "id": "6",
+      "name": "Legal Review & Approval",
+      "type": "LEGAL_REVIEW",
+      "order": 6,
+      "required": true,
+      "roles": ["Legal", "Admin"],
+      "actions": [
+        {
+          "id": "send-back-to-opr-3",
+          "label": "Return for Revision",
+          "target": "7"
+        }
+      ]
+    },
+    {
+      "id": "7",
+      "name": "OPR Pre-Publication Review",
+      "type": "OPR_FINAL",
+      "order": 7,
+      "required": true,
+      "roles": ["OPR", "Admin"],
+      "actions": [
+        {
+          "id": "send-to-afdpo",
+          "label": "Submit for Publication",
+          "target": "8"
+        }
+      ]
+    },
+    {
+      "id": "8",
+      "name": "AFDPO Publication Review",
+      "type": "AFDPO_FINAL",
+      "order": 8,
+      "required": true,
+      "roles": ["AFDPO", "Admin"],
+      "actions": []
+    }
+  ],
+  "transitions": [
+    {
+      "id": "t1",
+      "from": "1",
+      "to": "2",
+      "label": "Submit for Coordination"
+    },
+    {
+      "id": "t2",
+      "from": "2",
+      "to": "3",
+      "label": "Return for Revision"
+    },
+    {
+      "id": "t3",
+      "from": "3",
+      "to": "4",
+      "label": "Submit for Second Coordination"
+    },
+    {
+      "id": "t4",
+      "from": "4",
+      "to": "5",
+      "label": "Return for Revision"
+    },
+    {
+      "id": "t5",
+      "from": "5",
+      "to": "6",
+      "label": "Submit for Legal Review"
+    },
+    {
+      "id": "t6",
+      "from": "6",
+      "to": "7",
+      "label": "Return for Revision"
+    },
+    {
+      "id": "t7",
+      "from": "7",
+      "to": "8",
+      "label": "Submit for Publication"
+    }
+  ],
+  "settings": {
+    "allowSkip": false,
+    "requireComments": false,
+    "notifyOnStageChange": true,
+    "timeoutHours": 48
+  }
+}

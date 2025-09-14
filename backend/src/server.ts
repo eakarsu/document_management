@@ -32,6 +32,8 @@ import oprWorkflowFeedbackRouter from './routes/oprWorkflowFeedback';
 import exportRouter from './routes/export';
 import exportPerfectRouter from './routes/export-perfect';
 import aiDocumentGeneratorRouter from './routes/ai-document-generator';
+import workflowRouter from './routes/workflow';
+import workflowsRouter from './routes/workflows';
 import { DocumentService } from './services/DocumentService';
 import { AuthService } from './services/AuthService';
 import { SearchService } from './services/SearchService';
@@ -242,6 +244,12 @@ async function startServer() {
     
     // OPR Workflow Feedback routes (Stage 3 & 7 feedback)
     app.use('/api/opr-workflow-feedback', oprWorkflowFeedbackRouter);
+    
+    // Pluggable Workflow System routes
+    app.use('/api/workflow', workflowRouter);
+    
+    // Register JSON workflows route
+    app.use('/api', workflowsRouter);
 
     // ===== AUTHENTICATION ENDPOINTS =====
     

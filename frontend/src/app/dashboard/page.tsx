@@ -258,7 +258,7 @@ const DashboardPage: React.FC = () => {
   };
 
   const handleWorkflowBuilder = () => {
-    router.push('/workflow-builder-v2');
+    router.push('/workflow-builder');
   };
 
 

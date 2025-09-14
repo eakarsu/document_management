@@ -172,6 +172,7 @@ model Document {
   document_sections         document_sections[]
   versions                  DocumentVersion[]
   workflows                 DocumentWorkflow[]
+  jsonWorkflowInstances     JsonWorkflowInstance[]
   createdBy                 User                        @relation("DocumentCreator", fields: [createdById], references: [id])
   folder                    Folder?                     @relation(fields: [folderId], references: [id])
   organization              Organization                @relation(fields: [organizationId], references: [id])
@@ -294,6 +295,37 @@ model DocumentWorkflow {
   workflow    Workflow       @relation(fields: [workflowId], references: [id])
 
   @@map("document_workflows")
+}
+
+model JsonWorkflowInstance {
+  id              String                @id @default(cuid())
+  documentId      String
+  workflowId      String
+  currentStageId  String
+  isActive        Boolean               @default(true)
+  metadata        Json                  @default("{}")
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  completedAt     DateTime?
+  document        Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  history         JsonWorkflowHistory[]
+  
+  @@unique([documentId, isActive])
+  @@map("json_workflow_instances")
+}
+
+model JsonWorkflowHistory {
+  id                 String               @id @default(cuid())
+  workflowInstanceId String
+  stageId            String
+  stageName          String
+  action             String
+  performedBy        String
+  metadata           Json                 @default("{}")
+  createdAt          DateTime             @default(now())
+  workflowInstance   JsonWorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+  
+  @@map("json_workflow_history")
 }
 
 model WorkflowTask {
@@ -1097,6 +1129,58 @@ model SupplementalSection {
   createdBy           User      @relation(fields: [createdById], references: [id])
   
   @@map("supplemental_sections")
+}
+
+// Pluggable Workflow System Tables
+model WorkflowPlugin {
+  id                  String                @id @default(cuid())
+  name                String
+  version             String
+  description         String?
+  organization        String?
+  author              String?
+  config              Json                  // IWorkflowConfig
+  isActive            Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  
+  activations         WorkflowActivation[]
+  states              WorkflowState[]
+  
+  @@unique([name, version])
+  @@map("workflow_plugins")
+}
+
+model WorkflowActivation {
+  id                  String                @id @default(cuid())
+  documentType        String                @unique
+  pluginId            String
+  activatedAt         DateTime              @default(now())
+  activatedBy         String?
+  
+  plugin              WorkflowPlugin        @relation(fields: [pluginId], references: [id])
+  
+  @@map("workflow_activations")
+}
+
+model WorkflowState {
+  id                  String                @id @default(cuid())
+  documentId          String                @unique
+  workflowId          String
+  currentStage        String
+  previousStage       String?
+  status              String                // 'active' | 'completed' | 'cancelled' | 'suspended' | 'error'
+  startedAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  completedAt         DateTime?
+  data                Json                  @default("{}")
+  history             Json                  @default("[]")  // Array of IWorkflowHistory
+  
+  plugin              WorkflowPlugin        @relation(fields: [workflowId], references: [id])
+  
+  @@index([status])
+  @@index([workflowId])
+  @@map("workflow_states")
 }
 
 enum DocumentStatus {
