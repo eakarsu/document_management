@@ -21,7 +21,14 @@ import {
   Chip,
   Paper,
   Divider,
-  Avatar
+  Avatar,
+  Checkbox,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText
 } from '@mui/material';
 import {
   Business,
@@ -32,7 +39,8 @@ import {
   Upload as UploadIcon,
   Download as DownloadIcon,
   Edit as EditIcon,
-  Add as CreateIcon
+  Add as CreateIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 
@@ -57,6 +65,8 @@ const DocumentsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
 
   useEffect(() => {
     const fetchDocuments = async () => {
@@ -88,7 +98,64 @@ const DocumentsPage: React.FC = () => {
   });
 
   const handleDocumentClick = (documentId: string) => {
-    router.push(`/documents/${documentId}`);
+    // Only navigate if not selecting
+    if (selectedDocuments.size === 0) {
+      router.push(`/documents/${documentId}`);
+    }
+  };
+
+  const handleSelectDocument = (documentId: string) => {
+    const newSelected = new Set(selectedDocuments);
+    if (newSelected.has(documentId)) {
+      newSelected.delete(documentId);
+    } else {
+      newSelected.add(documentId);
+    }
+    setSelectedDocuments(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedDocuments.size === filteredDocuments.length) {
+      setSelectedDocuments(new Set());
+    } else {
+      const allIds = new Set(filteredDocuments.map(doc => doc.id));
+      setSelectedDocuments(allIds);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDocuments.size > 0) {
+      setBulkDeleteDialog(true);
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    try {
+      // Delete all selected documents from database
+      const deletePromises = Array.from(selectedDocuments).map(docId =>
+        fetch(`/api/documents/${docId}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        })
+      );
+
+      await Promise.all(deletePromises);
+
+      // Refresh documents list
+      const response = await fetch('/api/documents/search', {
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDocuments(data.documents || []);
+      }
+
+      setSelectedDocuments(new Set());
+      setBulkDeleteDialog(false);
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+    }
   };
 
   const handleDownload = async (documentId: string, title: string) => {
@@ -229,14 +296,69 @@ const DocumentsPage: React.FC = () => {
           </Paper>
         ) : (
           <Paper>
+            {/* Selection controls */}
+            {selectedDocuments.size > 0 && (
+              <Box sx={{ p: 2, bgcolor: 'grey.50', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Chip
+                    label={`${selectedDocuments.size} selected`}
+                    color="primary"
+                    size="small"
+                  />
+                  {filteredDocuments.length > 1 && (
+                    <Button
+                      size="small"
+                      onClick={handleSelectAll}
+                    >
+                      {selectedDocuments.size === filteredDocuments.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                  )}
+                </Box>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleBulkDelete}
+                >
+                  Delete Selected
+                </Button>
+              </Box>
+            )}
+            {/* Select all checkbox */}
+            {filteredDocuments.length > 1 && selectedDocuments.size === 0 && (
+              <Box sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
+                <Checkbox
+                  checked={false}
+                  onChange={handleSelectAll}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Select All
+                </Typography>
+              </Box>
+            )}
             <List>
               {filteredDocuments.map((doc, index) => (
                 <React.Fragment key={doc.id}>
                   <ListItem
                     button
                     onClick={() => handleDocumentClick(doc.id)}
-                    sx={{ py: 2 }}
+                    selected={selectedDocuments.has(doc.id)}
+                    sx={{
+                      py: 2,
+                      backgroundColor: selectedDocuments.has(doc.id) ? 'rgba(25, 118, 210, 0.08)' : 'transparent'
+                    }}
                   >
+                    <ListItemIcon>
+                      <Checkbox
+                        edge="start"
+                        checked={selectedDocuments.has(doc.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectDocument(doc.id);
+                        }}
+                      />
+                    </ListItemIcon>
                     <ListItemIcon>
                       <Avatar sx={{ bgcolor: 'primary.main' }}>
                         <DocumentIcon />
@@ -291,6 +413,28 @@ const DocumentsPage: React.FC = () => {
           </Paper>
         )}
       </Container>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog
+        open={bulkDeleteDialog}
+        onClose={() => setBulkDeleteDialog(false)}
+      >
+        <DialogTitle>Delete Multiple Documents</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to permanently delete {selectedDocuments.size} selected document{selectedDocuments.size > 1 ? 's' : ''}?
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkDeleteDialog(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={confirmBulkDelete} color="error" variant="contained">
+            Delete All
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

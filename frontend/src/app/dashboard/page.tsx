@@ -32,7 +32,9 @@ import {
   Tab,
   Badge,
   Collapse,
-  ListSubheader
+  ListSubheader,
+  Checkbox,
+  Alert
 } from '@mui/material';
 import {
   Description as DocumentIcon,
@@ -92,6 +94,8 @@ const DashboardPage: React.FC = () => {
     docId: '',
     docTitle: ''
   });
+  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -191,7 +195,29 @@ const DashboardPage: React.FC = () => {
   };
 
   const handleDocumentClick = (documentId: string) => {
-    router.push(`/documents/${documentId}`);
+    // Only navigate if not selecting
+    if (selectedDocuments.size === 0) {
+      router.push(`/documents/${documentId}`);
+    }
+  };
+
+  const handleSelectDocument = (documentId: string) => {
+    const newSelected = new Set(selectedDocuments);
+    if (newSelected.has(documentId)) {
+      newSelected.delete(documentId);
+    } else {
+      newSelected.add(documentId);
+    }
+    setSelectedDocuments(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedDocuments.size === dashboardData.recentDocuments.length) {
+      setSelectedDocuments(new Set());
+    } else {
+      const allIds = new Set(dashboardData.recentDocuments.map(doc => doc.id));
+      setSelectedDocuments(allIds);
+    }
   };
 
   const handleDeleteDocument = (documentId: string, documentTitle: string) => {
@@ -200,6 +226,12 @@ const DashboardPage: React.FC = () => {
       docId: documentId,
       docTitle: documentTitle
     });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDocuments.size > 0) {
+      setBulkDeleteDialog(true);
+    }
   };
 
   const confirmDelete = async () => {
@@ -247,6 +279,66 @@ const DashboardPage: React.FC = () => {
 
   const cancelDelete = () => {
     setDeleteDialog({ open: false, docId: '', docTitle: '' });
+  };
+
+  const confirmBulkDelete = async () => {
+    try {
+      // Delete all selected documents from database
+      const deletePromises = Array.from(selectedDocuments).map(async (docId) => {
+        try {
+          const response = await api.delete(`/api/documents/${docId}`);
+          if (!response.ok) {
+            console.error(`Failed to delete document ${docId}`);
+            return { success: false, docId };
+          }
+          return { success: true, docId };
+        } catch (error) {
+          console.error(`Error deleting document ${docId}:`, error);
+          return { success: false, docId };
+        }
+      });
+
+      const results = await Promise.all(deletePromises);
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      if (successCount > 0) {
+        console.log(`Successfully deleted ${successCount} document(s)`);
+      }
+      if (failCount > 0) {
+        console.error(`Failed to delete ${failCount} document(s)`);
+      }
+
+      // Refresh dashboard data after bulk deletion
+      const fetchDashboardData = async () => {
+        try {
+          const statsResponse = await api.get('/api/dashboard/stats');
+          const docsResponse = await api.get('/api/documents/search?limit=5');
+
+          if (statsResponse.ok && docsResponse.ok) {
+            const statsData = await statsResponse.json();
+            const docsData = await docsResponse.json();
+
+            const recentDocuments = docsData.documents || [];
+
+            setDashboardData({
+              totalDocuments: statsData.stats?.totalDocuments || 0,
+              totalUsers: statsData.stats?.totalUsers || 0,
+              recentDocuments: recentDocuments.slice(0, 5)
+            });
+          }
+        } catch (error) {
+          console.error('Failed to refresh dashboard data:', error);
+        }
+      };
+
+      await fetchDashboardData();
+      setSelectedDocuments(new Set());
+      setBulkDeleteDialog(false);
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      alert('An error occurred while deleting documents. Please try again.');
+    }
   };
 
   const handleAIWorkflow = () => {
@@ -394,22 +486,67 @@ const DashboardPage: React.FC = () => {
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Recent Documents
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  Recent Documents
+                </Typography>
+                {selectedDocuments.size > 0 && (
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Chip
+                      label={`${selectedDocuments.size} selected`}
+                      color="primary"
+                      size="small"
+                    />
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      startIcon={<DeleteIcon />}
+                      onClick={handleBulkDelete}
+                    >
+                      Delete Selected
+                    </Button>
+                  </Box>
+                )}
+              </Box>
               {dashboardData.recentDocuments.length > 0 ? (
-                <List>
+                <>
+                  {dashboardData.recentDocuments.length > 1 && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, pl: 2 }}>
+                      <Checkbox
+                        checked={selectedDocuments.size === dashboardData.recentDocuments.length}
+                        indeterminate={selectedDocuments.size > 0 && selectedDocuments.size < dashboardData.recentDocuments.length}
+                        onChange={handleSelectAll}
+                      />
+                      <Typography variant="body2" color="text.secondary">
+                        Select All
+                      </Typography>
+                    </Box>
+                  )}
+                  <List>
                   {dashboardData.recentDocuments.map((doc, index) => (
                     <React.Fragment key={doc.id}>
-                      <ListItem 
+                      <ListItem
                         button
                         onClick={() => handleDocumentClick(doc.id)}
-                        sx={{ 
-                          '&:hover': { 
-                            backgroundColor: 'rgba(0, 0, 0, 0.04)' 
-                          } 
+                        selected={selectedDocuments.has(doc.id)}
+                        sx={{
+                          '&:hover': {
+                            backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                          },
+                          backgroundColor: selectedDocuments.has(doc.id) ? 'rgba(25, 118, 210, 0.08)' : 'transparent'
                         }}
                       >
+                        <ListItemIcon>
+                          <Checkbox
+                            edge="start"
+                            checked={selectedDocuments.has(doc.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectDocument(doc.id);
+                            }}
+                          />
+                        </ListItemIcon>
                         <ListItemIcon>
                           <DocumentIcon />
                         </ListItemIcon>
@@ -441,6 +578,7 @@ const DashboardPage: React.FC = () => {
                     </React.Fragment>
                   ))}
                 </List>
+                </>
               ) : (
                 <Typography color="text.secondary" sx={{ py: 2 }}>
                   No documents found. Start by uploading your first document!
@@ -595,6 +733,28 @@ const DashboardPage: React.FC = () => {
           </Button>
           <Button onClick={confirmDelete} color="error" variant="contained">
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog
+        open={bulkDeleteDialog}
+        onClose={() => setBulkDeleteDialog(false)}
+      >
+        <DialogTitle>Delete Multiple Documents</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to permanently delete {selectedDocuments.size} selected document{selectedDocuments.size > 1 ? 's' : ''}?
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkDeleteDialog(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={confirmBulkDelete} color="error" variant="contained">
+            Delete All
           </Button>
         </DialogActions>
       </Dialog>

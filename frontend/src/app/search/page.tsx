@@ -29,7 +29,9 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  DialogContentText,
+  Checkbox
 } from '@mui/material';
 import {
   Business,
@@ -73,6 +75,8 @@ const SearchPage: React.FC = () => {
   const [results, setResults] = useState<Document[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
@@ -221,7 +225,56 @@ const SearchPage: React.FC = () => {
   };
 
   const handleDocumentClick = (documentId: string) => {
-    router.push(`/documents/${documentId}`);
+    // Only navigate if not selecting
+    if (selectedDocuments.size === 0) {
+      router.push(`/documents/${documentId}`);
+    }
+  };
+
+  const handleSelectDocument = (documentId: string) => {
+    const newSelected = new Set(selectedDocuments);
+    if (newSelected.has(documentId)) {
+      newSelected.delete(documentId);
+    } else {
+      newSelected.add(documentId);
+    }
+    setSelectedDocuments(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedDocuments.size === results.length) {
+      setSelectedDocuments(new Set());
+    } else {
+      const allIds = new Set(results.map(doc => doc.id));
+      setSelectedDocuments(allIds);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDocuments.size > 0) {
+      setBulkDeleteDialog(true);
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    try {
+      // Delete all selected documents from database
+      const deletePromises = Array.from(selectedDocuments).map(docId =>
+        fetch(`/api/documents/${docId}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        })
+      );
+
+      await Promise.all(deletePromises);
+
+      // Remove deleted documents from results
+      setResults(results.filter(doc => !selectedDocuments.has(doc.id)));
+      setSelectedDocuments(new Set());
+      setBulkDeleteDialog(false);
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+    }
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, doc: Document) => {
@@ -445,16 +498,52 @@ const SearchPage: React.FC = () => {
         {hasSearched && (
           <Paper>
             <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="h6">
-                {searchTerm ? `Search Results (${results.length})` : `All Documents (${results.length})`}
-              </Typography>
-              {searchTerm && (
-                <Typography variant="body2" color="text.secondary">
-                  Results for "{searchTerm}"
-                  {selectedCategory !== 'All' && ` in ${selectedCategory}`}
-                </Typography>
-              )}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="h6">
+                    {searchTerm ? `Search Results (${results.length})` : `All Documents (${results.length})`}
+                  </Typography>
+                  {searchTerm && (
+                    <Typography variant="body2" color="text.secondary">
+                      Results for "{searchTerm}"
+                      {selectedCategory !== 'All' && ` in ${selectedCategory}`}
+                    </Typography>
+                  )}
+                </Box>
+                {selectedDocuments.size > 0 && (
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Chip
+                      label={`${selectedDocuments.size} selected`}
+                      color="primary"
+                      size="small"
+                    />
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      startIcon={<DeleteIcon />}
+                      onClick={handleBulkDelete}
+                    >
+                      Delete Selected
+                    </Button>
+                  </Box>
+                )}
+              </Box>
             </Box>
+
+            {/* Select all checkbox */}
+            {results.length > 1 && (
+              <Box sx={{ px: 3, py: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
+                <Checkbox
+                  checked={selectedDocuments.size === results.length}
+                  indeterminate={selectedDocuments.size > 0 && selectedDocuments.size < results.length}
+                  onChange={handleSelectAll}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Select All
+                </Typography>
+              </Box>
+            )}
 
             {results.length === 0 ? (
               <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -477,7 +566,10 @@ const SearchPage: React.FC = () => {
                 {results.map((doc, index) => (
                   <React.Fragment key={doc.id}>
                     <ListItem
-                      sx={{ py: 2 }}
+                      sx={{
+                        py: 2,
+                        backgroundColor: selectedDocuments.has(doc.id) ? 'rgba(25, 118, 210, 0.08)' : 'transparent'
+                      }}
                       secondaryAction={
                         <IconButton
                           edge="end"
@@ -488,6 +580,16 @@ const SearchPage: React.FC = () => {
                         </IconButton>
                       }
                     >
+                      <ListItemIcon>
+                        <Checkbox
+                          edge="start"
+                          checked={selectedDocuments.has(doc.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectDocument(doc.id);
+                          }}
+                        />
+                      </ListItemIcon>
                       <ListItemButton
                         onClick={() => handleDocumentClick(doc.id)}
                         sx={{ mr: 6 }}
@@ -575,6 +677,28 @@ const SearchPage: React.FC = () => {
           </DialogActions>
         </Dialog>
       </Container>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog
+        open={bulkDeleteDialog}
+        onClose={() => setBulkDeleteDialog(false)}
+      >
+        <DialogTitle>Delete Multiple Documents</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to permanently delete {selectedDocuments.size} selected document{selectedDocuments.size > 1 ? 's' : ''}?
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkDeleteDialog(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={confirmBulkDelete} color="error" variant="contained">
+            Delete All
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
