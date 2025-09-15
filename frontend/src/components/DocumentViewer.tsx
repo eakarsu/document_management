@@ -14,9 +14,11 @@ import {
   Visibility as ViewIcon,
   Download as DownloadIcon,
   OpenInNew as OpenIcon,
-  FormatListNumbered
+  FormatListNumbered,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { api } from '../lib/api';
+import EnhancedDocumentEditor from './EnhancedDocumentEditor';
 
 interface DocumentViewerProps {
   documentId: string;
@@ -30,16 +32,18 @@ interface DocumentViewerProps {
   onDownload?: () => void;
 }
 
-const DocumentViewer: React.FC<DocumentViewerProps> = ({ 
-  documentId, 
-  document, 
-  onDownload 
+const DocumentViewer: React.FC<DocumentViewerProps> = ({
+  documentId,
+  document,
+  onDownload
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [content, setContent] = useState(document?.content || '');
 
-  // Use content directly from props if available
-  const htmlContent = document?.content || '';
+  // Use content directly from state or props
+  const htmlContent = content || document?.content || '';
 
   // Generate authenticated URLs for viewing - use frontend API proxy
   const getAuthenticatedUrl = async (endpoint: string): Promise<string> => {
@@ -164,7 +168,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       return html;
     };
 
-    // Render the HTML content directly (paragraph numbers are already embedded)
+    // Keep the full content including header and TOC for Air Force documents
+    // This ensures the display matches exactly what was generated
+
+    // Render the HTML content directly
     return (
       <Box 
         sx={{ 
@@ -192,6 +199,54 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           },
           '& [style*="margin-left: 100px"]': {
             marginLeft: '100px !important'
+          },
+          // Header formatting
+          '& div[style*="text-align: center"]': {
+            textAlign: 'center !important'
+          },
+          '& div[style*="font-weight: bold"]': {
+            fontWeight: 'bold !important'
+          },
+          '& div[style*="text-decoration: underline"]': {
+            textDecoration: 'underline !important'
+          },
+          '& div[style*="font-size: 18px"]': {
+            fontSize: '18px !important'
+          },
+          '& div[style*="font-size: 20px"]': {
+            fontSize: '20px !important'
+          },
+          '& div[style*="border: 2px solid black"]': {
+            border: '2px solid black !important',
+            padding: '10px !important',
+            margin: '20px auto !important',
+            width: '80% !important'
+          },
+          '& div[style*="border-bottom: 2px solid black"]': {
+            borderBottom: '2px solid black !important',
+            width: '60% !important',
+            margin: '20px auto !important'
+          },
+          // Table of Contents formatting
+          '& .toc-entry': {
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            margin: '8px 0'
+          },
+          '& .toc-title': {
+            flex: 1,
+            paddingRight: '10px'
+          },
+          '& .toc-dots': {
+            flex: 1,
+            borderBottom: '1px dotted #333',
+            margin: '0 5px',
+            minWidth: '50px'
+          },
+          '& .toc-page': {
+            whiteSpace: 'nowrap',
+            paddingLeft: '10px'
           }
         }}
         dangerouslySetInnerHTML={{ __html: extractContent(htmlContent) }}
@@ -237,13 +292,22 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       {/* Action Buttons */}
       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mb: 3 }}>
         <Button
+          variant={editMode ? "contained" : "outlined"}
+          startIcon={<EditIcon />}
+          onClick={() => setEditMode(!editMode)}
+          color="primary"
+        >
+          {editMode ? 'View Mode' : 'Edit Mode'}
+        </Button>
+
+        <Button
           variant="outlined"
           startIcon={<OpenIcon />}
           onClick={handleViewInNewTab}
         >
           Open in New Tab
         </Button>
-        
+
         <Button
           variant="outlined"
           startIcon={<DownloadIcon />}
@@ -260,8 +324,17 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
         </Alert>
       )}
 
-      {/* Document Viewer - Always show inline */}
-      {renderInlineViewer()}
+      {/* Document Viewer - Show editor or viewer based on mode */}
+      {editMode ? (
+        <EnhancedDocumentEditor
+          documentId={documentId}
+          content={htmlContent}
+          onContentChange={(newContent) => setContent(newContent)}
+          readOnly={false}
+        />
+      ) : (
+        renderInlineViewer()
+      )}
     </Paper>
   );
 };

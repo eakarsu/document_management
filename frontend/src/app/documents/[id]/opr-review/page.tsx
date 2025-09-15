@@ -1080,12 +1080,12 @@ const OPRReviewPage = () => {
                   <>
                     {/* Display Air Force header if it exists */}
                     {documentData?.customFields?.headerHtml && (
-                      <Box 
+                      <Box
                         sx={{ mb: 3 }}
                         dangerouslySetInnerHTML={{ __html: documentData.customFields.headerHtml }}
                       />
                     )}
-                    
+
                     <DocumentNumbering
                       content={editableContent}
                       enableLineNumbers={showLineNumbers}

@@ -237,19 +237,23 @@ function extractParagraphsWithNumbers(content: string, pages: number = 5): any[]
   if (contentStartIndex === -1) contentStartIndex = 0;
   
   // Match editor's page/line calculation
-  const LINES_PER_PAGE = 50; // Same as editor
-  const CHARS_PER_LINE = 80; // Same as editor
+  // Adjusted for more accurate Air Force document format
+  const LINES_PER_PAGE = 45; // Slightly less to account for margins/headers
+  const CHARS_PER_LINE = 75; // Slightly less to account for formatting
   
   // Parse the HTML to extract structured content - works with ANY numbering scheme
   const sectionRegex = /<h[2-6][^>]*>([^<]+)<\/h[2-6]>/gi;
   const paragraphRegex = /<p[^>]*>([^<]+)<\/p>/gi;
   
-  let currentPage = 1; // Start at page 1
-  let globalLineCounter = 1; // Start at line 1 (header is displayed separately, not counted)
+  // Account for header and TOC pages
+  // Header typically takes page 1, TOC takes page 2 (sometimes more)
+  // Actual content starts on page 3 or later
+  let currentPage = 3; // Start at page 3 (after header and TOC)
+  let globalLineCounter = 1; // Start at line 1 for the actual content
   let linesOnCurrentPage = 0;
-  
-  // DO NOT count header lines - the header is displayed separately above the DocumentNumbering component
-  // The line numbers in DocumentNumbering start at 1 for the actual content (after header)
+
+  // The header and TOC are displayed before the actual content
+  // So the first paragraph of actual content is on page 3 or later
   
   // First pass: extract all sections - parse ANY format
   const sections: any[] = [];
@@ -434,11 +438,11 @@ function generateAIFeedback(content: string, feedbackCount: number = 10, pages: 
     const originalPhrase = words.slice(startWord, startWord + 8).join(' ');
     
     // Calculate which line within the paragraph this phrase appears on
-    // Estimate based on word position (assuming ~10-12 words per line)
+    // For Air Force documents, typical formatting is ~12-15 words per line
     const WORDS_PER_LINE = 12;
     const lineOffset = Math.floor(startWord / WORDS_PER_LINE);
-    // Subtract 1 to match editor's 0-based internal counting that displays as 1-based
-    const actualLineNumber = Math.max(1, item.line + lineOffset - 1);
+    // The item.line is where the paragraph starts, add the offset for phrase position
+    const actualLineNumber = item.line + lineOffset;
     
     // Generate improved version based on type
     let improvedPhrase = originalPhrase;
@@ -606,6 +610,184 @@ function generateAIFeedback(content: string, feedbackCount: number = 10, pages: 
   return feedback;
 }
 
+// Generate Table of Contents from document content
+function generateTableOfContents(content: string): string {
+  const sections: Array<{title: string, number: string, page: number}> = [];
+
+  // Extract headers from content
+  const headerRegex = /<h[2-6][^>]*>([^<]+)<\/h[2-6]>/gi;
+  let match;
+
+  // Start at page 3 since header is page 1, TOC is page 2
+  // Content sections begin on page 3
+  let pageNum = 3;
+  let lastPosition = 0;
+
+  while ((match = headerRegex.exec(content)) !== null) {
+    const headerText = match[1].trim();
+    // Extract section number if present
+    const numberMatch = headerText.match(/^([\d.]+)\s+(.+)/);
+    if (numberMatch) {
+      // Estimate page based on position in content
+      // More accurate: ~2500 characters per page for Air Force documents
+      const pageIncrement = Math.floor((match.index - lastPosition) / 2500);
+      pageNum += pageIncrement;
+      lastPosition = match.index;
+
+      sections.push({
+        number: numberMatch[1],
+        title: numberMatch[2],
+        page: pageNum
+      });
+    }
+  }
+
+  let tocHtml = `
+  <div class="toc-section">
+    <h2 class="toc-title">TABLE OF CONTENTS</h2>
+    <div style="margin: 2rem 0;">`;
+
+  sections.forEach(section => {
+    const indent = (section.number.split('.').length - 1) * 20;
+    tocHtml += `
+      <div class="toc-entry" style="margin-left: ${indent}px;">
+        <span>${section.number} ${section.title}</span>
+        <span class="toc-dots"></span>
+        <span>${section.page}</span>
+      </div>`;
+  });
+
+  tocHtml += `
+    </div>
+  </div>
+  <div style="page-break-after: always;"></div>`;
+
+  return tocHtml;
+}
+
+// Generate References Section
+function generateReferencesSection(template: string): string {
+  const references = [
+    'DoD Directive 5000.01, "The Defense Acquisition System," September 9, 2020',
+    'DoD Instruction 5000.02, "Operation of the Adaptive Acquisition Framework," January 23, 2020',
+    'AFI 33-360, "Publications and Forms Management," December 7, 2018',
+    'AFMAN 33-363, "Management of Records," March 1, 2008',
+    'DAFI 90-160, "Publications and Forms Management," April 14, 2022',
+    'Federal Records Act, 44 U.S.C. Chapters 29, 31, and 33',
+    'Privacy Act of 1974, 5 U.S.C. 552a',
+    'Freedom of Information Act (FOIA), 5 U.S.C. 552'
+  ];
+
+  let referencesHtml = `
+  <div style="page-break-before: always; margin-top: 2rem;">
+    <h2>REFERENCES</h2>
+    <ol style="margin-left: 20px;">`;
+
+  references.forEach(ref => {
+    referencesHtml += `<li style="margin-bottom: 0.5rem;">${ref}</li>`;
+  });
+
+  referencesHtml += `</ol></div>`;
+  return referencesHtml;
+}
+
+// Generate Glossary/Acronyms Section
+function generateGlossarySection(template: string): string {
+  const glossary = [
+    { term: 'AFI', definition: 'Air Force Instruction' },
+    { term: 'AFMAN', definition: 'Air Force Manual' },
+    { term: 'AFPD', definition: 'Air Force Policy Directive' },
+    { term: 'DAFI', definition: 'Department of the Air Force Instruction' },
+    { term: 'DoD', definition: 'Department of Defense' },
+    { term: 'DSN', definition: 'Defense Switched Network' },
+    { term: 'IAW', definition: 'In Accordance With' },
+    { term: 'OPR', definition: 'Office of Primary Responsibility' },
+    { term: 'OCR', definition: 'Office of Collateral Responsibility' },
+    { term: 'POC', definition: 'Point of Contact' },
+    { term: 'RDS', definition: 'Records Disposition Schedule' },
+    { term: 'SECAF', definition: 'Secretary of the Air Force' }
+  ];
+
+  let glossaryHtml = `
+  <div style="page-break-before: always; margin-top: 2rem;">
+    <h2>GLOSSARY OF TERMS AND ACRONYMS</h2>
+    <dl style="margin-left: 20px;">`;
+
+  glossary.forEach(item => {
+    glossaryHtml += `
+      <dt style="font-weight: bold; margin-top: 0.5rem;">${item.term}</dt>
+      <dd style="margin-left: 20px; margin-bottom: 0.5rem;">${item.definition}</dd>`;
+  });
+
+  glossaryHtml += `</dl></div>`;
+  return glossaryHtml;
+}
+
+// Generate Attachments/Enclosures Section
+function generateAttachmentsSection(): string {
+  return `
+  <div style="page-break-before: always; margin-top: 2rem;">
+    <h2>ATTACHMENTS</h2>
+    <ol style="margin-left: 20px;">
+      <li>Attachment 1: Implementation Timeline</li>
+      <li>Attachment 2: Compliance Checklist</li>
+      <li>Attachment 3: Process Flow Diagram</li>
+      <li>Attachment 4: Roles and Responsibilities Matrix</li>
+    </ol>
+  </div>`;
+}
+
+// Generate Distribution List
+function generateDistributionList(template: string): string {
+  return `
+  <div style="page-break-before: always; margin-top: 2rem;">
+    <h2>DISTRIBUTION LIST</h2>
+    <div style="margin-left: 20px;">
+      <h3>ACTION ADDRESSEES:</h3>
+      <ul>
+        <li>All Major Commands (MAJCOM)</li>
+        <li>All Field Commands</li>
+        <li>All Direct Reporting Units (DRU)</li>
+      </ul>
+
+      <h3>INFORMATION ADDRESSEES:</h3>
+      <ul>
+        <li>Air National Guard (ANG)</li>
+        <li>Air Force Reserve Command (AFRC)</li>
+        <li>Air Force Space Command (AFSPC)</li>
+      </ul>
+
+      <h3>COPIES FURNISHED TO:</h3>
+      <ul>
+        <li>Office of the Secretary of Defense</li>
+        <li>Joint Chiefs of Staff</li>
+        <li>Department of the Army</li>
+        <li>Department of the Navy</li>
+      </ul>
+    </div>
+  </div>`;
+}
+
+// Add portion markings to paragraphs based on classification
+function addPortionMarkings(content: string, classification: string): string {
+  if (classification === 'UNCLASSIFIED') {
+    return content;
+  }
+
+  const marking = classification === 'SECRET' ? '(S)' :
+                  classification === 'TOP SECRET' ? '(TS)' :
+                  classification === 'CONFIDENTIAL' ? '(C)' : '(U)';
+
+  // Add marking to each paragraph
+  content = content.replace(/<p([^>]*)>(\d+\.[\d.]*\s*)/g, (match, attrs, numbering) => {
+    // Randomly assign some paragraphs different classification levels
+    const randomMarking = Math.random() > 0.8 ? '(U)' : marking;
+    return `<p${attrs}><span class="portion-marking">${randomMarking}</span> ${numbering}`;
+  });
+
+  return content;
+}
+
 // Generate document content with deep nesting
 async function generateAIDocument(template: string, pages: number, feedbackCount: number, customSealImage?: string, customHeaderData?: any): Promise<{
   content: string;
@@ -621,6 +803,9 @@ async function generateAIDocument(template: string, pages: number, feedbackCount
   };
 
   const deepStructurePrompt = `
+IMPORTANT: DO NOT include any document headers, table of contents, or title pages - these will be added automatically by the system.
+Start your response directly with the first section (e.g., <h2>1. First Section</h2>).
+
 CRITICAL: Create a document with DEEP HIERARCHICAL STRUCTURE using the following numbering system WITH PROPER INDENTATION:
 - Level 1: <h2>1. Main Section</h2> (no indent)
 - Level 2: <h3 style="margin-left: 20px;">1.1 Subsection</h3> (20px indent)
@@ -635,21 +820,56 @@ LENGTH REQUIREMENTS - CRITICAL:
 - If generating 10 pages, you MUST produce at least 6,500 words
 - Continue adding sections and content until you reach the required word count
 
-PARAGRAPH NUMBERING REQUIREMENTS:
-- EACH SECTION (including subsections like "1.1.1.2 Session Handling") MUST have 2-3 numbered paragraphs
-- For a section numbered 1.1.1.2, the paragraphs should be:
-  - 1.1.1.2.1. First paragraph (80-120 words)
-  - 1.1.1.2.2. Second paragraph (80-120 words)  
-  - 1.1.1.2.3. Third paragraph (80-120 words)
-- Format: <p style="margin-left: XXpx;">1.1.1.2.1. [Paragraph content here...]</p>
+PARAGRAPH NUMBERING AND HTML STRUCTURE:
+- EACH SECTION (including subsections) MUST have 2-3 numbered paragraphs
+- CRITICAL: Paragraphs must be indented 20px MORE than their parent heading
+
+EXAMPLE HTML STRUCTURE:
+For section 1 "Main Section" (Level 1):
+<h2>1. Main Section Title</h2>
+<p style="margin-left: 20px;">1.1. First paragraph content here (80-120 words)...</p>
+<p style="margin-left: 20px;">1.2. Second paragraph content here (80-120 words)...</p>
+
+For section 1.1 "Subsection" (Level 2):
+<h3 style="margin-left: 20px;">1.1 Subsection Title</h3>
+<p style="margin-left: 40px;">1.1.1. First paragraph content here (80-120 words)...</p>
+<p style="margin-left: 40px;">1.1.2. Second paragraph content here (80-120 words)...</p>
+
+For section 1.1.1 "Sub-subsection" (Level 3):
+<h4 style="margin-left: 40px;">1.1.1 Sub-subsection Title</h4>
+<p style="margin-left: 60px;">1.1.1.1. First paragraph content here (80-120 words)...</p>
+<p style="margin-left: 60px;">1.1.1.2. Second paragraph content here (80-120 words)...</p>
+
+For section 1.1.1.1 "Detail Level" (Level 4):
+<h5 style="margin-left: 60px;">1.1.1.1 Detail Level Title</h5>
+<p style="margin-left: 80px;">1.1.1.1.1. First paragraph content here (80-120 words)...</p>
+<p style="margin-left: 80px;">1.1.1.1.2. Second paragraph content here (80-120 words)...</p>
+
+For section 1.1.1.1.1 "Fine Detail" (Level 5):
+<h6 style="margin-left: 80px;">1.1.1.1.1 Fine Detail Title</h6>
+<p style="margin-left: 100px;">1.1.1.1.1.1. First paragraph content here (80-120 words)...</p>
+<p style="margin-left: 100px;">1.1.1.1.1.2. Second paragraph content here (80-120 words)...</p>
+
 - The paragraph number should be at the START of the paragraph text
 - Include a period and space after the paragraph number
 - CRITICAL: Each paragraph MUST be at least 80 words (4-6 sentences)
 
 INDENTATION REQUIREMENTS:
 - Each deeper level MUST be indented 20px more than its parent
-- Paragraphs following each heading must have the SAME indentation as their heading
-- Use inline style="margin-left: XXpx;" for indentation
+- CRITICAL: Paragraphs following each heading must be indented 20px MORE than their heading
+- Example: If heading 1.1.1 has margin-left: 40px, its paragraphs (1.1.1.1, 1.1.1.2) must have margin-left: 60px
+- Use inline style="margin-left: XXpx;" for both headings and paragraphs
+- Indentation formula:
+  - Level 1 heading (1.): margin-left: 0px
+  - Level 1 paragraphs (1.1., 1.2.): margin-left: 20px
+  - Level 2 heading (1.1): margin-left: 20px
+  - Level 2 paragraphs (1.1.1., 1.1.2.): margin-left: 40px
+  - Level 3 heading (1.1.1): margin-left: 40px
+  - Level 3 paragraphs (1.1.1.1., 1.1.1.2.): margin-left: 60px
+  - Level 4 heading (1.1.1.1): margin-left: 60px
+  - Level 4 paragraphs (1.1.1.1.1., 1.1.1.1.2.): margin-left: 80px
+  - Level 5 heading (1.1.1.1.1): margin-left: 80px
+  - Level 5 paragraphs (1.1.1.1.1.1., 1.1.1.1.1.2.): margin-left: 100px
 
 STRUCTURE REQUIREMENTS:
 1. Each main section (1, 2, 3) must have at least 2-3 subsections (1.1, 1.2, 1.3)
@@ -680,10 +900,12 @@ PARAGRAPH CONTENT REQUIREMENTS:
 ${deepStructurePrompt}
 
 SPECIFIC REQUIREMENTS FOR AIR FORCE MANUAL:
-- DO NOT include the header (BY ORDER OF..., AFI title, etc.) - this will be added automatically
-- Start directly with the main content sections
+- DO NOT include the Air Force header - it will be added automatically
+- DO NOT include a TABLE OF CONTENTS section - it will be generated automatically
+- Start directly with the main content sections (1. Section Title, etc.)
+- The header and TOC will be added by the system and counted in page numbering
 - Use hierarchical numbering with appropriate depth (1, 1.1, 1.1.1, 1.1.1.1, etc.)
-- Maximum depth should be 4 levels (e.g., 1.1.1.1) for standard Air Force documents
+- Maximum depth should be 5 levels (e.g., 1.1.1.1.1) for standard Air Force documents
 - Let the AI determine appropriate section titles and structure based on the topic
 
 - Use military terminology and formal language
@@ -692,7 +914,8 @@ SPECIFIC REQUIREMENTS FOR AIR FORCE MANUAL:
 - Include "Note:", "WARNING:", and "CAUTION:" statements
 - Each paragraph MUST be 4-6 sentences (80-120 words)
 - CRITICAL: EVERY <p> tag MUST include style="margin-bottom: 1.5em; line-height: 1.8;"
-- CRITICAL: Indented <p> tags need style="margin-left: XXpx; margin-bottom: 1.5em; line-height: 1.8;"
+- CRITICAL: Paragraph <p> tags must be indented 20px MORE than their heading
+- Example: If <h4 style="margin-left: 40px;">1.1.1 Title</h4>, then <p style="margin-left: 60px; margin-bottom: 1.5em; line-height: 1.8;">1.1.1.1. Content...</p>
 - Write comprehensive, detailed paragraphs that fully explain each topic
 - Include specific procedures, requirements, and examples in each paragraph
 - Each page should have approximately 600-700 words
@@ -710,7 +933,8 @@ SPECIFIC REQUIREMENTS:
 - Include code snippets in <pre><code> blocks at deeper levels
 - Each paragraph MUST be 4-6 sentences (80-120 words)
 - CRITICAL: EVERY <p> tag MUST include style="margin-bottom: 1.5em; line-height: 1.8;"
-- CRITICAL: Indented <p> tags need style="margin-left: XXpx; margin-bottom: 1.5em; line-height: 1.8;"
+- CRITICAL: Paragraph <p> tags must be indented 20px MORE than their heading
+- Example: If <h4 style="margin-left: 40px;">1.1.1 Title</h4>, then <p style="margin-left: 60px; margin-bottom: 1.5em; line-height: 1.8;">1.1.1.1. Content...</p>
 - Provide detailed technical explanations with examples`,
 
     policy: `Generate exactly ${pages} pages of organizational policy with DEEP HIERARCHICAL STRUCTURE.
@@ -923,14 +1147,21 @@ SPECIFIC REQUIREMENTS:
     const messages = [
       {
         role: 'system',
-        content: `You are an expert technical writer for the US Air Force. Generate well-structured technical documentation with deep hierarchical numbering following military standards. 
-        
-CRITICAL LENGTH REQUIREMENT: You MUST generate exactly ${pages} pages of content. Each page needs 600-700 words. Total minimum: ${pages * 650} words (not characters). 
+        content: `You are an expert technical writer for the US Air Force. Generate well-structured technical documentation with deep hierarchical numbering following military standards.
+
+CRITICAL LENGTH REQUIREMENT: You MUST generate exactly ${pages} pages of content. Each page needs 600-700 words. Total minimum: ${pages * 650} words (not characters). DO NOT include any header or table of contents - these will be added automatically by the system. 
 
 For a 10-page document, you MUST produce at least 6,500 words.
 For a 5-page document, you MUST produce at least 3,250 words.
 
-Continue adding sections and detailed paragraphs until you reach the required word count. Every paragraph MUST start with its paragraph number (e.g., "1.1.1.2.1. ") and each section must have 2-3 numbered paragraphs of at least 80-120 words each.`
+Continue adding sections and detailed paragraphs until you reach the required word count.
+
+CRITICAL PARAGRAPH NUMBERING RULE:
+- Paragraph numbers are ONE LEVEL DEEPER than their heading
+- If heading is 1.1.1.1.1 (5 levels), paragraphs are 1.1.1.1.1.1, 1.1.1.1.1.2 (6 levels)
+- If heading is 1.1.1.1 (4 levels), paragraphs are 1.1.1.1.1, 1.1.1.1.2 (5 levels)
+- NEVER use the same depth for paragraph numbers as the heading number
+- Each section must have 2-3 numbered paragraphs of at least 80-120 words each.`
       },
       {
         role: 'user',
@@ -986,10 +1217,7 @@ Continue adding sections and detailed paragraphs until you reach the required wo
     
     const title = titles[template] || 'Document';
     
-    // Ensure proper HTML structure
-    if (!cleanedContent.includes('<h1>')) {
-      cleanedContent = `<h1>${title}</h1>\n${cleanedContent}`;
-    }
+    // Don't add H1 title - let AI's content be used as-is
     
     // Generate Air Force header for ALL templates
     let afHeader = '';
@@ -1049,11 +1277,59 @@ Continue adding sections and detailed paragraphs until you reach the required wo
       certifiedBy: customHeaderData?.certifiedBy || 'SF/S5/8',
       certifiedByName: customHeaderData?.certifiedByName || '(Lt Gen Philip Garrant)',
       supersedes: customHeaderData?.supersedes || '',
-      pages: customHeaderData?.totalPages || pages
+      pages: customHeaderData?.totalPages || pages,
+      // New metadata elements
+      classification: customHeaderData?.classification || 'UNCLASSIFIED',
+      distributionStatement: customHeaderData?.distributionStatement || 'DISTRIBUTION STATEMENT A: Approved for public release; distribution unlimited',
+      changeNumber: customHeaderData?.changeNumber || '',
+      versionNumber: customHeaderData?.versionNumber || '1.0',
+      effectiveDate: customHeaderData?.effectiveDate || new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase(),
+      reviewDate: customHeaderData?.reviewDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase(),
+      pocName: customHeaderData?.pocName || 'Lt Col Smith, John A.',
+      pocDSN: customHeaderData?.pocDSN || '555-1234',
+      pocCommercial: customHeaderData?.pocCommercial || '(555) 555-1234',
+      pocEmail: customHeaderData?.pocEmail || 'john.a.smith@us.af.mil'
     };
     
     // Add styles and header HTML - matching official Air Force document layout
     afHeader = `<style>
+  .classification-header {
+    text-align: center;
+    font-weight: bold;
+    font-size: 12pt;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background-color: ${headerConfig.classification === 'SECRET' ? '#FFD700' :
+                        headerConfig.classification === 'TOP SECRET' ? '#FF6B6B' :
+                        headerConfig.classification === 'CONFIDENTIAL' ? '#87CEEB' : '#F0F0F0'};
+    color: ${headerConfig.classification === 'UNCLASSIFIED' ? '#000' : '#000'};
+    border: 2px solid #000;
+  }
+
+  .classification-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-weight: bold;
+    font-size: 10pt;
+    padding: 0.25rem;
+    background-color: white;
+    border-top: 1px solid #000;
+  }
+
+  .page-footer {
+    position: fixed;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 1in;
+    font-size: 10pt;
+  }
+
   .air-force-document-header {
     font-family: 'Times New Roman', serif;
     width: 100%;
@@ -1245,7 +1521,48 @@ Continue adding sections and detailed paragraphs until you reach the required wo
     margin-bottom: 10px;
     text-align: justify;
   }
+
+  .toc-section {
+    page-break-after: always;
+    margin-bottom: 2rem;
+  }
+
+  .toc-title {
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .toc-entry {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  .toc-dots {
+    flex: 1;
+    border-bottom: 1px dotted #000;
+    margin: 0 0.5rem;
+  }
+
+  .change-bar {
+    border-left: 3px solid #FF0000;
+    padding-left: 10px;
+    margin-left: -13px;
+  }
+
+  .portion-marking {
+    font-weight: bold;
+    color: #0066CC;
+  }
 </style>
+
+<!-- Classification Header -->
+<div class="classification-header">
+  ${headerConfig.classification}
+</div>
+
 <div class="air-force-document-header">
   <div class="header-top">
     <div class="header-left">
@@ -1259,23 +1576,45 @@ Continue adding sections and detailed paragraphs until you reach the required wo
       <div class="date">${headerConfig.documentDate}</div>
       <div class="subject">${headerConfig.subject}</div>
       <div class="category">${headerConfig.category}</div>
+      ${headerConfig.changeNumber ? `<div style="font-size: 10pt; color: red;">CHANGE ${headerConfig.changeNumber}</div>` : ''}
+      ${headerConfig.versionNumber ? `<div style="font-size: 10pt;">Version ${headerConfig.versionNumber}</div>` : ''}
     </div>
   </div>
-  
+
   <div class="compliance">
     ${headerConfig.compliance}
   </div>
-  
+
+  <div class="info-section">
+    <span class="section-label">DISTRIBUTION:</span>
+    <span class="section-content">${headerConfig.distributionStatement}</span>
+  </div>
+
   <div class="info-section">
     <span class="section-label">ACCESSIBILITY:</span>
     <span class="section-content">${headerConfig.accessibility} <a href="${headerConfig.accessibilityUrl}" style="color: #0066CC;">${headerConfig.accessibilityUrl}</a>.</span>
   </div>
-  
+
   <div class="info-section">
     <span class="section-label">RELEASABILITY:</span>
     <span class="section-content">${headerConfig.releasability}</span>
   </div>
+
+  <div class="info-section">
+    <span class="section-label">EFFECTIVE DATE:</span>
+    <span class="section-content">${headerConfig.effectiveDate}</span>
+    <span style="margin-left: 2rem;"><strong>REVIEW DATE:</strong> ${headerConfig.reviewDate}</span>
+  </div>
   
+  <div class="info-section">
+    <span class="section-label">POC:</span>
+    <span class="section-content">
+      ${headerConfig.pocName}<br />
+      DSN: ${headerConfig.pocDSN} | Commercial: ${headerConfig.pocCommercial}<br />
+      Email: ${headerConfig.pocEmail}
+    </span>
+  </div>
+
   <div class="footer-section">
     <div class="opr">
       <span class="section-label">OPR:</span> ${headerConfig.opr}
@@ -1294,8 +1633,39 @@ Continue adding sections and detailed paragraphs until you reach the required wo
     <span class="pages">Pages: ${headerConfig.pages}</span>
   </div>`}
 </div>
+
+<!-- Page Footer Template -->
+<div class="page-footer" style="display: none;">
+  <span>${headerConfig.documentType}</span>
+  <span>${headerConfig.effectiveDate}</span>
+  <span>Page <span class="page-number">1</span> of ${headerConfig.pages}</span>
+</div>
+
+<!-- Classification Footer -->
+<div class="classification-footer">
+  ${headerConfig.classification}
+</div>
 `;
-    cleanedContent = afHeader + cleanedContent;
+    // Generate Table of Contents
+    const tocHtml = generateTableOfContents(cleanedContent);
+
+    // Generate References Section
+    const referencesHtml = generateReferencesSection(template);
+
+    // Generate Glossary/Acronyms
+    const glossaryHtml = generateGlossarySection(template);
+
+    // Generate Attachments/Enclosures
+    const attachmentsHtml = generateAttachmentsSection();
+
+    // Generate Distribution List
+    const distributionHtml = generateDistributionList(template);
+
+    // Add portion markings to paragraphs
+    cleanedContent = addPortionMarkings(cleanedContent, headerConfig.classification);
+
+    // Assemble final document
+    cleanedContent = afHeader + tocHtml + cleanedContent + referencesHtml + glossaryHtml + attachmentsHtml + distributionHtml;
     
     // Generate AI-based OPR feedback using actual document content
     const oprFeedback = generateAIFeedback(cleanedContent, feedbackCount, pages);
@@ -1378,11 +1748,38 @@ router.post('/', async (req: Request, res: Response) => {
           classification: 'UNCLASSIFIED',
           content: content,
           htmlContent: content,
-          editableContent: content.includes('air-force-document-header') ? 
-            content.substring(content.indexOf('</div>\n<h1')) : content, // Remove header for editor if exists
+          editableContent: (() => {
+            // Find where the actual document content starts (after header and TOC)
+            if (content.includes('air-force-document-header')) {
+              // Look for the end of TOC section (page-break-after div)
+              const tocEndMatch = content.match(/<div style="page-break-after: always;"><\/div>/);
+              if (tocEndMatch && tocEndMatch.index !== undefined) {
+                return content.substring(tocEndMatch.index + tocEndMatch[0].length);
+              }
+              // Fallback: find first h2 tag (main content section)
+              const firstH2 = content.indexOf('<h2');
+              if (firstH2 !== -1) {
+                return content.substring(firstH2);
+              }
+            }
+            return content;
+          })(),
           plainText: content.replace(/<[^>]*>/g, ''), // Plain text version
-          headerHtml: content.includes('air-force-document-header') ? 
-            content.substring(0, content.indexOf('</div>\n<h1')) : '',
+          headerHtml: (() => {
+            if (content.includes('air-force-document-header')) {
+              // Extract everything up to the end of TOC
+              const tocEndMatch = content.match(/<div style="page-break-after: always;"><\/div>/);
+              if (tocEndMatch && tocEndMatch.index !== undefined) {
+                return content.substring(0, tocEndMatch.index + tocEndMatch[0].length);
+              }
+              // Fallback: extract up to first h2
+              const firstH2 = content.indexOf('<h2');
+              if (firstH2 !== -1) {
+                return content.substring(0, firstH2);
+              }
+            }
+            return '';
+          })(),
           hasCustomHeader: content.includes('air-force-document-header'),
           documentStyles: `
             <style>

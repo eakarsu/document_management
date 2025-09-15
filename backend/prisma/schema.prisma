@@ -68,6 +68,7 @@ model User {
   assignedTasks                                                    WorkflowTask[]                @relation("TaskAssignee")
   createdTasks                                                     WorkflowTask[]                @relation("TaskCreator")
   supplementalSections                                             SupplementalSection[]
+  uploadedAttachments                                              Attachment[]
 
   @@map("users")
 }
@@ -181,6 +182,7 @@ model Document {
   sequential_workflows      sequential_workflows?
   workflow_instances        workflow_instances[]
   supplementalSections      SupplementalSection[]
+  attachments               Attachment[]
 
   @@map("documents")
 }
@@ -1129,6 +1131,32 @@ model SupplementalSection {
   createdBy           User      @relation(fields: [createdById], references: [id])
   
   @@map("supplemental_sections")
+}
+
+model Attachment {
+  id              String   @id @default(cuid())
+  documentId      String
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  // File information
+  fileName        String
+  originalName    String
+  mimeType        String
+  fileSize        Int
+  storagePath     String
+  storageProvider String   @default("minio")
+
+  // Metadata
+  description     String?
+  attachmentType  String?  // 'REFERENCE', 'SUPPORTING', 'APPENDIX', 'FORM', 'IMAGE'
+  attachmentOrder Int?     // For ordering attachments
+
+  // Upload information
+  uploadedAt      DateTime @default(now())
+  uploadedById    String
+  uploadedBy      User     @relation(fields: [uploadedById], references: [id])
+
+  @@map("attachments")
 }
 
 // Pluggable Workflow System Tables

@@ -96,7 +96,9 @@ import DocumentStructureToolbar from '../../../components/editor/DocumentStructu
 import AppendixFormatter from '../../../components/editor/AppendixFormatter';
 import CommentsPanel from '../../../components/editor/CommentsPanel';
 import AdvancedSearchReplace from '../../../components/editor/AdvancedSearchReplace';
+import AirForceHeader from '../../../components/editor/AirForceHeader';
 import '../../../styles/supplement-marks.css';
+import '../../../styles/editor-document.css';
 
 interface DocumentDetails {
   id: string;
@@ -277,7 +279,7 @@ const DocumentEditor: React.FC = () => {
   // Custom extension to preserve inline styles
   const PreserveStyles = Extension.create({
     name: 'preserveStyles',
-    
+
     addGlobalAttributes() {
       return [
         {
@@ -285,13 +287,16 @@ const DocumentEditor: React.FC = () => {
           attributes: {
             style: {
               default: null,
-              parseHTML: element => element.getAttribute('style'),
+              parseHTML: element => {
+                const style = element.getAttribute('style');
+                return style || null;
+              },
               renderHTML: attributes => {
                 if (!attributes.style) {
                   return {};
                 }
                 return {
-                  style: attributes.style,
+                  style: String(attributes.style),
                 };
               },
             },
@@ -303,6 +308,18 @@ const DocumentEditor: React.FC = () => {
 
   const editor = useEditor({
     immediatelyRender: false,
+    parseOptions: {
+      preserveWhitespace: 'full',
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none',
+      },
+      transformPastedHTML(html) {
+        // Preserve the HTML as-is without stripping styles
+        return html;
+      },
+    },
     extensions: [
       PreserveStyles, // Add custom extension to preserve inline styles
       StarterKit.configure({
@@ -310,18 +327,6 @@ const DocumentEditor: React.FC = () => {
           depth: 100,
         },
         codeBlock: false, // We'll use CodeBlockLowlight instead
-        heading: {
-          HTMLAttributes: {
-            // Allow style attribute on headings
-            style: null,
-          },
-        },
-        paragraph: {
-          HTMLAttributes: {
-            // Allow style attribute on paragraphs
-            style: null,
-          },
-        },
       }),
       Underline,
       Link.configure({
@@ -594,15 +599,34 @@ const DocumentEditor: React.FC = () => {
               
               // Check if document has Air Force header
               const customFields = contentData.document.customFields || {};
-              if (customFields.hasCustomHeader && customFields.headerHtml) {
+              console.log('Document customFields:', customFields);
+              console.log('Full document content preview:', content?.substring(0, 500));
+
+              // Check if this is an Air Force document
+              const isAirForceDoc = content && (
+                content.includes('UNCLASSIFIED') ||
+                content.includes('TABLE OF CONTENTS') ||
+                content.includes('AIR FORCE') ||
+                docData.document.title?.includes('AIR FORCE') ||
+                docData.document.category === 'ADMINISTRATION'
+              );
+
+              if (isAirForceDoc) {
+                console.log('Detected Air Force document, keeping full content for accurate page numbering');
+
+                // Don't extract header - keep it as part of the content for accurate page numbering
                 setAirForceHeader({
-                  hasHeader: true,
-                  headerHtml: customFields.headerHtml,
-                  documentStyles: customFields.documentStyles,
-                  editableContent: customFields.editableContent
+                  hasHeader: false, // Don't show separate header component
+                  headerHtml: '',
+                  documentStyles: customFields.documentStyles || '',
+                  editableContent: content
                 });
-                // Use editable content if available
-                content = customFields.editableContent || content;
+
+                // Keep the full content including header and TOC in the editor
+                // This ensures accurate page numbering
+              } else {
+                console.log('Not an Air Force document, no header needed');
+                setAirForceHeader({ hasHeader: false });
               }
               
               // If content is plain text, wrap it in paragraph tags
@@ -2004,7 +2028,154 @@ const DocumentEditor: React.FC = () => {
 
         {/* Editor Content */}
         <Paper sx={{ minHeight: 600 }} ref={editorContainerRef}>
-          <style jsx global>{`
+          <style>{`
+            /* Force Document Header and TOC Styles */
+            div[style*="text-align: center"] {
+              text-align: center !important;
+            }
+
+            div[style*="text-align: left"] {
+              text-align: left !important;
+            }
+
+            div[style*="font-weight: bold"] {
+              font-weight: bold !important;
+            }
+
+            div[style*="text-decoration: underline"] {
+              text-decoration: underline !important;
+            }
+
+            div[style*="font-size: 18px"] {
+              font-size: 18px !important;
+            }
+
+            div[style*="font-size: 20px"] {
+              font-size: 20px !important;
+            }
+
+            div[style*="font-size: 11px"] {
+              font-size: 11px !important;
+            }
+
+            div[style*="font-size: 12px"] {
+              font-size: 12px !important;
+            }
+
+            div[style*="border: 2px solid black"] {
+              border: 2px solid black !important;
+              padding: 10px !important;
+              margin: 20px auto !important;
+              width: 80% !important;
+            }
+
+            div[style*="border-bottom: 2px solid black"] {
+              border-bottom: 2px solid black !important;
+              width: 60% !important;
+              margin: 20px auto !important;
+            }
+
+            div[style*="border-bottom: 1px solid black"] {
+              border-bottom: 1px solid black !important;
+            }
+
+            div[style*="border-top: 1px solid black"] {
+              border-top: 1px solid black !important;
+            }
+
+            div[style*="page-break-after: always"] {
+              page-break-after: always !important;
+              margin-bottom: 40px;
+              border-bottom: 2px dashed #ccc;
+              padding-bottom: 20px;
+            }
+
+            /* Table of Contents Styles */
+            .toc-entry {
+              display: flex !important;
+              justify-content: space-between !important;
+              align-items: baseline !important;
+              margin: 8px 0 !important;
+              font-family: 'Times New Roman', serif;
+            }
+
+            .toc-title {
+              flex: 1 !important;
+              padding-right: 10px !important;
+            }
+
+            .toc-dots {
+              flex: 1 !important;
+              border-bottom: 1px dotted #333 !important;
+              margin: 0 5px !important;
+              min-width: 50px !important;
+            }
+
+            .toc-page {
+              white-space: nowrap !important;
+              padding-left: 10px !important;
+            }
+
+            /* ProseMirror Content Styles */
+            .ProseMirror {
+              font-family: 'Times New Roman', serif;
+              line-height: 1.6;
+              padding: 20px;
+            }
+
+            .ProseMirror h1,
+            .ProseMirror h2,
+            .ProseMirror h3,
+            .ProseMirror h4,
+            .ProseMirror h5,
+            .ProseMirror h6 {
+              font-weight: bold;
+              margin-top: 1.5em;
+              margin-bottom: 0.5em;
+            }
+
+            .ProseMirror p {
+              margin-bottom: 1em;
+              line-height: 1.6;
+            }
+
+            .ProseMirror ul,
+            .ProseMirror ol {
+              margin-bottom: 1em;
+              padding-left: 2em;
+            }
+
+            .ProseMirror li {
+              margin-bottom: 0.5em;
+            }
+
+            /* Preserve inline margin styles */
+            .ProseMirror [style*="margin-left: 20px"],
+            [style*="margin-left: 20px"] {
+              margin-left: 20px !important;
+            }
+
+            .ProseMirror [style*="margin-left: 40px"],
+            [style*="margin-left: 40px"] {
+              margin-left: 40px !important;
+            }
+
+            .ProseMirror [style*="margin-left: 60px"],
+            [style*="margin-left: 60px"] {
+              margin-left: 60px !important;
+            }
+
+            .ProseMirror [style*="margin-left: 80px"],
+            [style*="margin-left: 80px"] {
+              margin-left: 80px !important;
+            }
+
+            .ProseMirror [style*="margin-left: 100px"],
+            [style*="margin-left: 100px"] {
+              margin-left: 100px !important;
+            }
+
+            /* Table Styles */
             .ProseMirror table {
               border-collapse: collapse;
               table-layout: fixed;
@@ -2173,24 +2344,7 @@ const DocumentEditor: React.FC = () => {
             }
           `}</style>
           
-          {/* Render preserved Air Force header if present */}
-          {airForceHeader.hasHeader && airForceHeader.headerHtml && (
-            <>
-              {airForceHeader.documentStyles && (
-                <style dangerouslySetInnerHTML={{ __html: airForceHeader.documentStyles }} />
-              )}
-              <Box 
-                sx={{ 
-                  backgroundColor: 'white',
-                  marginBottom: 3,
-                  pointerEvents: 'none',
-                  '& img': { maxWidth: '120px', height: 'auto' }
-                }}
-                dangerouslySetInnerHTML={{ __html: airForceHeader.headerHtml }}
-              />
-              <Divider sx={{ my: 2, borderColor: 'black', borderWidth: 2 }} />
-            </>
-          )}
+          {/* Air Force header is now kept as part of the editor content for accurate page numbering */}
           
           <Box sx={{ position: 'relative' }}>
             <EditorContent 

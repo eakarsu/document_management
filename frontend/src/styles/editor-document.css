@@ -1,0 +1,310 @@
+/* Air Force Document Editor Styles */
+
+/* Header Section Styles */
+.af-header-container {
+  font-family: 'Times New Roman', serif;
+  text-align: center;
+  padding: 20px;
+}
+
+.af-header-classification {
+  text-align: left;
+  font-weight: bold;
+  text-decoration: underline;
+  margin-bottom: 20px;
+}
+
+.af-header-order {
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.af-header-secretary {
+  font-weight: bold;
+  margin-bottom: 30px;
+}
+
+.af-header-seal {
+  margin: 30px auto;
+  width: 150px;
+  height: 150px;
+}
+
+.af-header-divider {
+  border-bottom: 2px solid black;
+  width: 60%;
+  margin: 20px auto;
+}
+
+.af-header-department {
+  font-weight: bold;
+  text-decoration: underline;
+  margin: 20px 0;
+}
+
+.af-header-instruction {
+  font-weight: bold;
+  font-size: 18px;
+  margin: 10px 0;
+}
+
+.af-header-date {
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.af-header-title {
+  font-weight: bold;
+  font-size: 20px;
+  text-decoration: underline;
+  margin: 30px 0;
+}
+
+.af-header-subtitle {
+  font-style: italic;
+  margin: 10px 0;
+}
+
+.af-header-version {
+  font-weight: bold;
+  margin: 20px 0;
+}
+
+.af-header-compliance-box {
+  border: 2px solid black;
+  padding: 10px;
+  margin: 20px auto;
+  width: 80%;
+  text-align: center;
+  font-weight: bold;
+}
+
+.af-header-metadata {
+  text-align: left;
+  margin-top: 30px;
+  font-size: 12px;
+}
+
+.af-header-metadata strong {
+  font-weight: bold;
+}
+
+.af-header-metadata div {
+  margin: 5px 0;
+}
+
+.af-header-footer {
+  text-align: center;
+  margin: 40px 0;
+  padding: 20px;
+  border-top: 1px solid black;
+  font-size: 11px;
+}
+
+.af-header-page-break {
+  page-break-after: always;
+  margin-bottom: 40px;
+  border-bottom: 2px dashed #ccc;
+  padding-bottom: 20px;
+}
+
+/* Table of Contents Styles */
+.toc-container {
+  font-family: 'Times New Roman', serif;
+  margin: 20px 0;
+  padding: 20px;
+}
+
+.toc-title {
+  font-weight: bold;
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 20px;
+  text-decoration: underline;
+}
+
+.toc-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.toc-entry-number {
+  min-width: 40px;
+}
+
+.toc-entry-title {
+  flex: 1;
+  padding: 0 10px;
+  position: relative;
+}
+
+.toc-entry-title::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 10px;
+  right: 10px;
+  border-bottom: 1px dotted #333;
+}
+
+.toc-entry-page {
+  min-width: 40px;
+  text-align: right;
+  padding-left: 10px;
+  background: white;
+  position: relative;
+  z-index: 1;
+}
+
+.toc-subsection {
+  margin-left: 20px;
+}
+
+.toc-subsubsection {
+  margin-left: 40px;
+}
+
+/* ProseMirror Editor Content Styles */
+.ProseMirror {
+  font-family: 'Times New Roman', serif !important;
+  line-height: 1.6;
+  padding: 20px;
+}
+
+.ProseMirror h1 {
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  margin: 1.5em 0 0.5em 0;
+  text-transform: uppercase;
+}
+
+.ProseMirror h2 {
+  font-size: 20px;
+  font-weight: bold;
+  margin: 1.5em 0 0.5em 0;
+}
+
+.ProseMirror h3 {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 1.5em 0 0.5em 0;
+}
+
+.ProseMirror h4 {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 1.5em 0 0.5em 0;
+}
+
+.ProseMirror p {
+  margin-bottom: 1em;
+  line-height: 1.6;
+  text-align: justify;
+}
+
+/* Indentation styles */
+.ProseMirror .indent-1 { margin-left: 20px !important; }
+.ProseMirror .indent-2 { margin-left: 40px !important; }
+.ProseMirror .indent-3 { margin-left: 60px !important; }
+.ProseMirror .indent-4 { margin-left: 80px !important; }
+.ProseMirror .indent-5 { margin-left: 100px !important; }
+
+/* Preserve inline styles */
+.ProseMirror [style*="margin-left: 20px"] { margin-left: 20px !important; }
+.ProseMirror [style*="margin-left: 40px"] { margin-left: 40px !important; }
+.ProseMirror [style*="margin-left: 60px"] { margin-left: 60px !important; }
+.ProseMirror [style*="margin-left: 80px"] { margin-left: 80px !important; }
+.ProseMirror [style*="margin-left: 100px"] { margin-left: 100px !important; }
+
+.ProseMirror [style*="text-align: center"] { text-align: center !important; }
+.ProseMirror [style*="text-align: left"] { text-align: left !important; }
+.ProseMirror [style*="text-align: right"] { text-align: right !important; }
+.ProseMirror [style*="text-align: justify"] { text-align: justify !important; }
+
+.ProseMirror [style*="font-weight: bold"] { font-weight: bold !important; }
+.ProseMirror [style*="font-style: italic"] { font-style: italic !important; }
+.ProseMirror [style*="text-decoration: underline"] { text-decoration: underline !important; }
+
+.ProseMirror [style*="font-size: 11px"] { font-size: 11px !important; }
+.ProseMirror [style*="font-size: 12px"] { font-size: 12px !important; }
+.ProseMirror [style*="font-size: 14px"] { font-size: 14px !important; }
+.ProseMirror [style*="font-size: 16px"] { font-size: 16px !important; }
+.ProseMirror [style*="font-size: 18px"] { font-size: 18px !important; }
+.ProseMirror [style*="font-size: 20px"] { font-size: 20px !important; }
+.ProseMirror [style*="font-size: 24px"] { font-size: 24px !important; }
+
+/* Border styles */
+.ProseMirror [style*="border: 2px solid black"] {
+  border: 2px solid black !important;
+  padding: 10px !important;
+  margin: 20px auto !important;
+  width: 80% !important;
+}
+
+.ProseMirror [style*="border-bottom: 2px solid black"] {
+  border-bottom: 2px solid black !important;
+  width: 60% !important;
+  margin: 20px auto !important;
+}
+
+.ProseMirror [style*="border-bottom: 1px solid black"] {
+  border-bottom: 1px solid black !important;
+}
+
+.ProseMirror [style*="border-top: 1px solid black"] {
+  border-top: 1px solid black !important;
+}
+
+/* Table styles */
+.ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid #ccc;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.ProseMirror th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+}
+
+/* Lists */
+.ProseMirror ul,
+.ProseMirror ol {
+  margin-bottom: 1em;
+  padding-left: 2em;
+}
+
+.ProseMirror li {
+  margin-bottom: 0.5em;
+}
+
+/* Force styles for divs inside ProseMirror */
+.ProseMirror div[style*="text-align: center"] { text-align: center !important; }
+.ProseMirror div[style*="text-align: left"] { text-align: left !important; }
+.ProseMirror div[style*="font-weight: bold"] { font-weight: bold !important; }
+.ProseMirror div[style*="text-decoration: underline"] { text-decoration: underline !important; }
+.ProseMirror div[style*="font-size: 18px"] { font-size: 18px !important; }
+.ProseMirror div[style*="font-size: 20px"] { font-size: 20px !important; }
+.ProseMirror div[style*="font-style: italic"] { font-style: italic !important; }
+
+/* Ensure header box styles work */
+div[style*="text-align: center"] { text-align: center !important; }
+div[style*="font-weight: bold"] { font-weight: bold !important; }
+div[style*="text-decoration: underline"] { text-decoration: underline !important; }
+div[style*="border: 2px solid black"] {
+  border: 2px solid black !important;
+  padding: 10px !important;
+  margin: 20px auto !important;
+  width: 80% !important;
+}
