@@ -34,20 +34,30 @@ export async function GET(
 
     const data = await backendResponse.json();
 
-    // Return document with content from customFields or empty
-    const content = data.document.customFields?.content || 
-                   data.document.content || 
-                   '';
-    
+    // For editor, return separated content
+    // editableContent has only the main content without header/TOC
+    const editableContent = data.document.customFields?.editableContent ||
+                           data.document.content ||
+                           '';
+
+    // Header HTML contains the formatted header and TOC
+    const headerHtml = data.document.customFields?.headerHtml || '';
+    const documentStyles = data.document.customFields?.documentStyles || '';
+    const hasCustomHeader = data.document.customFields?.hasCustomHeader || false;
+
     return NextResponse.json({
       success: true,
       document: {
         id: data.document.id,
         title: data.document.title,
-        content: content,
+        content: editableContent, // Just the editable content
+        headerHtml: headerHtml, // Formatted header and TOC
+        documentStyles: documentStyles, // Styles for the document
+        hasCustomHeader: hasCustomHeader, // Whether it has Air Force header
         category: data.document.category,
         status: data.document.status,
-        currentVersion: data.document.currentVersion
+        currentVersion: data.document.currentVersion,
+        customFields: data.document.customFields // Include all custom fields
       }
     });
     

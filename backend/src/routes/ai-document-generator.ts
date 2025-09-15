@@ -1749,38 +1749,73 @@ router.post('/', async (req: Request, res: Response) => {
           content: content,
           htmlContent: content,
           editableContent: (() => {
-            // Find where the actual document content starts (after header and TOC)
-            if (content.includes('air-force-document-header')) {
-              // Look for the end of TOC section (page-break-after div)
+            // Extract only the content after header and TOC for editing
+            // Look for multiple indicators of Air Force header/TOC
+            if (content.includes('UNCLASSIFIED') || content.includes('TABLE OF CONTENTS') || content.includes('air-force-document-header')) {
+              // Find the end of the TOC - look for page break after TOC
               const tocEndMatch = content.match(/<div style="page-break-after: always;"><\/div>/);
               if (tocEndMatch && tocEndMatch.index !== undefined) {
-                return content.substring(tocEndMatch.index + tocEndMatch[0].length);
+                // Return content after the TOC page break
+                const afterToc = content.substring(tocEndMatch.index + tocEndMatch[0].length);
+                console.log('Extracted content after TOC, length:', afterToc.length);
+                return afterToc;
               }
-              // Fallback: find first h2 tag (main content section)
+
+              // Alternative: Look for where actual content sections start (after any TOC listing)
+              // Find the last occurrence of TOC-related content
+              const tocPatterns = [
+                /Department of the Navy<\/.*?>\s*<\/.*?>\s*<\/.*?>/,  // End of typical TOC
+                /<\/ul>\s*<\/div>\s*<h2/,  // End of TOC list before first section
+                /TABLE OF CONTENTS.*?(?=<h2)/s  // Everything from TOC title to first h2
+              ];
+
+              for (const pattern of tocPatterns) {
+                const match = content.match(pattern);
+                if (match && match.index !== undefined) {
+                  const endIndex = match.index + match[0].length;
+                  // Find the next h2 tag after this point
+                  const nextH2 = content.indexOf('<h2', endIndex);
+                  if (nextH2 !== -1) {
+                    const extracted = content.substring(nextH2);
+                    console.log('Extracted content from first h2, length:', extracted.length);
+                    return extracted;
+                  }
+                }
+              }
+
+              // Final fallback: extract from first h2 (main content section)
               const firstH2 = content.indexOf('<h2');
               if (firstH2 !== -1) {
-                return content.substring(firstH2);
+                const extracted = content.substring(firstH2);
+                console.log('Fallback: extracted from first h2, length:', extracted.length);
+                return extracted;
               }
             }
+            // If no Air Force header detected, return full content
             return content;
           })(),
           plainText: content.replace(/<[^>]*>/g, ''), // Plain text version
           headerHtml: (() => {
-            if (content.includes('air-force-document-header')) {
+            // Check for Air Force document indicators
+            if (content.includes('UNCLASSIFIED') || content.includes('TABLE OF CONTENTS') || content.includes('air-force-document-header')) {
               // Extract everything up to the end of TOC
               const tocEndMatch = content.match(/<div style="page-break-after: always;"><\/div>/);
               if (tocEndMatch && tocEndMatch.index !== undefined) {
-                return content.substring(0, tocEndMatch.index + tocEndMatch[0].length);
+                const header = content.substring(0, tocEndMatch.index + tocEndMatch[0].length);
+                console.log('Extracted header with TOC, length:', header.length);
+                return header;
               }
               // Fallback: extract up to first h2
               const firstH2 = content.indexOf('<h2');
               if (firstH2 !== -1) {
-                return content.substring(0, firstH2);
+                const header = content.substring(0, firstH2);
+                console.log('Extracted header up to first h2, length:', header.length);
+                return header;
               }
             }
             return '';
           })(),
-          hasCustomHeader: content.includes('air-force-document-header'),
+          hasCustomHeader: content.includes('UNCLASSIFIED') || content.includes('TABLE OF CONTENTS') || content.includes('air-force-document-header'),
           documentStyles: `
             <style>
               h2 { font-size: 14pt; font-weight: bold; margin-top: 20px; margin-bottom: 10px; }

@@ -599,8 +599,6 @@ const DocumentEditor: React.FC = () => {
               
               // Check if document has Air Force header
               const customFields = contentData.document.customFields || {};
-              console.log('Document customFields:', customFields);
-              console.log('Full document content preview:', content?.substring(0, 500));
 
               // Check if this is an Air Force document
               const isAirForceDoc = content && (
@@ -611,21 +609,82 @@ const DocumentEditor: React.FC = () => {
                 docData.document.category === 'ADMINISTRATION'
               );
 
-              if (isAirForceDoc) {
-                console.log('Detected Air Force document, keeping full content for accurate page numbering');
+              // Check if document has separate header/TOC
+              // Check both direct properties and customFields
+              const hasCustomHeader = contentData.document.hasCustomHeader || customFields.hasCustomHeader;
+              const headerHtml = contentData.document.headerHtml || customFields.headerHtml;
+              const documentStyles = contentData.document.documentStyles || customFields.documentStyles;
+              const editableContent = contentData.document.content || customFields.editableContent || content;
 
-                // Don't extract header - keep it as part of the content for accurate page numbering
+
+              if (hasCustomHeader && headerHtml) {
+
+                // Store the header/TOC and display formatted version above editor
                 setAirForceHeader({
-                  hasHeader: false, // Don't show separate header component
-                  headerHtml: '',
-                  documentStyles: customFields.documentStyles || '',
-                  editableContent: content
+                  hasHeader: true, // Show formatted header above editor
+                  headerHtml: headerHtml, // Store for display and exports
+                  documentStyles: documentStyles || '',
+                  editableContent: editableContent // Content without header/TOC
                 });
 
-                // Keep the full content including header and TOC in the editor
-                // This ensures accurate page numbering
+                // For existing documents that still have header/TOC in content,
+                // we need to extract it here on the frontend
+                if (editableContent.includes('UNCLASSIFIED') || editableContent.includes('TABLE OF CONTENTS')) {
+
+                  let extractedContent = editableContent;
+
+                  // Remove the entire TABLE OF CONTENTS section
+                  // This pattern matches from "TABLE OF CONTENTS" through all the numbered entries
+                  // until we hit the actual first section (usually "1. Introduction" or similar)
+                  const tocPattern = /TABLE OF CONTENTS[\s\S]*?(?=<h2[^>]*>1\.\s+[A-Z])/;
+                  const tocMatch = extractedContent.match(tocPattern);
+
+                  if (tocMatch) {
+                    // Remove the matched TOC
+                    extractedContent = extractedContent.replace(tocPattern, '');
+                  }
+
+                  // Also remove if it's in a different format (with h2 tags and list items)
+                  if (extractedContent.includes('TABLE OF CONTENTS')) {
+                    // Pattern to match h2 with TABLE OF CONTENTS and everything until the next main h2
+                    const h2TocPattern = /<h2[^>]*>TABLE OF CONTENTS<\/h2>[\s\S]*?(?=<h2[^>]*>[^T])/;
+                    const h2Match = extractedContent.match(h2TocPattern);
+
+                    if (h2Match) {
+                      extractedContent = extractedContent.replace(h2TocPattern, '');
+                    }
+
+                    // If still present, try removing everything from TABLE OF CONTENTS to the first numbered section
+                    if (extractedContent.includes('TABLE OF CONTENTS')) {
+                      // Find where TABLE OF CONTENTS starts
+                      const tocStart = extractedContent.indexOf('TABLE OF CONTENTS');
+                      // Find where section 1 starts (look for "1. " followed by a capital letter)
+                      const sectionPattern = /<h2[^>]*>1\.\s+[A-Z]/;
+                      const sectionMatch = extractedContent.match(sectionPattern);
+
+                      if (tocStart !== -1 && sectionMatch && sectionMatch.index) {
+                        if (sectionMatch.index > tocStart) {
+                          // Extract everything before TOC and everything from section 1 onwards
+                          extractedContent = extractedContent.substring(0, tocStart) + extractedContent.substring(sectionMatch.index);
+                        }
+                      }
+                    }
+                  }
+
+                  // Final cleanup: Remove any remaining header content before the first main section
+                  if (extractedContent.includes('UNCLASSIFIED') || extractedContent.includes('BY ORDER OF')) {
+                    const firstMainSection = extractedContent.match(/<h2[^>]*>1\.\s+[A-Z]/);
+                    if (firstMainSection && firstMainSection.index) {
+                      extractedContent = extractedContent.substring(firstMainSection.index);
+                    }
+                  }
+
+                  content = extractedContent;
+                } else {
+                  // New documents with properly separated content
+                  content = editableContent;
+                }
               } else {
-                console.log('Not an Air Force document, no header needed');
                 setAirForceHeader({ hasHeader: false });
               }
               
@@ -826,13 +885,18 @@ const DocumentEditor: React.FC = () => {
 
     try {
       setSaving(true);
-      const content = editor.getHTML();
-      
+      let content = editor.getHTML();
+
+      // If document has a separate header/TOC, recombine them for saving
+      if (airForceHeader.hasHeader && airForceHeader.headerHtml) {
+        content = airForceHeader.headerHtml + content;
+      }
+
       const response = await authTokenService.authenticatedFetch(`/api/editor/documents/${documentId}/save`, {
         method: 'POST',
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           content,
-          title: documentData.title 
+          title: documentData.title
         }),
       });
 
@@ -2347,6 +2411,30 @@ const DocumentEditor: React.FC = () => {
           {/* Air Force header is now kept as part of the editor content for accurate page numbering */}
           
           <Box sx={{ position: 'relative' }}>
+            {/* Display formatted Air Force header/TOC if present */}
+            {airForceHeader.hasHeader && airForceHeader.headerHtml && (
+              <Paper
+                elevation={0}
+                sx={{
+                  mb: 2,
+                  p: 3,
+                  backgroundColor: '#f5f5f5',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: 1
+                }}
+              >
+                {/* Document styles */}
+                {airForceHeader.documentStyles && (
+                  <style dangerouslySetInnerHTML={{ __html: airForceHeader.documentStyles }} />
+                )}
+                {/* Formatted header and TOC */}
+                <div
+                  dangerouslySetInnerHTML={{ __html: airForceHeader.headerHtml }}
+                  style={{ fontFamily: 'Times New Roman, serif' }}
+                />
+              </Paper>
+            )}
+
             <EditorContent 
               editor={editor} 
               style={{ 
