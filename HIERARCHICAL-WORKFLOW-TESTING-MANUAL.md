@@ -1,4 +1,4 @@
-# Hierarchical Distributed Workflow Testing Manual
+ # Hierarchical Distributed Workflow Testing Manual
 
 ## Overview
 This manual provides comprehensive testing procedures for the 10-stage hierarchical distributed Air Force document review workflow with organizational gatekeepers and ownership transfer capabilities.

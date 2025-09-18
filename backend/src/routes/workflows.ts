@@ -555,6 +555,15 @@ router.post('/workflow-instances/:documentId/reset', authMiddleware, async (req,
     // Use the centralized WorkflowManager for consistent handling
     const resetWorkflow = await workflowManager.resetWorkflow(documentId, userId);
 
+    // Handle case where there was no workflow to reset
+    if (resetWorkflow.workflowId === null) {
+      return res.json({
+        success: true,
+        currentStage: null,
+        message: 'No workflow to reset - document ready for new workflow'
+      });
+    }
+
     // Get workflow definition for the first stage name
     const workflowPath = path.join(__dirname, '../../workflows', `${resetWorkflow.workflowId}.json`);
     const workflowDef = JSON.parse(fs.readFileSync(workflowPath, 'utf-8'));

@@ -145,7 +145,20 @@ export class WorkflowManager {
     });
 
     if (allInstances.length === 0) {
-      throw new Error('No workflow found for this document');
+      // No workflow to reset - this is fine, just return success
+      console.log(`[WorkflowManager] No workflow found for document ${documentId}, nothing to reset`);
+      return {
+        id: 'no-workflow',
+        documentId,
+        workflowId: null,
+        currentStageId: null,
+        isActive: false,
+        metadata: {
+          resetBy: userId,
+          resetAt: new Date().toISOString(),
+          message: 'No workflow to reset'
+        }
+      };
     }
 
     // Delete ALL history records for this document FIRST
