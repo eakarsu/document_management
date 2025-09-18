@@ -1,9 +1,0 @@
-{
-  "query": "query SearchDocuments($query: String!, $organizationId: String!, $offset: Int, $limit: Int) { searchDocuments(query: $query, organizationId: $organizationId, offset: $offset, limit: $limit) { total documents { id title content(maxLength: 200) } } }",
-  "variables": {
-    "query": "apple",
-    "organizationId": "cmed6dm7f0000ioaciudpllci",
-    "offset": 0,
-    "limit": 10
-  }
-}
