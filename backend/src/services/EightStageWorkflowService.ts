@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import winston from 'winston';
+import { workflowManager } from './WorkflowManager';
 
 const prisma = new PrismaClient();
 
@@ -40,22 +41,48 @@ export class EightStageWorkflowService {
   // Stage 1: Initial Draft Creation
   async createWorkflowInstance(params: WorkflowParams) {
     try {
-      // First get the existing document to preserve its customFields
-      const existingDocument = await prisma.document.findUnique({
-        where: { id: params.documentId }
+      // Check if document exists
+      const document = await prisma.document.findUnique({
+        where: { id: params.documentId },
+        include: { createdBy: true }
       });
-      
-      // For now, create a simple workflow entry using document's metadata
-      const document = await prisma.document.update({
+
+      if (!document) {
+        throw new Error('Document not found');
+      }
+
+      // Determine workflow ID dynamically based on request or configuration
+      const workflowId = params.metadata?.workflowId || 'document-review-workflow';
+
+      // Use centralized WorkflowManager to ensure only one workflow per document
+      const workflowInstance = await workflowManager.getOrCreateWorkflow(
+        params.documentId,
+        workflowId,
+        params.oprUserId
+      );
+
+      // PERMANENT FIX: Do NOT auto-start workflow
+      // User must explicitly click "Start Workflow" button
+      // Removing auto-start to prevent workflow from being activated after reset
+      // if (!workflowInstance.isActive) {
+      //   await workflowManager.startWorkflow(params.documentId, params.oprUserId);
+      // }
+
+      // Get updated workflow instance
+      const activeWorkflow = await workflowManager.getWorkflowStatus(params.documentId);
+
+      // Also update document's customFields for backward compatibility
+      await prisma.document.update({
         where: { id: params.documentId },
         data: {
           customFields: {
-            ...(existingDocument?.customFields as object || {}),
+            ...(document.customFields as object || {}),
             workflow: {
               stage: 'DRAFT_CREATION',
               status: 'active',
               oprUserId: params.oprUserId,
               createdAt: new Date().toISOString(),
+              workflowInstanceId: activeWorkflow?.id,
               stageHistory: [{
                 stage: 'DRAFT_CREATION',
                 enteredAt: new Date().toISOString(),
@@ -63,23 +90,20 @@ export class EightStageWorkflowService {
               }]
             }
           }
-        },
-        include: {
-          createdBy: true
         }
       });
 
-      logger.info(`8-Stage workflow created for document: ${params.documentId}`);
-      
+      logger.info(`8-Stage workflow created for document: ${params.documentId}, workflow instance: ${activeWorkflow?.id}`);
+
       return {
         success: true,
         workflowInstance: {
-          id: `workflow_${document.id}`,
+          id: activeWorkflow?.id || `workflow_${params.documentId}`,
           document_id: params.documentId,
           opr_user_id: params.oprUserId,
           organization_id: params.organizationId,
-          current_stage: 'DRAFT_CREATION',
-          is_active: true,
+          current_stage: activeWorkflow?.currentStageId || 'DRAFT_CREATION',
+          is_active: activeWorkflow?.isActive || true,
           documents: document,
           users: document.createdBy
         }
@@ -210,7 +234,27 @@ export class EightStageWorkflowService {
   async getWorkflowStatus(workflowInstanceId: string) {
     try {
       const documentId = workflowInstanceId.replace('workflow_', '');
-      
+
+      // First check if we have a JsonWorkflowInstance
+      const workflowInstance = await workflowManager.getWorkflowStatus(documentId);
+
+      if (workflowInstance) {
+        return {
+          success: true,
+          workflow: {
+            id: workflowInstance.id,
+            document_id: documentId,
+            current_stage: workflowInstance.currentStageId,
+            is_active: workflowInstance.isActive,
+            created_at: workflowInstance.createdAt,
+            updated_at: workflowInstance.updatedAt,
+            completed_at: workflowInstance.completedAt,
+            metadata: workflowInstance.metadata
+          }
+        };
+      }
+
+      // Fallback to document customFields for backward compatibility
       const document = await prisma.document.findUnique({
         where: { id: documentId },
         include: {
@@ -249,6 +293,28 @@ export class EightStageWorkflowService {
   // Get workflow by document ID
   async getWorkflowByDocumentId(documentId: string) {
     try {
+      // First check if we have a JsonWorkflowInstance for this document
+      const workflowInstance = await workflowManager.getWorkflowStatus(documentId);
+
+      if (workflowInstance) {
+        // Return data from the JsonWorkflowInstance
+        return {
+          success: true,
+          workflow: {
+            id: workflowInstance.id,
+            document_id: documentId,
+            current_stage: workflowInstance.currentStageId,
+            is_active: workflowInstance.isActive,
+            created_at: workflowInstance.createdAt,
+            updated_at: workflowInstance.updatedAt,
+            completed_at: workflowInstance.completedAt,
+            metadata: workflowInstance.metadata,
+            history: workflowInstance.history
+          }
+        };
+      }
+
+      // Fallback to checking document customFields for backward compatibility
       const document = await prisma.document.findUnique({
         where: { id: documentId },
         include: {
@@ -264,7 +330,7 @@ export class EightStageWorkflowService {
       }
 
       const workflow = (document.customFields as any)?.workflow;
-      
+
       if (!workflow) {
         return {
           success: false,
@@ -836,64 +902,23 @@ export class EightStageWorkflowService {
   async resetWorkflow(workflowId: string, userId: string) {
     try {
       // Remove 'workflow_' prefix if present
-      const documentId = workflowId.startsWith('workflow_') 
-        ? workflowId.replace('workflow_', '') 
+      const documentId = workflowId.startsWith('workflow_')
+        ? workflowId.replace('workflow_', '')
         : workflowId;
 
-      // Try to find by workflow_instance_id first
-      let document = await prisma.document.findFirst({
-        where: {
-          customFields: {
-            path: ['workflow', 'workflow_instance_id'],
-            equals: workflowId
-          }
-        }
-      });
+      // Use the centralized WorkflowManager for reset
+      // This ensures workflow is properly deactivated after reset
+      const resetResult = await workflowManager.resetWorkflow(documentId, userId);
 
-      // If not found, try to find by document ID directly
-      if (!document) {
-        document = await prisma.document.findUnique({
-          where: { id: documentId }
-        });
-      }
-
-      if (!document) {
-        throw new Error('Workflow not found');
-      }
-
-      // Reset the workflow to DRAFT_CREATION stage
-      const updatedDocument = await prisma.document.update({
-        where: { id: document.id },
-        data: {
-          customFields: {
-            ...document.customFields as object,
-            workflow: {
-              stage: 'DRAFT_CREATION',
-              status: 'active',
-              oprUserId: userId,
-              createdAt: new Date().toISOString(),
-              resetAt: new Date().toISOString(),
-              resetBy: userId,
-              stageHistory: [{
-                stage: 'DRAFT_CREATION',
-                enteredAt: new Date().toISOString(),
-                userId: userId,
-                action: 'WORKFLOW_RESET'
-              }],
-              feedback: {} // Clear all feedback
-            }
-          }
-        }
-      });
-
-      logger.info(`Workflow reset to DRAFT_CREATION for document: ${document.id} by user: ${userId}`);
+      logger.info(`Workflow reset to beginning for document: ${documentId} by user: ${userId}`);
 
       return {
         success: true,
-        message: 'Workflow successfully reset to DRAFT_CREATION',
+        message: 'Workflow successfully reset to beginning',
         workflow: {
-          documentId: document.id,
-          currentStage: 'DRAFT_CREATION',
+          documentId: documentId,
+          currentStage: resetResult.currentStageId,
+          isActive: resetResult.isActive, // Will be false after reset
           resetAt: new Date().toISOString(),
           resetBy: userId
         }

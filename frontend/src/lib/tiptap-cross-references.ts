@@ -124,7 +124,7 @@ export const CrossReferences = Node.create<CrossReferencesOptions>({
           if (node.type.name.includes('heading')) {
             const id = node.attrs.id || `heading-${pos}`;
             if (id === targetId) {
-              const headingNumber = this.extractHeadingNumber(node.textContent);
+              const headingNumber = extractHeadingNumber(node.textContent);
               targetText = headingNumber ? `Section ${headingNumber}` : node.textContent;
               return false;
             }
@@ -132,7 +132,7 @@ export const CrossReferences = Node.create<CrossReferencesOptions>({
           
           // Check for other elements with IDs
           if (node.attrs && node.attrs.id === targetId) {
-            targetText = this.formatReferenceText(node.attrs.targetType, node.textContent);
+            targetText = formatReferenceText(node.attrs.targetType, node.textContent);
             return false;
           }
         });
@@ -215,14 +215,14 @@ export const CrossReferences = Node.create<CrossReferencesOptions>({
         if (!targetText) {
           doc.descendants((node, pos) => {
             if (node.attrs && node.attrs.id === reference.targetId) {
-              targetText = this.formatReferenceText(reference.targetType, node.textContent);
+              targetText = formatReferenceText(reference.targetType, node.textContent);
               return false;
             }
             // Check headings without explicit IDs
             if (node.type.name.includes('heading')) {
               const id = node.attrs.id || `heading-${pos}`;
               if (id === reference.targetId) {
-                const headingNumber = this.extractHeadingNumber(node.textContent);
+                const headingNumber = extractHeadingNumber(node.textContent);
                 targetText = headingNumber ? `Section ${headingNumber}` : node.textContent;
                 return false;
               }
@@ -253,14 +253,14 @@ export const CrossReferences = Node.create<CrossReferencesOptions>({
             // Find the current text of the target
             doc.descendants((targetNode, targetPos) => {
               if (targetNode.attrs && targetNode.attrs.id === targetId) {
-                newDisplayText = this.formatReferenceText(node.attrs.targetType, targetNode.textContent);
+                newDisplayText = formatReferenceText(node.attrs.targetType, targetNode.textContent);
                 return false;
               }
               // Check headings
               if (targetNode.type.name.includes('heading')) {
                 const id = targetNode.attrs.id || `heading-${targetPos}`;
                 if (id === targetId) {
-                  const headingNumber = this.extractHeadingNumber(targetNode.textContent);
+                  const headingNumber = extractHeadingNumber(targetNode.textContent);
                   newDisplayText = headingNumber ? `Section ${headingNumber}` : targetNode.textContent;
                   return false;
                 }
@@ -333,33 +333,33 @@ export const CrossReferences = Node.create<CrossReferencesOptions>({
       }),
     ];
   },
-  
-  // Helper methods
-  extractHeadingNumber(text: string): string | null {
-    const match = text.match(/^(\d+(?:\.\d+)*)/);
-    return match ? match[1] : null;
-  },
-  
-  formatReferenceText(type: string, text: string): string {
-    const truncatedText = text.length > 50 ? text.substring(0, 50) + '...' : text;
-    
-    switch (type) {
-      case 'heading':
-      case 'section':
-        const number = this.extractHeadingNumber(text);
-        return number ? `Section ${number}` : truncatedText;
-      case 'figure':
-        return `Figure ${truncatedText}`;
-      case 'table':
-        return `Table ${truncatedText}`;
-      case 'footnote':
-        return `Footnote ${truncatedText}`;
-      case 'page':
-        return `Page ${truncatedText}`;
-      default:
-        return truncatedText;
-    }
-  },
 });
+
+// Helper functions
+function extractHeadingNumber(text: string): string | null {
+  const match = text.match(/^(\d+(?:\.\d+)*)/);
+  return match ? match[1] : null;
+}
+
+function formatReferenceText(type: string, text: string): string {
+  const truncatedText = text.length > 50 ? text.substring(0, 50) + '...' : text;
+
+  switch (type) {
+    case 'heading':
+    case 'section':
+      const number = extractHeadingNumber(text);
+      return number ? `Section ${number}` : truncatedText;
+    case 'figure':
+      return `Figure ${truncatedText}`;
+    case 'table':
+      return `Table ${truncatedText}`;
+    case 'footnote':
+      return `Footnote ${truncatedText}`;
+    case 'page':
+      return `Page ${truncatedText}`;
+    default:
+      return truncatedText;
+  }
+}
 
 export default CrossReferences;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -16,7 +16,8 @@ import {
   Card,
   CardContent,
   Divider,
-  Stack
+  Stack,
+  Chip
 } from '@mui/material';
 import {
   Visibility,
@@ -27,6 +28,7 @@ import {
 
 const LoginPage: React.FC = () => {
   const router = useRouter();
+  const submitRef = useRef(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -71,18 +73,26 @@ const LoginPage: React.FC = () => {
   };
 
   const quickLogin = (email: string, password: string) => {
+    console.log('🔄 Quick login button clicked for:', email);
+
+    // If already loading, don't do anything
+    if (isLoading || submitRef.current) {
+      console.log('⚠️ Login already in progress, ignoring quick login');
+      return;
+    }
+
     // Clear any existing session first to prevent cached user issues
     localStorage.removeItem('user');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    
+
     // Clear cookies
     document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    
+
     // Just populate the form fields, don't login automatically
     setFormData({ email, password });
-    
+
     // Clear any existing errors
     setError('');
   };
@@ -92,11 +102,11 @@ const LoginPage: React.FC = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    
+
     // Clear cookies
     document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    
+
     // Clear form and reload page
     setFormData({ email: '', password: '' });
     setError('');
@@ -107,23 +117,32 @@ const LoginPage: React.FC = () => {
     e.preventDefault();
     setError('');
 
+    // Prevent multiple submissions using ref
+    if (submitRef.current || isLoading) {
+      console.log(`🚫 [${new Date().toISOString()}] Login already in progress, blocking duplicate submission`);
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
 
+    // Set both ref and state to prevent any double submission
+    submitRef.current = true;
     setIsLoading(true);
+    console.log(`✅ [${new Date().toISOString()}] Starting login for: ${formData.email}`);
 
     // Clear ALL cached data before login
     localStorage.clear();
     sessionStorage.clear();
-    
+
     // Clear all cookies
-    document.cookie.split(";").forEach(function(c) { 
-      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+    document.cookie.split(";").forEach(function(c) {
+      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
     });
 
     try {
-      console.log('🔍 LOGIN DEBUG: Submitting login with:', formData);
+      console.log('🔍 LOGIN DEBUG: Submitting login ONCE with:', formData);
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -137,15 +156,15 @@ const LoginPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        
+
         // Store tokens in localStorage
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
-        
+
         // Set cookies for middleware
         document.cookie = `accessToken=${data.accessToken}; path=/; samesite=strict`;
         document.cookie = `refreshToken=${data.refreshToken}; path=/; samesite=strict`;
-        
+
         // Store user data
         const userData = {
           ...data.user,
@@ -153,7 +172,7 @@ const LoginPage: React.FC = () => {
           refreshToken: data.refreshToken
         };
         localStorage.setItem('user', JSON.stringify(userData));
-        
+
         // Redirect to dashboard
         const redirect = new URLSearchParams(window.location.search).get('redirect') || '/dashboard';
         router.push(redirect);
@@ -165,15 +184,16 @@ const LoginPage: React.FC = () => {
       setError('Network error. Please try again.');
     } finally {
       setIsLoading(false);
+      submitRef.current = false;
     }
   };
 
   return (
-    <Container maxWidth="sm" sx={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      py: 4 
+    <Container maxWidth="md" sx={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      py: 4
     }}>
       <Paper elevation={3} sx={{ width: '100%', p: 4, borderRadius: 2 }}>
         {/* Header */}
@@ -245,131 +265,303 @@ const LoginPage: React.FC = () => {
               size="large"
               disabled={isLoading}
               startIcon={<LoginIcon />}
-              sx={{ mt: 3, py: 1.5, fontSize: '1.1rem' }}
+              sx={{
+                mt: 3,
+                py: 1.5,
+                fontSize: '1.1rem',
+                backgroundColor: formData.email && formData.password ? '#2e7d32' : undefined,
+                '&:hover': {
+                  backgroundColor: formData.email && formData.password ? '#1b5e20' : undefined,
+                }
+              }}
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? 'Signing In...' : (formData.email && formData.password ? 'Proceed to Login' : 'Sign In')}
             </Button>
           </Stack>
         </Box>
 
         <Divider sx={{ my: 3 }} />
 
-        {/* OPR Workflow Test Users */}
+        {/* Hierarchical Distributed Workflow Test Users */}
         <Card variant="outlined" sx={{ mt: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom color="primary">
-              🎯 OPR Workflow Test Users
+              🎯 Hierarchical Distributed Review Workflow (10 Stages)
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              8-Stage Air Force Document Review Workflow - Role-Based Access Control
+              All test accounts use password: <strong>testpass123</strong>
             </Typography>
-            <Stack spacing={2}>
-              <Box>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  📝 <strong>OPR (Office of Primary Responsibility):</strong> opr@demo.mil
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Can act on stages: 1, 3, 5, 7 (Initial Draft, Review & Revision, Final Revision, Pre-Publication)
-                </Typography>
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  onClick={() => quickLogin('opr@demo.mil', 'password123')}
-                  disabled={isLoading}
-                  sx={{ fontSize: '0.75rem' }}
-                >
-                  Quick Login as OPR
-                </Button>
-              </Box>
 
-              <Box>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  🤝 <strong>Coordinator:</strong> coordinator.test@af.mil
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Can act on stages: 2, 4 (First & Second Coordination Review)
-                </Typography>
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  onClick={() => quickLogin('coordinator.test@af.mil', 'password123')}
-                  disabled={isLoading}
-                  sx={{ fontSize: '0.75rem' }}
-                >
-                  Quick Login as Coordinator
-                </Button>
-              </Box>
-
-              <Box>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  ⚖️ <strong>Legal Reviewer:</strong> legal@demo.mil
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Can act on stage: 6 (Legal Review & Approval)
-                </Typography>
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  onClick={() => quickLogin('legal@demo.mil', 'password123')}
-                  disabled={isLoading}
-                  sx={{ fontSize: '0.75rem' }}
-                >
-                  Quick Login as Legal
-                </Button>
-              </Box>
-
-              <Box>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  🏛️ <strong>AFDPO (Air Force Publishing Office):</strong> afdpo.analyst@demo.mil
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Can act on stage: 8 (AFDPO Publication Review)
-                </Typography>
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  onClick={() => quickLogin('afdpo.analyst@demo.mil', 'password123')}
-                  disabled={isLoading}
-                  sx={{ fontSize: '0.75rem' }}
-                >
-                  Quick Login as AFDPO
-                </Button>
-              </Box>
-
-              <Box>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  👑 <strong>Workflow Admin:</strong> admin@demo.mil
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Can override any stage (1-8) with red admin buttons
-                </Typography>
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  color="secondary"
-                  onClick={() => quickLogin('admin@demo.mil', 'password123')}
-                  disabled={isLoading}
-                  sx={{ fontSize: '0.75rem' }}
-                >
-                  Quick Login as Admin
-                </Button>
-              </Box>
-            </Stack>
-            
-            {/* Workflow Stages Info */}
-            <Box sx={{ mt: 2, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
-              <Typography variant="body2" fontWeight="bold" gutterBottom>
-                🔄 OPR Workflow Stages:
+            {/* Stage 1: Action Officers */}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                📝 Stage 1: Initial Draft - Action Officers
               </Typography>
-              <Typography variant="caption" display="block" sx={{ lineHeight: 1.4 }}>
-                1→ Initial Draft Preparation → 2→ First Coordination Review → 3→ OPR Review & Revision → 4→ Second Coordination Review → 
-                5→ OPR Final Revision → 6→ Legal Review & Approval → 7→ OPR Pre-Publication Review → 8→ AFDPO Publication Review (Complete)
+              <Stack spacing={1.5} sx={{ mt: 1 }}>
+                <Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    onClick={() => quickLogin('ao1@airforce.mil', 'testpass123')}
+                    disabled={isLoading}
+                    sx={{ fontSize: '0.70rem', py: 0.3, px: 1, mr: 1 }}
+                  >
+                    ao1@airforce.mil (Primary AO)
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    onClick={() => quickLogin('ao2@airforce.mil', 'testpass123')}
+                    disabled={isLoading}
+                    sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
+                  >
+                    ao2@airforce.mil (Secondary AO)
+                  </Button>
+                </Box>
+              </Stack>
+            </Box>
+
+            {/* Stage 2: PCM */}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#fff3e0', borderRadius: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                🔍 Stage 2: PCM Review (OPR Gatekeeper)
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => quickLogin('pcm@airforce.mil', 'testpass123')}
+                disabled={isLoading}
+                sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
+              >
+                pcm@airforce.mil (Program Control Manager)
+              </Button>
+            </Box>
+
+            {/* Stages 3 & 5: Coordination */}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#f3e5f5', borderRadius: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                🤝 Stages 3 & 5: Coordination Phases
+              </Typography>
+
+              <Typography variant="caption" fontWeight="bold" display="block" sx={{ mt: 1, mb: 0.5 }}>
+                Coordinator:
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                color="secondary"
+                onClick={() => quickLogin('coordinator1@airforce.mil', 'testpass123')}
+                disabled={isLoading}
+                sx={{ fontSize: '0.70rem', py: 0.3, px: 1, mb: 2 }}
+              >
+                coordinator1@airforce.mil
+              </Button>
+
+              <Typography variant="caption" fontWeight="bold" display="block" sx={{ mt: 1, mb: 0.5 }}>
+                Front Office Gatekeepers:
+              </Typography>
+              <Stack spacing={0.5} sx={{ mb: 2 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => quickLogin('ops.frontoffice@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
+                >
+                  🏢 ops.frontoffice@airforce.mil
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => quickLogin('log.frontoffice@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
+                >
+                  📦 log.frontoffice@airforce.mil
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => quickLogin('fin.frontoffice@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
+                >
+                  💰 fin.frontoffice@airforce.mil
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => quickLogin('per.frontoffice@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
+                >
+                  👥 per.frontoffice@airforce.mil
+                </Button>
+              </Stack>
+
+              <Typography variant="caption" fontWeight="bold" display="block" sx={{ mb: 0.5 }}>
+                Sub-Reviewers:
+              </Typography>
+              <Stack spacing={0.5}>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => quickLogin('ops.reviewer1@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
+                >
+                  ops.reviewer1@airforce.mil
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => quickLogin('ops.reviewer2@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
+                >
+                  ops.reviewer2@airforce.mil
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => quickLogin('log.reviewer1@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
+                >
+                  log.reviewer1@airforce.mil
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => quickLogin('fin.reviewer1@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
+                >
+                  fin.reviewer1@airforce.mil
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => quickLogin('per.reviewer1@airforce.mil', 'testpass123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
+                >
+                  per.reviewer1@airforce.mil
+                </Button>
+              </Stack>
+            </Box>
+
+            {/* Stage 7: Legal */}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#e8f5e9', borderRadius: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                ⚖️ Stage 7: Legal Review & Approval
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => quickLogin('legal.reviewer@airforce.mil', 'testpass123')}
+                disabled={isLoading}
+                sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
+              >
+                legal.reviewer@airforce.mil (Legal Compliance Officer)
+              </Button>
+            </Box>
+
+            {/* Stage 9: Leadership */}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#fce4ec', borderRadius: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                👑 Stage 9: OPR Leadership Signature
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => quickLogin('opr.leadership@airforce.mil', 'testpass123')}
+                disabled={isLoading}
+                sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
+              >
+                opr.leadership@airforce.mil (OPR Commander)
+              </Button>
+            </Box>
+
+            {/* Stage 10: AFDPO */}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#e0f2f1', borderRadius: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                🏛️ Stage 10: AFDPO Publication
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => quickLogin('afdpo.publisher@airforce.mil', 'testpass123')}
+                disabled={isLoading}
+                sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
+              >
+                afdpo.publisher@airforce.mil (AFDPO Publisher)
+              </Button>
+            </Box>
+
+            {/* Admin */}
+            <Box sx={{ mb: 2, p: 2, backgroundColor: '#ffebee', borderRadius: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                🛠️ System Administration
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                onClick={() => quickLogin('admin@airforce.mil', 'testpass123')}
+                disabled={isLoading}
+                sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
+              >
+                admin@airforce.mil (Workflow Administrator)
+              </Button>
+            </Box>
+
+            {/* Workflow Stages Info */}
+            <Box sx={{ mt: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                🔄 Workflow Stages Overview:
+              </Typography>
+              <Typography variant="caption" component="div" sx={{ lineHeight: 1.8 }}>
+                <strong>1.</strong> Initial Draft (AO) →
+                <strong>2.</strong> PCM Review →
+                <strong>3.</strong> First Coordination →
+                <strong>4.</strong> OPR Feedback Inc. →
+                <strong>5.</strong> Second Coordination →
+                <strong>6.</strong> OPR Second Update →
+                <strong>7.</strong> Legal Review →
+                <strong>8.</strong> Post-Legal Update →
+                <strong>9.</strong> Leadership Signature →
+                <strong>10.</strong> AFDPO Publication
               </Typography>
             </Box>
-            
-            <Box sx={{ mt: 2, p: 1, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                💡 Each user sees different buttons and capabilities based on their role and current workflow stage
+
+            {/* Key Features */}
+            <Box sx={{ mt: 2, p: 2, backgroundColor: '#e1f5fe', borderRadius: 1 }}>
+              <Typography variant="caption" fontWeight="bold" display="block" gutterBottom>
+                ⚡ Key Features:
+              </Typography>
+              <Typography variant="caption" display="block">
+                • Ownership transfer between Action Officers
+              </Typography>
+              <Typography variant="caption" display="block">
+                • PCM gatekeeper at OPR level
+              </Typography>
+              <Typography variant="caption" display="block">
+                • Front Office gatekeepers at organization level
+              </Typography>
+              <Typography variant="caption" display="block">
+                • Two coordination rounds with feedback incorporation
+              </Typography>
+              <Typography variant="caption" display="block">
+                • Legal review with post-legal update
+              </Typography>
+              <Typography variant="caption" display="block">
+                • Leadership signature requirement
+              </Typography>
+              <Typography variant="caption" display="block">
+                • Reset to start functionality
               </Typography>
             </Box>
           </CardContent>

@@ -131,15 +131,20 @@ const DocumentViewPage: React.FC = () => {
   const jsonWorkflowResetRef = useRef<(() => Promise<void>) | null>(null);
 
   // Define the 8-stage workflow steps
+  // Updated for 11-stage hierarchical workflow
   const workflowSteps = [
-    'OPR Creates',
-    '1st Coordination', 
-    'OPR Revisions',
-    '2nd Coordination',
-    'OPR Final',
-    'Legal Review',
-    'OPR Legal',
-    'AFDPO Publish'
+    'Initial Draft',           // Stage 1
+    'PCM Review',              // Stage 2
+    'First Coordination',      // Stage 3
+    'Review Collection',       // Stage 3.5
+    'OPR Feedback',           // Stage 4
+    'Second Coordination',     // Stage 5
+    'Second Review',          // Stage 5.5
+    'Second OPR Feedback',    // Stage 6
+    'Legal Review',           // Stage 7
+    'Post-Legal OPR',         // Stage 8
+    'Leadership Review',      // Stage 9
+    'AFDPO Publication'       // Stage 10
   ];
 
   // Helper function to check if current stage allows OPR coordination submission
@@ -173,15 +178,20 @@ const DocumentViewPage: React.FC = () => {
   const canUserAdvanceFromStage = (stageNumber: number): boolean => {
     if (!userRole) return false;
 
+    // Updated for 11-stage hierarchical workflow
     const roleRequirements = {
-      1: ['ADMIN', 'OPR', 'AUTHOR'],           // OPR Creates
-      2: ['ADMIN', 'TECHNICAL_REVIEWER'],     // 1st Coordination  
-      3: ['ADMIN', 'OPR', 'AUTHOR'],          // OPR Revisions
-      4: ['ADMIN', 'TECHNICAL_REVIEWER'],     // 2nd Coordination
-      5: ['ADMIN', 'OPR', 'AUTHOR'],          // OPR Final
-      6: ['ADMIN', 'LEGAL_REVIEWER'],         // Legal Review
-      7: ['ADMIN', 'OPR', 'AUTHOR'],          // OPR Legal
-      8: ['ADMIN', 'PUBLISHER']               // AFDPO Publish
+      1: ['ADMIN', 'ACTION_OFFICER'],         // Stage 1: Initial Draft
+      2: ['ADMIN', 'PCM'],                    // Stage 2: PCM Review
+      3: ['ADMIN', 'COORDINATOR'],            // Stage 3: First Coordination
+      3.5: ['ADMIN', 'SUB_REVIEWER', 'OPR'],  // Stage 3.5: Review Collection
+      4: ['ADMIN', 'ACTION_OFFICER'],         // Stage 4: OPR Feedback
+      5: ['ADMIN', 'COORDINATOR'],            // Stage 5: Second Coordination
+      5.5: ['ADMIN', 'SUB_REVIEWER', 'OPR'],  // Stage 5.5: Second Review
+      6: ['ADMIN', 'ACTION_OFFICER'],         // Stage 6: Second OPR Feedback
+      7: ['ADMIN', 'LEGAL'],                  // Stage 7: Legal Review
+      8: ['ADMIN', 'ACTION_OFFICER'],         // Stage 8: Post-Legal OPR
+      9: ['ADMIN', 'LEADERSHIP'],             // Stage 9: Leadership Review
+      10: ['ADMIN', 'AFDPO', 'PUBLISHER']     // Stage 10: AFDPO Publication
     };
 
     const requiredRoles = roleRequirements[stageNumber as keyof typeof roleRequirements] || [];
@@ -262,16 +272,29 @@ const DocumentViewPage: React.FC = () => {
           const backendStage = workflow.current_stage;
           const stageMapping = {
             'DRAFT_CREATION': 'OPR Creates',
-            'INTERNAL_COORDINATION': '1st Coordination', 
+            'INTERNAL_COORDINATION': '1st Coordination',
             'OPR_REVISIONS': 'OPR Revisions',
             'EXTERNAL_COORDINATION': '2nd Coordination',
             'OPR_FINAL': 'OPR Final',
             'LEGAL_REVIEW': 'Legal Review',
             'OPR_LEGAL': 'OPR Legal',
-            'FINAL_PUBLISHING': 'AFDPO Publish'
+            'FINAL_PUBLISHING': 'AFDPO Publish',
+            // New stages for hierarchical workflow
+            '1': 'Initial Draft Preparation',
+            '2': 'PCM Review',
+            '3': 'First Coordination Distribution',
+            '3.5': 'First Review Collection',
+            '4': 'OPR Feedback Incorporation',
+            '5': 'Second Coordination Distribution',
+            '5.5': 'Second Review Collection',
+            '6': 'Second OPR Feedback Incorporation',
+            '7': 'Legal Review',
+            '8': 'Post-Legal OPR Update',
+            '9': 'OPR Leadership Review',
+            '10': 'AFDPO Publication'
           };
-          
-          const frontendStage = stageMapping[backendStage as keyof typeof stageMapping] || 'OPR Creates';
+
+          const frontendStage = stageMapping[backendStage as keyof typeof stageMapping] || backendStage || 'OPR Creates';
           setWorkflowStage(frontendStage);
           setWorkflowActive(true);
           
@@ -456,7 +479,7 @@ const DocumentViewPage: React.FC = () => {
     try {
       // console.log('🚀 WORKFLOW: Starting 8-stage workflow for document:', documentId);
 
-      const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/start/${documentId}`, {
+      const response = await authTokenService.authenticatedFetch(`/api/workflow/documents/${documentId}/workflow/initialize`, {
         method: 'POST',
         body: JSON.stringify({})
       });
@@ -488,23 +511,25 @@ const DocumentViewPage: React.FC = () => {
       // console.log('🔍 WORKFLOW: Fetching status for document:', documentId);
       
       // Add timestamp to prevent caching issues
-      const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/document/${documentId}?t=${Date.now()}`, {
+      const response = await authTokenService.authenticatedFetch(`/api/workflow/documents/${documentId}/workflow/status?t=${Date.now()}`, {
         method: 'GET'
       });
 
       if (response.ok) {
         const data = await response.json();
-        // console.log('🔍 WORKFLOW: Status response:', data);
-        
+        console.log('🔍 WORKFLOW: Status response:', data);
+
         if (data.success && data.workflow) {
           setWorkflowActive(data.workflow.is_active);
           setWorkflowStage(data.workflow.current_stage);
           setWorkflowId(data.workflow.id);
-          // console.log('🔍 WORKFLOW: State updated:', {
-          //   active: data.workflow.is_active,
-          //   stage: data.workflow.current_stage,
-          //   id: data.workflow.id
-          // });
+          console.log('🔍 WORKFLOW: State updated:', {
+            active: data.workflow.is_active,
+            stage: data.workflow.current_stage,
+            id: data.workflow.id
+          });
+        } else {
+          console.log('❌ WORKFLOW: No workflow data in response or success=false');
         }
       } else {
         // console.log('🔍 WORKFLOW: Status response not OK:', response.status);
@@ -542,7 +567,7 @@ const DocumentViewPage: React.FC = () => {
       }
 
       // Update workflow state
-      const response = await authTokenService.authenticatedFetch(`/api/workflow/8-stage/advance/${workflowId || documentId}`, {
+      const response = await authTokenService.authenticatedFetch(`/api/workflow/documents/${documentId}/workflow/action`, {
         method: 'POST',
         body: JSON.stringify({
           fromStage: workflowStage,
@@ -615,8 +640,18 @@ const DocumentViewPage: React.FC = () => {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('🔍 DEBUG: Document data:', {
+          id: data.document.id,
+          status: data.document.status,
+          title: data.document.title,
+          workflowInstanceId: data.document.workflowInstanceId
+        });
+        console.log('🔍 DEBUG: Is document status PUBLISHED?', data.document.status === 'PUBLISHED');
         setDocumentData(data.document);
-        setIsDocumentPublished(data.document.status === 'PUBLISHED');
+        // Only consider document published if workflow is not active or completed
+        // If workflow is active and not at final stage, show workflow UI instead
+        const hasActiveWorkflow = data.document.workflowInstanceId && data.document.status !== 'COMPLETED';
+        setIsDocumentPublished(data.document.status === 'PUBLISHED' && !hasActiveWorkflow);
       } else {
         throw new Error('Failed to fetch document data');
       }
@@ -701,16 +736,20 @@ const DocumentViewPage: React.FC = () => {
     const currentStepName = stageToStepMap[workflowStage] || workflowStage;
     const currentStepIndex = workflowSteps.findIndex(step => step === currentStepName);
     
-    // Role-based stage responsibility mapping
+    // Role-based stage responsibility mapping (11-stage workflow)
     const stageRoles: Record<number, string[]> = {
-      1: ['ADMIN', 'OPR', 'AUTHOR'],           // OPR Creates
-      2: ['ADMIN', 'TECHNICAL_REVIEWER'],     // 1st Coordination  
-      3: ['ADMIN', 'OPR', 'AUTHOR'],          // OPR Revisions
-      4: ['ADMIN', 'TECHNICAL_REVIEWER'],     // 2nd Coordination
-      5: ['ADMIN', 'OPR', 'AUTHOR'],          // OPR Final
-      6: ['ADMIN', 'LEGAL_REVIEWER'],         // Legal Review
-      7: ['ADMIN', 'OPR', 'AUTHOR'],          // OPR Legal
-      8: ['ADMIN', 'PUBLISHER']               // AFDPO Publish
+      1: ['ADMIN', 'ACTION_OFFICER'],         // Stage 1: Initial Draft
+      2: ['ADMIN', 'PCM'],                    // Stage 2: PCM Review
+      3: ['ADMIN', 'COORDINATOR'],            // Stage 3: First Coordination
+      3.5: ['ADMIN', 'SUB_REVIEWER', 'OPR'],  // Stage 3.5: Review Collection
+      4: ['ADMIN', 'ACTION_OFFICER'],         // Stage 4: OPR Feedback
+      5: ['ADMIN', 'COORDINATOR'],            // Stage 5: Second Coordination
+      5.5: ['ADMIN', 'SUB_REVIEWER', 'OPR'],  // Stage 5.5: Second Review
+      6: ['ADMIN', 'ACTION_OFFICER'],         // Stage 6: Second OPR Feedback
+      7: ['ADMIN', 'LEGAL'],                  // Stage 7: Legal Review
+      8: ['ADMIN', 'ACTION_OFFICER'],         // Stage 8: Post-Legal OPR
+      9: ['ADMIN', 'LEADERSHIP'],             // Stage 9: Leadership Review
+      10: ['ADMIN', 'AFDPO', 'PUBLISHER']     // Stage 10: AFDPO Publication
     };
 
     return (
@@ -727,7 +766,7 @@ const DocumentViewPage: React.FC = () => {
             color: '#1565c0', 
             fontWeight: 'bold' 
           }}>
-            🔄 8-Stage Workflow Progress
+            🔄 Workflow Progress
             <Chip 
               label={`Your Role: ${userRole?.role || 'Loading...'}`} 
               size="small" 
@@ -865,13 +904,27 @@ const DocumentViewPage: React.FC = () => {
           startIcon={<StartWorkflowIcon />}
           sx={{ mb: 2 }}
         >
-          🚀 Start 8-Stage Workflow
+          🚀 Start Workflow
         </Button>
       );
     }
 
     // Stage-specific action buttons
     const renderStageButtons = () => {
+      console.log('🔍 DEBUG renderStageButtons: workflowStage =', workflowStage);
+
+      // If workflowStage is "PUBLISHED" but workflow is active, it's a mismatch
+      // This can happen when document status is PUBLISHED but workflow is still active
+      // In this case, don't show the published UI
+      if (workflowStage === 'PUBLISHED' && workflowActive) {
+        console.log('⚠️ WARNING: Document status is PUBLISHED but workflow is active. Not showing published UI.');
+        return (
+          <Alert severity="warning">
+            Workflow is in progress. Please use the workflow controls to advance stages.
+          </Alert>
+        );
+      }
+
       switch (workflowStage) {
         case 'OPR Creates':
         case 'DRAFT_CREATION':
@@ -993,7 +1046,8 @@ const DocumentViewPage: React.FC = () => {
             <Button
               variant="contained"
               color="primary"
-              onClick={() => handleWorkflowAdvancement('AFDPO Publish', 8)}
+              onClick={() => handleWorkflowAdvancement('AFDPO Publication', 10)}
+              disabled={workflowStage !== '9' && workflowStage !== 'OPR Leadership Final Review'} // Only enable after Leadership review (stage 9)
             >
               📤 Send to AFDPO
             </Button>
@@ -1003,9 +1057,31 @@ const DocumentViewPage: React.FC = () => {
             </Alert>
           );
 
+        case '6':
+        case 'Second OPR Feedback Incorporation':
+          // Stage 6 - Second OPR Feedback Incorporation
+          return canAdvance ? (
+            <div>
+              <Typography variant="h6" gutterBottom>
+                Second OPR Feedback Incorporation
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Action Officer is incorporating second round feedback.
+                Use the workflow buttons to advance when ready.
+              </Typography>
+            </div>
+          ) : (
+            <Alert severity="info">
+              Waiting for Action Officer to incorporate second round feedback.
+            </Alert>
+          );
+
         case 'AFDPO Publish':
         case 'FINAL_PUBLISHING':
-          // Stage 8 means the document is completed - show completion screen for all users
+        case 'AFDPO Publication':
+        case '10':
+        case 'PUBLISHED':  // Handle when document status is truly published
+          // Final stage - document is published
           return (
             <Card sx={{
               bgcolor: 'success.light',
@@ -1042,7 +1118,17 @@ const DocumentViewPage: React.FC = () => {
           );
 
         default:
-          return null;
+          // Handle new hierarchical workflow stages
+          return (
+            <Alert severity="info">
+              <Typography variant="subtitle1">
+                Current Stage: {workflowStage}
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Please use the workflow buttons above to advance to the next stage when ready.
+              </Typography>
+            </Alert>
+          );
       }
     };
 
@@ -1324,9 +1410,35 @@ const DocumentViewPage: React.FC = () => {
                 userRole={userRole?.roleType || userRole?.role || 'USER'}
                 onWorkflowChange={(instance) => {
                   // Update old workflow state to maintain compatibility
-                  if (instance.isActive) {
+                  console.log('🔍 DEBUG onWorkflowChange: Instance received:', instance);
+                  if ((instance as any).isActive || (instance as any).active) {
                     setWorkflowActive(true);
-                    setWorkflowStage(instance.currentStageName || '');
+                    // Don't use document status as workflow stage - use actual workflow stage
+                    const stageName = instance.currentStageName || '';
+                    console.log('🔍 DEBUG onWorkflowChange: Setting stage to:', stageName, 'from instance:', instance);
+
+                    // If the stage name is "PUBLISHED" but workflow is active,
+                    // this is likely the document status, not the workflow stage
+                    if (stageName === 'PUBLISHED' && instance.currentStageId) {
+                      console.log('⚠️ WARNING: Stage name is PUBLISHED but workflow is active. Using stage ID:', instance.currentStageId);
+                      // Map the stage ID to the correct stage name
+                      const stageIdToName: Record<string, string> = {
+                        '1': 'OPR Creates',
+                        '2': '1st Coordination',
+                        '3': 'Legal Review',
+                        '4': 'OPR Feedback Incorporation',
+                        '5': 'OPR Leadership Review',
+                        '6': 'Second OPR Feedback Incorporation',
+                        '7': 'Final Coordination',
+                        '8': 'Final Legal Review',
+                        '9': 'OPR Leadership Review',
+                        '10': 'AFDPO Publication'
+                      };
+                      const mappedStage = stageIdToName[instance.currentStageId] || stageName;
+                      setWorkflowStage(mappedStage);
+                    } else {
+                      setWorkflowStage(stageName);
+                    }
                   } else {
                     setWorkflowActive(false);
                     setWorkflowStage('');
@@ -1389,7 +1501,7 @@ const DocumentViewPage: React.FC = () => {
                 <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
                   🤖 AI-Powered Feedback Processing
                 </Typography>
-                <OPRFeedbackProcessor documentId={documentId} />
+                <OPRFeedbackProcessor documentId={documentId} documentTitle={documentData?.title || ''} />
               </Paper>
             )}
           </Grid>
@@ -1567,7 +1679,7 @@ const DocumentViewPage: React.FC = () => {
 
             {/* Workflow Tasks Component */}
             <Paper sx={{ p: 3, mb: 3 }}>
-              <WorkflowTasks documentId={documentId} />
+              <WorkflowTasks />
             </Paper>
 
             {/* Document Versions */}

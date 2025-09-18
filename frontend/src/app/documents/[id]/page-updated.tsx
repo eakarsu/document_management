@@ -879,9 +879,15 @@ const DocumentViewPage: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Document Preview
               </Typography>
-              <DocumentViewer 
-                documentId={documentId} 
-                title={documentData.title}
+              <DocumentViewer
+                documentId={documentId}
+                document={{
+                  title: documentData.title,
+                  mimeType: documentData.mimeType || '',
+                  category: documentData.category || '',
+                  fileSize: documentData.fileSize,
+                  content: (documentData as any).content
+                }}
               />
             </Paper>
           </Grid>
@@ -931,7 +937,7 @@ const DocumentViewPage: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Version History
               </Typography>
-              <DocumentVersions documentId={documentId} />
+              <DocumentVersions documentId={documentId} currentUserId={''} />
             </Paper>
           </Grid>
         </Grid>

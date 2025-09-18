@@ -65,6 +65,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import WorkflowTasks from '../../components/WorkflowTasks';
+import ReviewerTasks from '../../components/ReviewerTasks';
 
 interface DashboardData {
   totalDocuments: number;
@@ -721,6 +722,10 @@ const DashboardPage: React.FC = () => {
             {/* Workflow Tasks - Pending Approvals */}
             <Box sx={{ mt: 3 }}>
               <WorkflowTasks showHeader={true} maxTasks={5} />
+            </Box>
+            {/* Reviewer Tasks - For Sub-Reviewers */}
+            <Box sx={{ mt: 3 }}>
+              <ReviewerTasks />
             </Box>
           </Grid>
         </Grid>

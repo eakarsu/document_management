@@ -235,7 +235,7 @@ export function FeedbackReviewInterface({
                 <div className="bg-muted p-4 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Badge variant={getSeverityColor(selectedFeedback.severity)}>
+                      <Badge variant={getSeverityColor(selectedFeedback.severity) as any}>
                         {selectedFeedback.severity}
                       </Badge>
                       <span className="text-sm text-muted-foreground">
@@ -426,7 +426,7 @@ export function FeedbackReviewInterface({
                     <div className="flex items-center gap-2">
                       {getStatusIcon(feedback.status)}
                       <Badge 
-                        variant={getSeverityColor(feedback.severity)}
+                        variant={getSeverityColor(feedback.severity) as any}
                         className="text-xs"
                       >
                         {feedback.severity}

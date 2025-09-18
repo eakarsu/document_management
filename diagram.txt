@@ -1,0 +1,123 @@
+I'll create a comprehensive Mermaid diagram showing the entire 10-stage workflow with the detailed Coordinator distribution
+  process integrated:
+
+  graph TB
+      Start([🚀 WORKFLOW START]) --> Stage1[<b>STAGE 1: Initial Draft Preparation</b><br/>📝 Actor: ao1@airforce.mil<br/>Role:
+  ACTION_OFFICER<br/>Tasks: Create draft, Upload document]
+
+      Stage1 --> Stage2[<b>STAGE 2: Legal Review</b><br/>⚖️ Actor: legal.reviewer@airforce.mil<br/>Role: LEGAL<br/>Tasks: Review
+  for compliance, Add legal notes]
+
+      Stage2 --> Stage3Start[<b>STAGE 3: Coordinator Distribution</b><br/>📧 Actor: coordinator@airforce.mil]
+
+      subgraph "📊 STAGE 3: DISTRIBUTED REVIEW PROCESS"
+          Stage3Start --> DistModal[Open Distribution Modal<br/>Select 5 Reviewers<br/>Set 7-day deadline]
+
+          DistModal --> ParallelReviews{Distribute to<br/>Multiple Reviewers}
+
+          ParallelReviews --> R1[Reviewer 1<br/>Technical SME<br/>15 comments]
+          ParallelReviews --> R2[Reviewer 2<br/>Policy Expert<br/>8 comments]
+          ParallelReviews --> R3[Reviewer 3<br/>Operations<br/>12 comments]
+          ParallelReviews --> R4[Reviewer 4<br/>Finance<br/>5 comments]
+          ParallelReviews --> R5[Reviewer 5<br/>Personnel<br/>10 comments]
+      end
+
+      subgraph "🤖 STAGE 3.5: FEEDBACK COLLECTION"
+          R1 --> Collection[System Collects Feedback<br/>50 Total Comments]
+          R2 --> Collection
+          R3 --> Collection
+          R4 --> Collection
+          R5 --> Collection
+
+          Collection --> Analytics[Analyze Feedback<br/>8 Critical, 22 Major, 20 Minor<br/>3 Conflicts Detected]
+
+          Analytics --> CoordReview[Coordinator Reviews<br/>Resolves Conflicts<br/>Prepares Package]
+      end
+
+      CoordReview --> Stage4[<b>STAGE 4: First OPR Feedback</b><br/>✏️ Actor: ao1@airforce.mil<br/>Role:
+  ACTION_OFFICER<br/>Tasks: Incorporate 50 comments]
+
+      Stage4 --> Stage5[<b>STAGE 5: Second Legal Review</b><br/>⚖️ Actor: legal.reviewer@airforce.mil<br/>Role: LEGAL<br/>Tasks:
+  Verify incorporated changes]
+
+      Stage5 --> Stage6[<b>STAGE 6: Second OPR Feedback</b><br/>✏️ Actor: ao1@airforce.mil<br/>Role: ACTION_OFFICER<br/>Tasks:
+  Address legal concerns]
+
+      Stage6 --> Stage7[<b>STAGE 7: Final Legal Review</b><br/>⚖️ Actor: legal.reviewer@airforce.mil<br/>Role: LEGAL<br/>Tasks:
+  Final compliance check]
+
+      Stage7 --> Stage8[<b>STAGE 8: Post-Legal OPR Update</b><br/>✏️ Actor: ao1@airforce.mil<br/>Role: ACTION_OFFICER<br/>Tasks:
+  Final revisions]
+
+      Stage8 --> Stage9[<b>STAGE 9: Leadership Review</b><br/>⭐ Actor: opr.leadership@airforce.mil<br/>Role:
+  LEADERSHIP<br/>Tasks: Review & Approve/Reject]
+
+      Stage9 --> Stage10[<b>STAGE 10: AFDPO Publication</b><br/>📚 Actor: afdpo.publisher@airforce.mil<br/>Role: AFDPO<br/>Tasks:
+   Final Check, Publish]
+
+      Stage10 --> End([✅ WORKFLOW COMPLETE<br/>Document Published])
+
+      %% Alternative Paths
+      Stage9 -.->|Reject| Stage8
+      Stage7 -.->|Issues Found| Stage6
+      Stage5 -.->|Major Issues| Stage4
+
+      %% Styling
+      classDef actionOfficer fill:#e3f2fd,stroke:#1976d2,stroke-width:3px,color:#000
+      classDef legal fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px,color:#000
+      classDef coordinator fill:#fff3e0,stroke:#f57c00,stroke-width:4px,color:#000
+      classDef reviewer fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000
+      classDef leadership fill:#fce4ec,stroke:#c2185b,stroke-width:3px,color:#000
+      classDef afdpo fill:#e8f5e9,stroke:#388e3c,stroke-width:3px,color:#000
+      classDef system fill:#f5f5f5,stroke:#616161,stroke-width:2px,color:#000
+      classDef complete fill:#c8e6c9,stroke:#2e7d32,stroke-width:4px,color:#000
+
+      class Stage1,Stage4,Stage6,Stage8 actionOfficer
+      class Stage2,Stage5,Stage7 legal
+      class Stage3Start,DistModal,CoordReview coordinator
+      class R1,R2,R3,R4,R5 reviewer
+      class Collection,Analytics system
+      class Stage9 leadership
+      class Stage10 afdpo
+      class End complete
+
+  Here's a second diagram showing the workflow with timing and metrics:
+
+  flowchart LR
+      subgraph "📅 WORKFLOW TIMELINE & METRICS"
+          subgraph "Week 1"
+              S1[Stage 1<br/>Draft<br/>1 day] --> S2[Stage 2<br/>Legal<br/>2 days]
+          end
+
+          subgraph "Week 2"
+              S2 --> S3[Stage 3<br/>Distribute<br/>1 day]
+              S3 --> S35[Stage 3.5<br/>Collect<br/>7 days]
+          end
+
+          subgraph "Week 3"
+              S35 --> S4[Stage 4<br/>Incorporate<br/>2 days]
+              S4 --> S5[Stage 5<br/>Legal 2<br/>1 day]
+          end
+
+          subgraph "Week 4"
+              S5 --> S6[Stage 6<br/>OPR 2<br/>1 day]
+              S6 --> S7[Stage 7<br/>Legal 3<br/>1 day]
+              S7 --> S8[Stage 8<br/>Final OPR<br/>1 day]
+          end
+
+          subgraph "Week 5"
+              S8 --> S9[Stage 9<br/>Leadership<br/>2 days]
+              S9 --> S10[Stage 10<br/>AFDPO<br/>1 day]
+          end
+      end
+
+      subgraph "📊 STAGE METRICS"
+          Metrics[<b>Total Duration: ~21 days</b><br/>Total Actors: 9 unique users<br/>Total Comments: 50+ feedback
+  items<br/>Review Cycles: 3 legal, 4 OPR<br/>Parallel Reviews: 5 simultaneous<br/>Decision Points: 4 approval gates]
+      end
+
+      subgraph "👥 ACTORS SUMMARY"
+          Actors[<b>Primary Actors:</b><br/>• ao1@airforce.mil (Stages 1,4,6,8)<br/>• legal.reviewer@airforce.mil (Stages
+  2,5,7)<br/>• coordinator@airforce.mil (Stage 3)<br/>• 5 Reviewers (Stage 3.5)<br/>• opr.leadership@airforce.mil (Stage 9)<br/>•
+   afdpo.publisher@airforce.mil (Stage 10)]
+      end

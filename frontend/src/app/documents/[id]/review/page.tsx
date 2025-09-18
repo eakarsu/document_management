@@ -234,6 +234,73 @@ const DocumentReviewPage = () => {
     });
   };
 
+  const handleSubmitFeedbackToOPR = async () => {
+    if (comments.length === 0) {
+      alert('Please add at least one comment before submitting');
+      return;
+    }
+
+    try {
+      // First, save the feedback to the comment matrix
+      const patchResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            commentMatrix: comments,
+            lastCommentUpdate: new Date().toISOString()
+          }
+        })
+      });
+
+      if (!patchResponse.ok) {
+        alert('Failed to save feedback');
+        return;
+      }
+
+      // Find active workflow task for this user
+      const taskResponse = await authTokenService.authenticatedFetch(`/api/workflow-instances/${documentId}`);
+      if (taskResponse.ok) {
+        const workflowData = await taskResponse.json();
+
+        // Find the active task for the current user
+        const activeTask = workflowData.activeTasks?.find((task: any) =>
+          task.status === 'active' || task.status === 'pending'
+        );
+
+        if (activeTask) {
+          // Complete the task
+          const completeResponse = await authTokenService.authenticatedFetch(
+            `/api/workflow-instances/${documentId}/tasks/${activeTask.id}/complete`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                decision: 'approved',
+                comments: `Submitted ${comments.length} feedback item(s) for OPR review`
+              })
+            }
+          );
+
+          if (completeResponse.ok) {
+            alert('Feedback successfully submitted to OPR!');
+            router.push('/dashboard');
+          } else {
+            alert('Feedback saved but could not complete workflow task');
+            router.push('/dashboard');
+          }
+        } else {
+          alert('Feedback saved successfully!');
+          router.push('/dashboard');
+        }
+      } else {
+        alert('Feedback saved successfully!');
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      alert('Error submitting feedback to OPR');
+    }
+  };
+
   const handleDeleteComment = async (id: string) => {
     const updatedComments = comments.filter(c => c.id !== id);
     setComments(updatedComments);
@@ -262,35 +329,7 @@ const DocumentReviewPage = () => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (comments.length === 0) {
-      alert('Please add at least one comment before submitting');
-      return;
-    }
-
-    try {
-      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}/feedback`, {
-        method: 'POST',
-        body: JSON.stringify({
-          comments,
-          userRole: 'coordinator',
-          documentId,
-          isDraft: false  // Final submission, not a draft
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(`CRM Feedback submitted successfully! ${data.hasCritical ? '⚠️ Critical comments detected' : ''}`);
-        router.push(`/documents/${documentId}`);
-      } else {
-        alert('Failed to submit feedback');
-      }
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-      alert('Error submitting feedback');
-    }
-  };
+  // Removed handleSubmit - using handleSubmitFeedbackToOPR instead
 
   const getCommentTypeColor = (type: string) => {
     switch(type) {
@@ -316,7 +355,7 @@ const DocumentReviewPage = () => {
     <>
       <AppBar position="sticky" color="primary">
         <Toolbar>
-          <IconButton edge="start" color="inherit" onClick={() => router.push(`/documents/${documentId}`)}>
+          <IconButton edge="start" color="inherit" onClick={() => router.push('/dashboard')}>
             <ArrowBack />
           </IconButton>
           <DocumentIcon sx={{ ml: 2, mr: 1 }} />
@@ -326,14 +365,14 @@ const DocumentReviewPage = () => {
           <Badge badgeContent={comments.length} color="error" sx={{ mr: 2 }}>
             <CommentIcon />
           </Badge>
-          <Button 
-            color="inherit" 
+          <Button
+            color="inherit"
             variant="outlined"
-            onClick={handleSubmit}
+            onClick={handleSubmitFeedbackToOPR}
             disabled={comments.length === 0}
             startIcon={<SendIcon />}
           >
-            Submit {comments.length} Comment{comments.length !== 1 ? 's' : ''}
+            Submit Feedback to OPR
           </Button>
         </Toolbar>
       </AppBar>

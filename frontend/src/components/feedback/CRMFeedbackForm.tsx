@@ -350,7 +350,7 @@ const CRMFeedbackForm: React.FC<CRMFeedbackFormProps> = ({
               </Grid>
 
               {/* Column 7: Resolution (for Originators) */}
-              {userRole === 'originator' && (
+              {(userRole as string) === 'originator' && (
                 <Grid item xs={12}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Resolution (Col 7)</InputLabel>
@@ -385,7 +385,7 @@ const CRMFeedbackForm: React.FC<CRMFeedbackFormProps> = ({
                 <TableCell align="center">Type</TableCell>
                 <TableCell>Location</TableCell>
                 <TableCell>Comment</TableCell>
-                {userRole === 'originator' && <TableCell align="center">Resolution</TableCell>}
+                {(userRole as string) === 'originator' && <TableCell align="center">Resolution</TableCell>}
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -449,7 +449,7 @@ const CRMFeedbackForm: React.FC<CRMFeedbackFormProps> = ({
                         </AccordionDetails>
                       </Accordion>
                     </TableCell>
-                    {userRole === 'originator' && (
+                    {(userRole as string) === 'originator' && (
                       <TableCell align="center">
                         {comment.resolution ? (
                           <Chip
@@ -479,7 +479,7 @@ const CRMFeedbackForm: React.FC<CRMFeedbackFormProps> = ({
               })}
               {comments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={userRole === 'originator' ? 6 : 5} align="center">
+                  <TableCell colSpan={(userRole as string) === 'originator' ? 6 : 5} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
                       No comments added yet
                     </Typography>
@@ -638,7 +638,7 @@ const CRMFeedbackForm: React.FC<CRMFeedbackFormProps> = ({
                 value={formData.coordinatorComment}
                 onChange={(e) => setFormData({ ...formData, coordinatorComment: e.target.value })}
                 required
-                disabled={userRole === 'originator'}
+                disabled={(userRole as string) === 'originator'}
               />
             </Grid>
             <Grid item xs={12}>
@@ -649,7 +649,7 @@ const CRMFeedbackForm: React.FC<CRMFeedbackFormProps> = ({
                 label="Change the following"
                 value={formData.changeFrom}
                 onChange={(e) => setFormData({ ...formData, changeFrom: e.target.value })}
-                disabled={userRole === 'originator'}
+                disabled={(userRole as string) === 'originator'}
               />
             </Grid>
             <Grid item xs={12}>
@@ -660,7 +660,7 @@ const CRMFeedbackForm: React.FC<CRMFeedbackFormProps> = ({
                 label="To Read"
                 value={formData.changeTo}
                 onChange={(e) => setFormData({ ...formData, changeTo: e.target.value })}
-                disabled={userRole === 'originator'}
+                disabled={(userRole as string) === 'originator'}
               />
             </Grid>
             <Grid item xs={12}>
@@ -672,12 +672,12 @@ const CRMFeedbackForm: React.FC<CRMFeedbackFormProps> = ({
                 value={formData.coordinatorJustification}
                 onChange={(e) => setFormData({ ...formData, coordinatorJustification: e.target.value })}
                 required
-                disabled={userRole === 'originator'}
+                disabled={(userRole as string) === 'originator'}
               />
             </Grid>
 
             {/* Column 7: Resolution (Originator Only) */}
-            {userRole === 'originator' && (
+            {(userRole as string) === 'originator' && (
               <>
                 <Grid item xs={12}>
                   <Divider sx={{ my: 1 }} />

@@ -1,15 +1,21 @@
 {
-  "defaultWorkflowId": "opr-review-workflow",
+  "defaultWorkflowId": "hierarchical-distributed-workflow",
   "workflows": {
+    "hierarchical-distributed-workflow": {
+      "name": "Hierarchical Distributed Review Workflow",
+      "description": "10-stage hierarchical workflow with distributed reviewers",
+      "isDefault": true,
+      "priority": 1
+    },
     "opr-review-workflow": {
       "name": "OPR Review Workflow (8 Stages)",
       "description": "Complete 8-stage OPR document review workflow with multiple coordination rounds",
-      "isDefault": true,
-      "priority": 1
+      "isDefault": false,
+      "priority": 2
     }
   },
   "settings": {
-    "autoSelectDefault": true,
-    "allowWorkflowOverride": false
+    "autoSelectDefault": false,
+    "allowWorkflowOverride": true
   }
 }

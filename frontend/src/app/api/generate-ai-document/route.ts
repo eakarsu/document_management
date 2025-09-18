@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     // Prepare document info as JSON string
     const documentInfoJson = JSON.stringify(documentInfo);
 
-    return new Promise((resolve) => {
+    return new Promise<NextResponse>((resolve) => {
       const child = spawn('node', [
         scriptPath,
         documentInfoJson,

@@ -541,19 +541,49 @@ router.get('/search',
 
       let where: any = {};
 
-      // Organization filter (always applied for authenticated users)
-      where.organizationId = req.user.organizationId;
-      
+      // PERMANENT FIX: Admin users can see ALL documents from ALL organizations
+      // Regular users see documents from their organization OR documents they have explicit permission for
+      if (req.user.role?.name !== 'Admin') {
+        // Get documents user has explicit permission for
+        const permittedDocIds = await prisma.documentPermission.findMany({
+          where: { userId: req.user.id },
+          select: { documentId: true }
+        }).then(perms => perms.map(p => p.documentId));
+
+        // User can see: documents from their org OR documents they have permission for
+        const accessConditions: any[] = [
+          { organizationId: req.user.organizationId }
+        ];
+
+        if (permittedDocIds.length > 0) {
+          accessConditions.push({ id: { in: permittedDocIds } });
+        }
+
+        where.OR = accessConditions;
+      }
+
       // Filter out deleted documents
       where.status = { not: 'DELETED' };
 
       // Search query for metadata fields only
       if (q) {
-        where.OR = [
+        // Combine access conditions with search conditions
+        const searchConditions = [
           { title: { contains: q as string, mode: 'insensitive' } },
           { description: { contains: q as string, mode: 'insensitive' } },
           { originalName: { contains: q as string, mode: 'insensitive' } }
         ];
+
+        if (where.OR) {
+          // Combine access and search conditions
+          where.AND = [
+            { OR: where.OR },
+            { OR: searchConditions }
+          ];
+          delete where.OR;
+        } else {
+          where.OR = searchConditions;
+        }
       }
 
       // Filters
@@ -603,15 +633,48 @@ router.get('/search',
 
 // Get document metadata
 router.get('/:id',
+  authMiddleware,
   async (req: any, res) => {
     try {
       const documentId = req.params.id;
 
-      const document = await documentService.getDocumentById(
-        documentId,
-        req.user.id,
-        req.user.organizationId
-      );
+      // First check if user has explicit permission for this document
+      const hasPermission = await prisma.documentPermission.findFirst({
+        where: {
+          documentId,
+          userId: req.user.id
+        }
+      });
+
+      let document;
+      if (hasPermission || req.user.role?.name === 'Admin') {
+        // User has permission or is admin - get document directly from DB
+        document = await prisma.document.findFirst({
+          where: {
+            id: documentId,
+            status: { not: 'DELETED' }
+          },
+          include: {
+            createdBy: {
+              select: { firstName: true, lastName: true, email: true }
+            },
+            folder: {
+              select: { name: true }
+            },
+            versions: {
+              orderBy: { versionNumber: 'desc' },
+              take: 10
+            }
+          }
+        });
+      } else {
+        // Use service method which checks organizationId
+        document = await documentService.getDocumentById(
+          documentId,
+          req.user.id,
+          req.user.organizationId
+        );
+      }
 
       if (!document) {
         return res.status(404).json({
@@ -638,17 +701,9 @@ router.get('/:id',
           : 'No content'
       });
 
-      // Ensure content field is accessible in the response
-      const documentWithContent = {
-        ...document,
-        content: document.customFields && typeof document.customFields === 'object' && (document.customFields as any).content
-          ? (document.customFields as any).content
-          : null
-      };
-
       res.json({
         success: true,
-        document: documentWithContent
+        document: document
       });
 
     } catch (error) {
@@ -682,6 +737,41 @@ router.put('/:id',
 
     } catch (error) {
       logger.error('Document update failed:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Update failed'
+      });
+    }
+  }
+);
+
+// Patch document (partial update)
+router.patch('/:id',
+  async (req: any, res) => {
+    try {
+      const documentId = req.params.id;
+      const updateData = req.body;
+
+      logger.info('PATCH document request:', {
+        documentId,
+        userId: req.user.id,
+        updateData: Object.keys(updateData)
+      });
+
+      const document = await documentService.updateDocument(
+        documentId,
+        updateData,
+        req.user.id,
+        req.user.organizationId
+      );
+
+      res.json({
+        success: true,
+        document
+      });
+
+    } catch (error) {
+      logger.error('Document PATCH failed:', error);
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Update failed'

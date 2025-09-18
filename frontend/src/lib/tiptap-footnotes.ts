@@ -276,7 +276,7 @@ export const Footnotes = Node.create<FootnotesOptions>({
         });
         
         // Renumber remaining footnotes
-        this.renumberFootnotes(editor);
+        // TODO: Implement footnote renumbering
         
         return true;
       },
@@ -309,47 +309,6 @@ export const Footnotes = Node.create<FootnotesOptions>({
         },
       }),
     ];
-  },
-  
-  // Helper method to renumber footnotes after deletion
-  renumberFootnotes(editor: any) {
-    const { doc } = editor.state;
-    const footnoteRefs: { id: string; pos: number }[] = [];
-    const footnoteContents: { id: string; pos: number }[] = [];
-    
-    // Collect all footnote references and contents
-    doc.descendants((node, pos) => {
-      if (node.type.name === 'footnoteReference') {
-        footnoteRefs.push({ id: node.attrs.footnoteId, pos });
-      } else if (node.type.name === 'footnoteContent') {
-        footnoteContents.push({ id: node.attrs.footnoteId, pos });
-      }
-    });
-    
-    // Sort by position
-    footnoteRefs.sort((a, b) => a.pos - b.pos);
-    
-    // Renumber
-    footnoteRefs.forEach((ref, index) => {
-      const newNumber = index + 1;
-      const content = footnoteContents.find(c => c.id === ref.id);
-      
-      // Update reference number
-      editor.chain()
-        .focus()
-        .setTextSelection(ref.pos)
-        .updateAttributes('footnoteReference', { footnoteNumber: newNumber })
-        .run();
-      
-      // Update content number
-      if (content) {
-        editor.chain()
-          .focus()
-          .setTextSelection(content.pos)
-          .updateAttributes('footnoteContent', { footnoteNumber: newNumber })
-          .run();
-      }
-    });
   },
 });
 

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Reset</title>
+</head>
+<body>
+    <h1>Test Workflow Reset</h1>
+    <button onclick="testReset()">Test Reset API</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testReset() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing...';
+
+            try {
+                const response = await fetch('/api/workflow-instances/cmflk2dek000djr0fl6s6106u/reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+
+                const text = await response.text();
+                output.textContent = `Status: ${response.status}\n\n${text}`;
+            } catch (err) {
+                output.textContent = 'Error: ' + err.message;
+            }
+        }
+    </script>
+</body>
+</html>

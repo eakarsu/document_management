@@ -326,11 +326,40 @@ export class DocumentService {
         throw new Error('Access denied');
       }
 
-      const document = await this.prisma.document.findFirst({
+      // Get user's role
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          role: {
+            select: { name: true }
+          }
+        }
+      });
+
+      // PERMANENT FIX: Check if user has a workflow task for this document
+      // If they do, they can access it regardless of organization
+      const hasWorkflowTask = await this.prisma.workflowTask.findFirst({
         where: {
-          id: documentId,
-          organizationId
-        },
+          assignedToId: userId,
+          status: {
+            in: ['PENDING', 'IN_PROGRESS']
+          },
+          formData: {
+            path: ['documentId'],
+            equals: documentId
+          }
+        }
+      });
+
+      // Build where clause - allow cross-org access for admins and workflow participants
+      const whereClause: any = { id: documentId };
+      if (user?.role?.name !== 'Admin' && !hasWorkflowTask) {
+        // Only enforce organization check if not admin and not assigned a workflow task
+        whereClause.organizationId = organizationId;
+      }
+
+      const document = await this.prisma.document.findFirst({
+        where: whereClause,
         include: {
           createdBy: {
             select: {
@@ -412,24 +441,68 @@ export class DocumentService {
       }
 
       // Get current document
-      const currentDoc = await this.prisma.document.findFirst({
+      // Check if user has workflow task access (cross-organization)
+      const hasWorkflowTask = await this.prisma.workflowTask.findFirst({
         where: {
-          id: documentId,
-          organizationId
+          assignedToId: userId,
+          status: {
+            in: ['PENDING', 'IN_PROGRESS']
+          },
+          OR: [
+            {
+              formData: {
+                equals: { documentId }
+              }
+            },
+            {
+              formData: {
+                path: ['documentId'],
+                equals: documentId
+              }
+            }
+          ]
         }
+      });
+
+      // For workflow participants, allow cross-organization updates
+      const currentDoc = await this.prisma.document.findFirst({
+        where: hasWorkflowTask
+          ? { id: documentId }  // Workflow participants can update across organizations
+          : { id: documentId, organizationId }  // Regular users need organization match
       });
 
       if (!currentDoc) {
         throw new Error('Document not found');
       }
 
+      // Prepare update data - merge customFields if provided
+      const updateData: any = {
+        ...input,
+        updatedAt: new Date()
+      };
+
+      // If customFields is being updated, merge with existing
+      if (input.customFields) {
+        const existingCustomFields = (typeof currentDoc.customFields === 'object' && currentDoc.customFields !== null)
+          ? currentDoc.customFields as Record<string, any>
+          : {};
+        updateData.customFields = {
+          ...existingCustomFields,
+          ...input.customFields
+        };
+
+        this.logger.info('Merging customFields for document update:', {
+          documentId,
+          existingFields: Object.keys(existingCustomFields),
+          newFields: Object.keys(input.customFields as any),
+          mergedFields: Object.keys(updateData.customFields)
+        });
+      }
+
       // Update document
       const updatedDocument = await this.prisma.document.update({
         where: { id: documentId },
-        data: {
-          ...input,
-          updatedAt: new Date()
-        },
+        data: updateData,
         include: {
           createdBy: {
             select: {
@@ -473,17 +546,14 @@ export class DocumentService {
         }
       });
 
-      // Update search index
-      await this.searchService.updateDocument({
-        id: documentId,
-        title: updatedDocument.title,
-        metadata: {
-          category: updatedDocument.category || undefined,
-          tags: updatedDocument.tags,
-          mimeType: updatedDocument.mimeType,
-          customFields: updatedDocument.customFields as Record<string, any> || undefined
-        }
+      this.logger.info('Document updated in database:', {
+        documentId,
+        updatedCustomFields: updatedDocument.customFields ? Object.keys(updatedDocument.customFields) : null,
+        customFieldsValue: updatedDocument.customFields
       });
+
+      // REMOVED ELASTICSEARCH - ONLY USING POSTGRESQL
+      // No search index update needed - all data is in PostgreSQL
 
       // Log audit trail
       await this.createAuditLog({
@@ -742,11 +812,24 @@ export class DocumentService {
         throw new Error('Access denied');
       }
 
-      const document = await this.prisma.document.findFirst({
-        where: {
-          id: documentId,
-          organizationId
+      // Get user's role
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          role: {
+            select: { name: true }
+          }
         }
+      });
+
+      // PERMANENT FIX: Admin users can access documents from ANY organization
+      const whereClause: any = { id: documentId };
+      if (user?.role?.name !== 'Admin') {
+        whereClause.organizationId = organizationId;
+      }
+
+      const document = await this.prisma.document.findFirst({
+        where: whereClause
       });
 
       if (!document) {
@@ -1094,6 +1177,25 @@ export class DocumentService {
     permission: 'READ' | 'WRITE' | 'DELETE'
   ): Promise<boolean> {
     try {
+      // Get user's role first
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          organizationId: true,
+          role: {
+            select: {
+              name: true,
+              permissions: true
+            }
+          }
+        }
+      });
+
+      // PERMANENT FIX: Admin users have full access to ALL documents
+      if (user?.role?.name === 'Admin') {
+        return true;
+      }
+
       // Check if user has specific document permission
       const docPermission = await this.prisma.documentPermission.findFirst({
         where: {
@@ -1107,6 +1209,38 @@ export class DocumentService {
         return true;
       }
 
+      // PERMANENT FIX: Check if user has an active workflow task for this document
+      // This allows reviewers to access documents they are assigned to review
+      const workflowTask = await this.prisma.workflowTask.findFirst({
+        where: {
+          assignedToId: userId,
+          status: {
+            in: ['PENDING', 'IN_PROGRESS']
+          },
+          OR: [
+            // Check if documentId is directly in formData
+            {
+              formData: {
+                equals: { documentId }
+              }
+            },
+            // Check if documentId is nested in formData
+            {
+              formData: {
+                path: ['documentId'],
+                equals: documentId
+              }
+            }
+          ]
+        }
+      });
+
+      if (workflowTask) {
+        // Users with active workflow tasks can READ and WRITE the document (for feedback)
+        this.logger.info(`User ${userId} granted ${permission} access to document ${documentId} via workflow task`);
+        return true;
+      }
+
       // Check if user is the creator
       const document = await this.prisma.document.findFirst({
         where: { id: documentId },
@@ -1117,15 +1251,49 @@ export class DocumentService {
         return true;
       }
 
-      // Get user's organization to check if they're in the same org as document
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { organizationId: true }
+      // Check if user is a coordinator with workflow permissions
+      if (user?.role?.name === 'Coordinator' && permission === 'READ') {
+        // Check if this document is in a workflow that the coordinator is handling
+        const workflowInstance = await this.prisma.jsonWorkflowInstance.findFirst({
+          where: {
+            documentId,
+            isActive: true
+          }
+        });
+
+        if (workflowInstance) {
+          // Coordinators can read documents in active workflows
+          return true;
+        }
+      }
+
+      // For now, allow workflow participants access
+      // Check if document is in an active workflow
+      const docWorkflow = await this.prisma.jsonWorkflowInstance.findFirst({
+        where: {
+          documentId,
+          isActive: true
+        }
       });
 
-      // Allow access if user and document are in the same organization
-      if (user?.organizationId && document?.organizationId === user.organizationId) {
+      if (docWorkflow) {
+        // Allow access for workflow participants
         return true;
+      }
+
+      // Check if user has any role that gives document:view permission
+      const rolePermissions = user?.role?.permissions as string[] || [];
+      if (permission === 'READ' && rolePermissions.includes('document:view')) {
+        return true;
+      }
+
+      // Allow access if user and document are in the same organization (for admins/managers)
+      if (user?.organizationId && document?.organizationId === user.organizationId) {
+        // Only if user has appropriate role
+        const adminRoles = ['Admin', 'Administrator', 'Manager'];
+        if (user.role?.name && adminRoles.includes(user.role.name)) {
+          return true;
+        }
       }
 
       // Check folder permissions

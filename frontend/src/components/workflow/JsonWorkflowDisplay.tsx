@@ -36,6 +36,7 @@ import {
   AccessTime
 } from '@mui/icons-material';
 import { api } from '../../lib/api';
+import DistributionModal from '../DistributionModal';
 
 // Global instance tracker to ensure only one workflow component per document
 const globalInstances = new Map<string, boolean>();
@@ -123,9 +124,13 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [clickedButtons, setClickedButtons] = useState<Set<string>>(new Set());
   const [availableWorkflows, setAvailableWorkflows] = useState<any[]>([]);
-  // Force OPR workflow as the only option
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState('opr-review-workflow');
+  // PERMANENT FIX: Default to 10-stage hierarchical workflow
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('hierarchical-distributed-workflow');
   const [selectWorkflowDialog, setSelectWorkflowDialog] = useState(false);
+  const [distributionModalOpen, setDistributionModalOpen] = useState(false);
+
+  // PERMANENT FIX: Removed hardcoded workflow options
+  // Workflows are now loaded from backend only
 
   // SINGLETON PATTERN - After all hooks
   const instanceKey = `${documentId}-${userRole}`;
@@ -150,6 +155,13 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       }
 
       const instance = await instanceResponse.json();
+      console.log('📊 WORKFLOW INSTANCE FROM API:', {
+        active: instance.active,
+        isActive: instance.isActive,
+        workflowId: instance.workflowId,
+        currentStageId: instance.currentStageId,
+        user: userRole
+      });
       setWorkflowInstance(instance);
 
       if (instance.active && instance.workflowId) {
@@ -200,15 +212,16 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       const response = await api.get('/api/workflows');
       if (response.ok) {
         const workflows = await response.json();
+        console.log('📋 WORKFLOWS FROM BACKEND:', workflows);
         setAvailableWorkflows(workflows);
-        
-        // ALWAYS force OPR workflow as selected
-        setSelectedWorkflowId('opr-review-workflow');
+
+        // PERMANENT FIX: Don't override with hardcoded options
+        // Use the workflows from the backend
       }
     } catch (err) {
       console.error('Error fetching available workflows:', err);
-      // Even on error, force OPR workflow
-      setSelectedWorkflowId('opr-review-workflow');
+      // PERMANENT FIX: Don't use hardcoded options on error
+      // Let the backend provide the workflows
     }
   };
 
@@ -218,7 +231,9 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       setProcessing(true);
       setError(null);
 
-      
+      console.log('🚀 STARTING WORKFLOW:', workflowId);
+      console.log('Selected workflow ID:', selectedWorkflowId);
+
       const response = await api.post(`/api/workflow-instances/${documentId}/start`, {
         workflowId
       });
@@ -257,17 +272,23 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         throw new Error(errorData.error || 'Failed to reset workflow');
       }
 
-      // Force refresh the workflow data
-      await fetchWorkflow();
-      
-      // Also trigger the onWorkflowChange callback to refresh parent component
+      // PERMANENT FIX: After reset, set workflow to null/inactive state
+      // Don't auto-fetch or auto-start - let user manually start when ready
+      setWorkflowInstance(null);
+      setWorkflowDef(null);
+
+      // Notify parent that workflow is now inactive
       if (onWorkflowChange) {
-        const refreshedData = await api.get(`/api/workflow-instances/${documentId}`);
-        const refreshedInstance = await refreshedData.json();
-        onWorkflowChange(refreshedInstance);
+        onWorkflowChange({
+          active: false,
+          isActive: false,
+          workflowId: null,
+          message: 'Workflow reset. Start a new workflow to continue.'
+        });
       }
-      
-      return true; // Return success indicator
+
+      // Success message
+      console.log('Workflow reset successfully. Ready to start new workflow.');
     } catch (err) {
       console.error('Error resetting workflow:', err);
       setError(err instanceof Error ? err.message : 'Failed to reset workflow');
@@ -278,18 +299,23 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   };
 
   // Advance workflow to next stage
-  const advanceWorkflow = async (targetStageId: string, action: string) => {
-    const buttonId = `${targetStageId}-${action}`;
+  const advanceWorkflow = async (targetStageId: string | null, action: string, additionalData?: any) => {
+    const buttonId = `${targetStageId || 'complete'}-${action}`;
     try {
       setProcessing(true);
       setError(null);
-      
+
       // Mark this button as clicked
       setClickedButtons(prev => new Set(prev).add(buttonId));
 
       const metadata: any = {};
       if (comment) {
         metadata.comment = comment;
+      }
+
+      // Merge additional data (like completeWorkflow flag)
+      if (additionalData) {
+        Object.assign(metadata, additionalData);
       }
 
       const response = await api.post(`/api/workflow-instances/${documentId}/advance`, {
@@ -323,11 +349,46 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     }
   };
 
+  // Submit review for Stage 3.5 reviewers
+  const submitReview = async (feedback: string, approved: boolean) => {
+    try {
+      setProcessing(true);
+      setError(null);
+
+      const response = await api.post(`/api/workflows/documents/${documentId}/submit-review`, {
+        workflowInstanceId: workflowInstance?.id,
+        feedback,
+        approved
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit review');
+      }
+
+      // Refresh workflow after successful review submission
+      await fetchWorkflow();
+    } catch (err) {
+      console.error('Error submitting review:', err);
+      setError(err instanceof Error ? err.message : 'Failed to submit review');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   // Check if user can perform actions on current stage
   const canUserAct = (stage: WorkflowStage): boolean => {
     const normalizedRole = userRole?.toUpperCase();
     if (normalizedRole === 'ADMIN') return true;
-    return stage.roles.some(r => r.toLowerCase() === userRole?.toLowerCase());
+
+    // PERMANENT FIX: Support both 'roles' array and 'assignedRole' string
+    if (stage.roles) {
+      return stage.roles.some(r => r?.toLowerCase() === userRole?.toLowerCase());
+    }
+    if (stage.assignedRole) {
+      return stage.assignedRole.toLowerCase() === userRole?.toLowerCase();
+    }
+    return false;
   };
 
   // Get available actions for current stage
@@ -341,21 +402,88 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       return [];
     }
 
-
     // Check if user has permission for this stage
     const normalizedRole = userRole?.toUpperCase();
-    const isAdmin = normalizedRole === 'ADMIN';
 
+    // Debug logging - always log to understand role issues
+    console.log('🔍 ROLE CHECK:', {
+      userRole,
+      normalizedRole,
+      currentStageId: currentStage.id,
+      currentStageAssignedRole: currentStage.assignedRole,
+      isStage10: currentStage.id === '10',
+      stageRequiresAFDPO: currentStage.assignedRole === 'AFDPO'
+    });
+
+    const isAdmin = normalizedRole === 'ADMIN';
+    const isOPR = normalizedRole === 'OPR' || normalizedRole === 'OPR LEADERSHIP' || normalizedRole?.includes('OPR');
+    const isLeadership = normalizedRole === 'LEADERSHIP' || normalizedRole === 'OPR LEADERSHIP';
+    const isActionOfficer = normalizedRole === 'ACTION_OFFICER' || normalizedRole === 'ACTION OFFICER';
+    const isAFDPO = normalizedRole === 'AFDPO' || normalizedRole === 'AFDPO_ANALYST' || normalizedRole === 'PUBLISHER';
+
+    // CRITICAL FIX: Block any publish actions unless at stage 10 (AFDPO Publication)
+    const canPublish = currentStage.id === '10' && (isAFDPO || isAdmin);
+
+    // Debug logging to see what userRole we're getting
+    console.log('🔍 WORKFLOW PERMISSION DEBUG:', {
+      userRole,
+      normalizedRole,
+      isAdmin,
+      isOPR,
+      isLeadership,
+      isActionOfficer,
+      currentStageId: workflowInstance?.currentStageId,
+      currentStageName: currentStage?.name,
+      currentStageAssignedRole: currentStage?.assignedRole,
+      canPublish
+    });
+
+    // Support both 'roles' array and 'assignedRole' string
+    // OPR/Leadership should be able to act as ACTION_OFFICER for feedback incorporation stages
     const userCanAct = isAdmin ||
-                       currentStage.roles.some(r => r.toUpperCase() === normalizedRole);
+                       (currentStage.roles && currentStage.roles.some(r => r.toUpperCase() === normalizedRole)) ||
+                       (currentStage.assignedRole && currentStage.assignedRole.toUpperCase() === normalizedRole) ||
+                       (isActionOfficer && currentStage.assignedRole === 'ACTION_OFFICER') ||
+                       (isAFDPO && currentStage.assignedRole === 'AFDPO') || // AFDPO can act on AFDPO stages
+                       ((isOPR || isLeadership) && (currentStage.id === '4' || currentStage.id === '3.5' || currentStage.id === '6' ||
+                                  currentStage.id === '8' || // Post-Legal OPR Update
+                                  currentStage.assignedRole === 'ACTION_OFFICER' || // OPR/Leadership can act as Action Officer
+                                  currentStage.name?.toLowerCase().includes('review collection')));
+
+    console.log('🎯 USER CAN ACT?', {
+      userCanAct,
+      isAFDPO,
+      isAdmin,
+      currentStageAssignedRole: currentStage.assignedRole
+    });
 
     // Get all defined actions for this stage
     const actions: Array<{ id: string; label: string; target: string; disabled: boolean; disabledReason?: string }> =
-      [...(currentStage.actions || [])].map(action => ({
-        ...action,
-        disabled: !userCanAct,
-        disabledReason: !userCanAct ? `This action requires ${currentStage.roles.join(' or ')} role` : undefined
-      }));
+      [...(currentStage.actions || [])].map(action => {
+        // Handle both string actions and object actions
+        if (typeof action === 'string') {
+          // Convert string action to proper object format
+          // Capitalize first letter and replace underscores
+          const label = (action as string).charAt(0).toUpperCase() + (action as string).slice(1).replace(/_/g, ' ');
+          return {
+            id: `action-${action}`,
+            label: label,
+            target: currentStage.id, // Actions don't change stage, transitions do
+            disabled: !userCanAct,
+            disabledReason: !userCanAct ? `This action requires ${currentStage.roles?.join(' or ') || currentStage.assignedRole || 'appropriate'} role` : undefined
+          };
+        } else {
+          // Handle object actions with existing properties
+          return {
+            ...action,
+            id: (action as any).id || `action-${(action as any).name}`,
+            label: (action as any).label || (action as any).name || 'Action',
+            target: (action as any).nextStage || currentStage.id, // Use nextStage if it exists, otherwise stay on current stage
+            disabled: !userCanAct,
+            disabledReason: !userCanAct ? `This action requires ${currentStage.roles?.join(' or ') || currentStage.assignedRole || 'appropriate'} role` : undefined
+          };
+        }
+      });
     
     // For users with appropriate roles, ensure all transitions are available
     // This includes both defined actions and any additional transitions
@@ -364,6 +492,58 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     );
     
     
+    // Special handling for Review Collection Phases - enable for all users in these stages
+    const isReviewCollectionPhase = currentStage.id === '4' || currentStage.id === '3.5' || currentStage.id === '5.5' ||
+                                   currentStage.name?.toLowerCase().includes('review collection');
+
+    if (isReviewCollectionPhase) {
+      console.log('🔍 Review Collection Phase detected:', {
+        stageId: currentStage.id,
+        stageName: currentStage.name,
+        existingActions: actions.map(a => ({ id: a.id, label: a.label, disabled: a.disabled }))
+      });
+
+      // Enable all existing actions in Review Collection Phase
+      console.log('🚀 Enabling all actions for Review Collection Phase');
+      actions.forEach(action => {
+        action.disabled = false;
+        action.disabledReason = undefined;
+      });
+
+      // Check if we already have review collection actions
+      const hasReviewActions = actions.some(a =>
+        a.label?.toLowerCase().includes('complete') ||
+        a.label?.toLowerCase().includes('process') ||
+        a.label?.toLowerCase().includes('review')
+      );
+
+      console.log('🔍 Has existing review actions:', hasReviewActions);
+
+      if (!hasReviewActions) {
+        console.log('🚀 Adding Review Collection Phase actions for stage:', currentStage.id);
+
+        // Add "All Reviews Complete" action
+        actions.push({
+          id: 'opr-complete-reviews',
+          label: 'All Reviews Complete',
+          target: currentStage.id,
+          disabled: false,
+          disabledReason: undefined
+        });
+
+        // Add "Process Feedback" action
+        actions.push({
+          id: 'opr-process-feedback',
+          label: 'Process Feedback & Continue',
+          target: currentStage.id,
+          disabled: false,
+          disabledReason: undefined
+        });
+      } else {
+        console.log('🔍 Existing review actions found and enabled');
+      }
+    }
+
     // Add transition buttons for all users (but disabled if no permission)
     availableTransitions.forEach((transition: any) => {
       const targetStage = workflowDef.stages.find((s: any) => s.id === transition.to);
@@ -380,24 +560,55 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         });
       } else if (!hasAction) {
         // Regular user transition button (may be disabled)
-        const canPerformAction = userCanAct && currentStage.roles.some(r => r.toUpperCase() === normalizedRole);
+        // PERMANENT FIX: Support both 'roles' array and 'assignedRole' string
+        // OPR/Leadership can act as ACTION_OFFICER for feedback incorporation stages
+        const canPerformAction = userCanAct && (
+          (currentStage.roles && currentStage.roles.some(r => r.toUpperCase() === normalizedRole)) ||
+          (currentStage.assignedRole && currentStage.assignedRole.toUpperCase() === normalizedRole) ||
+          ((isOPR || isLeadership) && (currentStage.id === '4' || currentStage.id === '6' || currentStage.id === '8' ||
+                     currentStage.assignedRole === 'ACTION_OFFICER' ||
+                     currentStage.name?.toLowerCase().includes('review collection')))
+        );
         actions.push({
           id: `user-transition-${transition.to}`,
           label: transition.label || `Submit to ${targetStage?.name || 'Next Stage'}`,
           target: transition.to,
           disabled: !canPerformAction,
-          disabledReason: !canPerformAction ? `This action requires ${currentStage.roles.join(' or ')} role` : undefined
+          disabledReason: !canPerformAction ? `This action requires ${currentStage.roles?.join(' or ') || currentStage.assignedRole || 'OPR'} role` : undefined
         });
       }
     });
 
-    return actions;
+    // CRITICAL FIX: Filter out any publish-related actions unless at stage 10 (AFDPO Publication)
+    const filteredActions = actions.filter(action => {
+      const lowerLabel = action.label?.toLowerCase() || '';
+      const isPublishAction = lowerLabel.includes('publish') ||
+                              lowerLabel.includes('afdpo') ||
+                              action.id?.toLowerCase().includes('publish');
+
+      // Only allow publish actions at stage 10
+      if (isPublishAction && currentStage.id !== '10') {
+        console.warn(`⚠️ Blocking publish action "${action.label}" at stage ${currentStage.id} (should only be at stage 10)`);
+        return false;
+      }
+
+      return true;
+    });
+
+    return filteredActions;
   };
 
-  // Calculate progress percentage
+  // Calculate progress percentage based on actual stage position
   const getProgressPercentage = (): number => {
-    if (!workflowInstance?.stageOrder || !workflowInstance?.totalStages) return 0;
-    return (workflowInstance.stageOrder / workflowInstance.totalStages) * 100;
+    if (!workflowDef || !workflowInstance?.currentStageId) return 0;
+
+    const sortedStages = workflowDef.stages.slice().sort((a, b) => a.order - b.order);
+    const currentStageIndex = sortedStages.findIndex(s => s.id === workflowInstance.currentStageId);
+
+    if (currentStageIndex === -1) return 0;
+
+    // Use currentStageIndex + 1 to show progress including current stage
+    return ((currentStageIndex + 1) / sortedStages.length) * 100;
   };
 
   if (loading) {
@@ -414,21 +625,44 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   const isWorkflowCompleted = (() => {
     if (!workflowInstance) return false;
 
-    // Check if status is explicitly marked as completed
-    if (workflowInstance.status === 'completed') return true;
+    // Get isActive status first (can't use the variable defined later)
+    const currentIsActive = (workflowInstance as any)?.isActive ?? (workflowInstance as any)?.active;
 
-    // Check if workflow definition exists and we're at the last stage
-    if (workflowDef) {
+    // Debug logging in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Workflow Completion Check:', {
+        isActive: currentIsActive,
+        status: (workflowInstance as any).status,
+        completedAt: (workflowInstance as any).completedAt,
+        currentStageId: workflowInstance.currentStageId
+      });
+    }
+
+    // Check if status is explicitly marked as completed
+    if ((workflowInstance as any).status === 'completed') {
+      console.log('✅ Marked complete due to status=completed');
+      return true;
+    }
+
+    // Only mark as complete if explicitly inactive AND at final stage
+    if (workflowDef && !currentIsActive) {
       const maxStageOrder = Math.max(...workflowDef.stages.map(s => s.order));
       const currentStageOrder = workflowInstance.stageOrder ||
         workflowDef.stages.find(s => s.id === workflowInstance.currentStageId)?.order;
 
-      if (currentStageOrder === maxStageOrder) return true;
+      if (currentStageOrder === maxStageOrder) {
+        console.log('✅ Marked complete due to inactive + final stage');
+        return true;
+      }
     }
 
-    // For workflows without definition, check if completedAt is set
-    if (workflowInstance.completedAt) return true;
+    // For workflows without definition, check if completedAt is set AND workflow is inactive
+    if (!currentIsActive && (workflowInstance as any).completedAt) {
+      console.log('✅ Marked complete due to inactive + completedAt');
+      return true;
+    }
 
+    console.log('❌ Workflow NOT marked as complete');
     return false;
   })();
 
@@ -441,50 +675,12 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   if (isDuplicate && process.env.NODE_ENV === 'development') {
   }
 
-  // FORCE workflow completion screen - override any inactive status
-  if (isWorkflowCompleted) {
-    if (process.env.NODE_ENV === 'development') {
-    }
-    return (
-      <Card sx={{
-        mb: 3,
-        background: 'linear-gradient(135deg, #4CAF50 0%, #8BC34A 100%)',
-        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)',
-        borderRadius: 2
-      }}>
-        <CardContent sx={{ p: 0 }}>
-          <Box sx={{
-            background: 'rgba(255, 255, 255, 0.95)',
-            p: 3,
-            borderTopLeftRadius: 8,
-            borderTopRightRadius: 8
-          }}>
-            <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ color: '#1a1a2e' }}>
-              ✅ Workflow Complete
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              This workflow has been successfully completed.
-            </Typography>
-          </Box>
-          <Box sx={{
-            background: 'white',
-            p: 3,
-            mb: 2
-          }}>
-            <Typography variant="body2" color="text.secondary">
-              <strong>Status:</strong> 🎉 Complete
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              <strong>Progress:</strong> 100% Complete
-            </Typography>
-          </Box>
-        </CardContent>
-      </Card>
-    );
-  }
+  // FORCE workflow completion screen - but still show the workflow visualization
+  // Don't return early, just set a flag
+  // (Removed early return to allow showing the full workflow visualization)
 
   // Skip the active check if workflow is completed - completed workflows should always show completion
-  const isActive = workflowInstance?.isActive ?? workflowInstance?.active;
+  const isActive = (workflowInstance as any)?.isActive ?? (workflowInstance as any)?.active;
   if (!isActive && !isWorkflowCompleted) {
     if (process.env.NODE_ENV === 'development') {
     }
@@ -617,10 +813,14 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   const currentStage = workflowDef?.stages?.find(s => s.id === workflowInstance.currentStageId);
   const availableActions = workflowDef ? getAvailableActions() : [];
   
-  // Check if workflow is at the final stage (AFDPO - stage 8)
-  const isFinalStage = currentStage?.order === 8 || currentStage?.type === 'AFDPO_FINAL';
-  // Stage 8 means document is published - show completion regardless of available actions
-  const isWorkflowComplete = isFinalStage;
+  // Check if workflow is at the final stage (AFDPO - stage 10 in 11-stage workflow, stage 8 in 8-stage workflow)
+  // For hierarchical-distributed-workflow, stage 10 (order 11) is the final AFDPO Publication stage
+  const isFinalStage = (workflowDef?.id === 'hierarchical-distributed-workflow' && currentStage?.id === '10') ||
+                       (workflowDef?.id === 'opr-review-workflow' && currentStage?.order === 8) ||
+                       currentStage?.type === 'AFDPO_FINAL' ||
+                       currentStage?.assignedRole === 'AFDPO';
+  // Only mark as complete if workflow instance is actually completed, not just at final stage
+  const isWorkflowComplete = !isActive && isFinalStage;
   
 
 
@@ -677,14 +877,33 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
           </Box>
         </Box>
 
+        {/* Workflow Completion Banner */}
+        {isWorkflowCompleted && (
+          <Box sx={{
+            background: 'linear-gradient(135deg, #4CAF50 0%, #8BC34A 100%)',
+            color: 'white',
+            p: 2,
+            mb: 2,
+            borderRadius: 1,
+            textAlign: 'center'
+          }}>
+            <Typography variant="h5" fontWeight="bold">
+              ✅ Workflow Complete
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              All stages have been successfully completed. Document status: PUBLISHED
+            </Typography>
+          </Box>
+        )}
+
         {/* Visual Workflow Progress */}
-        <Box sx={{ 
+        <Box sx={{
           background: 'white',
           p: 3,
           mb: 2
         }}>
           <Typography variant="h6" fontWeight="bold" gutterBottom>
-            Workflow Progress
+            Workflow Progress {isWorkflowCompleted && '- Complete'}
           </Typography>
           
           {/* Horizontal Stage Display */}
@@ -709,9 +928,14 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
             {workflowDef.stages
               .sort((a, b) => a.order - b.order)
               .map((stage, index) => {
-                const isCompleted = stage.order < workflowInstance.stageOrder!;
-                const isCurrent = stage.id === workflowInstance.currentStageId;
-                const isPending = stage.order > workflowInstance.stageOrder!;
+                // Get current stage to properly determine completed stages
+                const currentStageObj = workflowDef.stages.find(s => s.id === workflowInstance.currentStageId);
+                const currentOrder = currentStageObj?.order || workflowInstance.stageOrder || 0;
+
+                // If workflow is completed, all stages are complete
+                const isCompleted = isWorkflowCompleted ? true : stage.order < currentOrder;
+                const isCurrent = isWorkflowCompleted ? false : stage.id === workflowInstance.currentStageId;
+                const isPending = isWorkflowCompleted ? false : stage.order > currentOrder;
                 
                 return (
                   <React.Fragment key={stage.id}>
@@ -788,7 +1012,12 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
               <strong>Status:</strong> {isWorkflowComplete ? '🎉 Published & Complete' : currentStage?.name}
             </Typography>
             <Typography variant="body2">
-              <strong>Progress:</strong> {workflowInstance.stageOrder} of {workflowInstance.totalStages} stages
+              <strong>Progress:</strong> {(() => {
+                // Find current stage position in sorted list
+                const sortedStages = workflowDef?.stages?.slice().sort((a, b) => a.order - b.order) || [];
+                const currentStageIndex = sortedStages.findIndex(s => s.id === workflowInstance.currentStageId);
+                return `${currentStageIndex + 1} of ${sortedStages.length} stages`;
+              })()}
             </Typography>
             <Typography variant="body2" color={isWorkflowComplete ? "success.main" : "primary"}>
               <strong>{Math.round(getProgressPercentage())}%</strong> Complete
@@ -817,7 +1046,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
               Available Actions
             </Typography>
             
-            {workflowDef.settings.requireComments && (
+            {workflowDef.settings?.requireComments && (
               <TextField
                 fullWidth
                 multiline
@@ -848,23 +1077,23 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                   // Admin actions - Red gradient
                   buttonGradient = 'linear-gradient(45deg, #FF6B6B 30%, #FF8787 90%)';
                   hoverGradient = 'linear-gradient(45deg, #FF5252 30%, #FF6B6B 90%)';
-                } else if (action.label.toLowerCase().includes('approve')) {
+                } else if (action.label?.toLowerCase().includes('approve')) {
                   // Approval actions - Green gradient
                   buttonGradient = 'linear-gradient(45deg, #4CAF50 30%, #8BC34A 90%)';
                   hoverGradient = 'linear-gradient(45deg, #388E3C 30%, #4CAF50 90%)';
-                } else if (action.label.toLowerCase().includes('reject')) {
+                } else if (action.label?.toLowerCase().includes('reject')) {
                   // Reject actions - Orange gradient
                   buttonGradient = 'linear-gradient(45deg, #FF9800 30%, #FFB74D 90%)';
                   hoverGradient = 'linear-gradient(45deg, #F57C00 30%, #FF9800 90%)';
                 }
                 
-                const isButtonDisabled = processing || isButtonClicked || (workflowDef.settings.requireComments && !comment) || action.disabled;
+                const isButtonDisabled = processing || isButtonClicked || (workflowDef.settings?.requireComments && !comment) || action.disabled;
 
                 // Determine the disabled reason
                 let disabledTooltip = '';
                 if (action.disabled && action.disabledReason) {
                   disabledTooltip = action.disabledReason;
-                } else if (workflowDef.settings.requireComments && !comment) {
+                } else if (workflowDef.settings?.requireComments && !comment) {
                   disabledTooltip = 'Please add a comment before proceeding';
                 } else if (processing) {
                   disabledTooltip = 'Processing...';
@@ -879,7 +1108,81 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                         variant="contained"
                         size="large"
                         startIcon={<NavigateNext />}
-                        onClick={() => advanceWorkflow(action.target, action.label)}
+                        onClick={() => {
+                          // Special handling for "All Reviews Complete" in Review Collection Phase
+                          if (action.label?.toLowerCase().includes('all reviews complete') ||
+                              action.label?.toLowerCase().includes('reviews complete')) {
+                            console.log('🚀 Processing All Reviews Complete action');
+                            // Navigate to OPR review page for feedback processing
+                            window.location.href = `/documents/${documentId}/opr-review`;
+                            return;
+                          }
+
+                          // PERMANENT FIX: Special handling for OPR actions in stage 4
+                          if (action.id === 'opr-complete-reviews') {
+                            // Navigate to OPR review page for feedback processing
+                            window.location.href = `/documents/${documentId}/opr-review`;
+                            return;
+                          }
+
+                          if (action.id === 'opr-process-feedback') {
+                            // Navigate to OPR review page for feedback processing
+                            window.location.href = `/documents/${documentId}/opr-review`;
+                            return;
+                          }
+
+                          // Special handling for DISTRIBUTE action type
+                          if (action.label.toLowerCase().includes('distribute') ||
+                              action.type === 'DISTRIBUTE' ||
+                              (workflowInstance?.currentStageId === '3' &&
+                               (userRole === 'Coordinator' || userRole === 'COORDINATOR'))) {
+                            setDistributionModalOpen(true);
+                            return;
+                          }
+
+                          // Special handling for Stage 3.5 review submission
+                          if (workflowInstance?.currentStageId === '3.5' &&
+                              action.type === 'REVIEW_SUBMIT') {
+                            // Show review submission interface
+                            const feedback = prompt('Please provide your review feedback:');
+                            if (feedback) {
+                              const approved = confirm('Do you approve this document?');
+                              submitReview(feedback, approved);
+                            }
+                            return;
+                          }
+
+                          // Special handling for AFDPO actions in Stage 10
+                          if (workflowInstance?.currentStageId === '10' &&
+                              (action.type === 'PUBLISH' || action.type === 'ARCHIVE' || action.id === 'final_check')) {
+                            console.log('🚀 Processing AFDPO action:', action.name, action.type);
+
+                            if (action.type === 'PUBLISH') {
+                              // Complete the workflow when publishing
+                              advanceWorkflow(null, action.label, { completeWorkflow: true });
+                            } else if (action.type === 'REVIEW' || action.id === 'final_check') {
+                              // Final Publication Check - just show a confirmation
+                              alert('Final publication check completed. Document is ready for publication.');
+                            } else if (action.type === 'ARCHIVE') {
+                              // Archive the document and complete workflow
+                              advanceWorkflow(null, action.label, { completeWorkflow: true, archive: true });
+                            }
+                            return;
+                          }
+
+                          // Check if this action has a target stage different from current (i.e., it's a transition)
+                          if (action.target !== workflowInstance?.currentStageId) {
+                            advanceWorkflow(action.target, action.label);
+                          } else {
+                            // Non-transitioning action (like "Review Document")
+                            // Navigate to the full editor page
+                            if (action.label.toLowerCase().includes('review')) {
+                              // Navigate to editor page in same window
+                              window.location.href = `/editor/${documentId}`;
+                            }
+                            console.log('Non-transitioning action:', action.label);
+                          }
+                        }}
                         disabled={isButtonDisabled}
                         sx={{
                           background: isButtonDisabled ? disabledGradient : buttonGradient,
@@ -907,6 +1210,18 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
 
       </CardContent>
+
+      {/* Distribution Modal for Stage 3 Coordinator */}
+      {distributionModalOpen && (
+        <DistributionModal
+          open={distributionModalOpen}
+          onClose={() => setDistributionModalOpen(false)}
+          documentId={documentId}
+          documentTitle={workflowInstance?.metadata?.documentTitle || 'Document'}
+          workflowInstanceId={workflowInstance?.metadata?.instanceId || ''}
+          stageId={workflowInstance?.currentStageId || '3'}
+        />
+      )}
     </Card>
   );
 };

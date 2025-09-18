@@ -1,37 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get access token from cookies or headers
-    let accessToken = request.cookies.get('accessToken')?.value;
+    // Get token from cookies or headers - check both 'token' and 'accessToken'
+    let token = request.cookies.get('token')?.value || request.cookies.get('accessToken')?.value;
 
     // If no cookie, try Authorization header
-    if (!accessToken) {
+    if (!token) {
       const authHeader = request.headers.get('authorization');
       if (authHeader && authHeader.startsWith('Bearer ')) {
-        accessToken = authHeader.substring(7);
+        token = authHeader.substring(7);
       }
     }
-    
-    if (!accessToken) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Authentication required' 
+
+    // Also check for token in cookie header string (fallback)
+    if (!token) {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const tokenMatch = cookieHeader.match(/token=([^;]+)/);
+      token = tokenMatch ? tokenMatch[1] : null;
+    }
+
+    if (!token) {
+      return NextResponse.json({
+        success: false,
+        error: 'Authentication required'
       }, { status: 401 });
     }
 
-    // Forward to backend with token for document details
-    const backendResponse = await fetch(`${process.env.BACKEND_URL || 'http://localhost:4000'}/api/documents/${params.id}`, {
+    // Get backend URL with fallbacks
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
+                      process.env.NEXT_PUBLIC_API_URL ||
+                      process.env.BACKEND_URL ||
+                      'http://localhost:4000';
+
+    // Forward to backend with token
+    const backendResponse = await fetch(`${backendUrl}/api/documents/${params.id}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       }
     });
@@ -58,29 +68,42 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get access token from cookies or headers
-    let accessToken = request.cookies.get('accessToken')?.value;
+    // Get token from cookies or headers - check both 'token' and 'accessToken'
+    let token = request.cookies.get('token')?.value || request.cookies.get('accessToken')?.value;
 
     // If no cookie, try Authorization header
-    if (!accessToken) {
+    if (!token) {
       const authHeader = request.headers.get('authorization');
       if (authHeader && authHeader.startsWith('Bearer ')) {
-        accessToken = authHeader.substring(7);
+        token = authHeader.substring(7);
       }
     }
-    
-    if (!accessToken) {
+
+    // Also check for token in cookie header string (fallback)
+    if (!token) {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const tokenMatch = cookieHeader.match(/token=([^;]+)/);
+      token = tokenMatch ? tokenMatch[1] : null;
+    }
+
+    if (!token) {
       return NextResponse.json({ 
         success: false, 
         error: 'Authentication required' 
       }, { status: 401 });
     }
 
+    // Get backend URL with fallbacks
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
+                      process.env.NEXT_PUBLIC_API_URL ||
+                      process.env.BACKEND_URL ||
+                      'http://localhost:4000';
+
     // Forward to backend with token
-    const backendResponse = await fetch(`${process.env.BACKEND_URL || 'http://localhost:4000'}/api/documents/${params.id}`, {
+    const backendResponse = await fetch(`${backendUrl}/api/documents/${params.id}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       }
     });
@@ -107,61 +130,59 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    
-    // Get current document directly from database
-    const currentDoc = await prisma.document.findUnique({
-      where: { id: params.id }
-    });
 
-    if (!currentDoc) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Document not found" 
-      }, { status: 404 });
-    }
-    
-    // DEBUG: Check for duplicates in incoming content
-    if (body.customFields?.content) {
-      const incomingContent = body.customFields.content;
-      const h1Count = (incomingContent.match(/<h1>/g) || []).length;
-      const sectionICount = (incomingContent.match(/SECTION I - INTRODUCTION/g) || []).length;
-      
-      console.log('PATCH API - Incoming content check:');
-      console.log('  - Document ID:', params.id);
-      console.log('  - Content length:', incomingContent.length);
-      console.log('  - H1 count:', h1Count, h1Count > 1 ? '❌ HAS DUPLICATES!' : '✅');
-      console.log('  - Section I count:', sectionICount, sectionICount > 1 ? '❌ HAS DUPLICATES!' : '✅');
-      
-      if (h1Count > 1 || sectionICount > 1) {
-        console.error('❌ CRITICAL: Frontend sent content with duplicates to PATCH!');
+    // Get token from cookies or headers
+    let token = request.cookies.get('token')?.value || request.cookies.get('accessToken')?.value;
+
+    if (!token) {
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
       }
     }
-    
-    // Merge customFields
-    const currentCustomFields = currentDoc.customFields as any || {};
-    const updatedCustomFields = {
-      ...currentCustomFields,
-      ...(body.customFields || {})
-    };
 
-    // Update document directly in database
-    const updatedDocument = await prisma.document.update({
-      where: { id: params.id },
-      data: {
-        customFields: updatedCustomFields
-      }
+    if (!token) {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const tokenMatch = cookieHeader.match(/token=([^;]+)/);
+      token = tokenMatch ? tokenMatch[1] : null;
+    }
+
+    if (!token) {
+      return NextResponse.json({
+        success: false,
+        error: 'Authentication required'
+      }, { status: 401 });
+    }
+
+    // Get backend URL with fallbacks
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
+                      process.env.NEXT_PUBLIC_API_URL ||
+                      process.env.BACKEND_URL ||
+                      'http://localhost:4000';
+
+    // Forward to backend with token
+    const backendResponse = await fetch(`${backendUrl}/api/documents/${params.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body)
     });
 
-    return NextResponse.json({
-      success: true,
-      document: updatedDocument
-    });
+    if (backendResponse.ok) {
+      const responseData = await backendResponse.json();
+      return NextResponse.json(responseData);
+    } else {
+      const errorData = await backendResponse.json();
+      return NextResponse.json(errorData, { status: backendResponse.status });
+    }
 
   } catch (error) {
     console.error("PATCH API error:", error);
-    return NextResponse.json({ 
-      success: false, 
-      error: "Internal server error" 
+    return NextResponse.json({
+      success: false,
+      error: "Internal server error"
     }, { status: 500 });
   }
 }

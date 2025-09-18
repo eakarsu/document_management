@@ -44,7 +44,6 @@ export async function POST(
     // Don't fail the save operation just because change tracking failed
     // Return success with fallback tracking
     const documentId = params.id;
-    const { versionId, oldContent, newContent } = body || {};
     
     return NextResponse.json({
       success: true,
@@ -53,8 +52,8 @@ export async function POST(
       fallback: true,
       changes: {
         timestamp: new Date().toISOString(),
-        versionId: versionId || 1,
-        changeSize: (newContent?.length || 0) - (oldContent?.length || 0),
+        versionId: 1,
+        changeSize: 0,
         error: error instanceof Error ? error.message : 'Unknown error'
       }
     });

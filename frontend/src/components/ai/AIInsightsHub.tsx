@@ -312,12 +312,24 @@ const AIInsightsHub: React.FC<AIInsightsHubProps> = ({
                 id: 'doc-insight-1',
                 title: `Document Analysis: ${selectedDoc?.title}`,
                 description: `Risk Score: ${docAnalysis.riskScore}, Complexity: ${docAnalysis.complexity}`,
-                impact: docAnalysis.riskScore > 50 ? 'HIGH' : 'MEDIUM',
+                impact: {
+                  financial: docAnalysis.riskScore > 50 ? 80 : 40,
+                  efficiency: docAnalysis.riskScore > 50 ? 70 : 30,
+                  timeImpact: docAnalysis.riskScore > 50 ? 60 : 20,
+                  qualityImpact: docAnalysis.riskScore > 50 ? 90 : 50
+                },
                 category: 'RISK',
-                action: 'Review document risk factors',
-                potentialSavings: 'Risk mitigation',
-                status: 'NEW'
-              });
+                type: 'EFFICIENCY',
+                priority: 'HIGH',
+                findings: [],
+                recommendations: [],
+                timestamp: new Date(),
+                confidence: 0.8,
+                source: 'DOCUMENT_ANALYSIS',
+                metadata: {},
+                isImplemented: false,
+                estimatedSavings: 0
+              } as any);
             }
           }
           
@@ -350,7 +362,7 @@ const AIInsightsHub: React.FC<AIInsightsHubProps> = ({
                 medium: 25,
                 high: 10
               }
-            });
+            } as any);
           }
           
           // Use benchmark data from AI if available
@@ -377,7 +389,7 @@ const AIInsightsHub: React.FC<AIInsightsHubProps> = ({
                 automationRate: 'ABOVE_AVERAGE',
                 qualityScore: 'ABOVE_AVERAGE'
               }
-            });
+            } as any);
           }
           
           return; // Exit early if we got AI data

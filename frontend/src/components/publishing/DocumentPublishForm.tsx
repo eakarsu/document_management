@@ -309,8 +309,11 @@ export default function DocumentPublishForm({
                           <Typography variant="body1">
                             {workflow.name}
                           </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {workflow.type || workflow.workflowType} • {workflow.stageCount} stages
+                          </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {workflow.workflowType} • {workflow.description}
+                            {workflow.description}
                           </Typography>
                         </Box>
                       </MenuItem>

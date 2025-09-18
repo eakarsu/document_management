@@ -79,6 +79,11 @@ class AuthTokenService {
     }
   }
 
+  getAccessToken(): string | null {
+    const tokenInfo = this.getTokenInfo();
+    return tokenInfo.accessToken;
+  }
+
   async authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
     // Always get fresh token info
     const tokenInfo = this.getTokenInfo();

@@ -37,8 +37,8 @@ import {
   History as HistoryIcon,
   AddCircleOutline,
   RemoveCircleOutline,
-  ChangeCircleOutline,
-  SwapHoriz,
+  ChangeCircleOutlined,
+  SwapHorizOutlined,
   CloudUpload as UploadIcon,
   Description as DocumentIcon,
   Image as ImageIcon,
@@ -316,7 +316,7 @@ const EnhancedDocumentEditor: React.FC<EnhancedDocumentEditorProps> = ({
 
   const loadSupplements = async () => {
     try {
-      const response = await api.get(`/editor/documents/${documentId}/supplement`);
+      const response = await api.get(`/editor/documents/${documentId}/supplement`) as any;
       if (response.data?.supplements) {
         setSupplements(response.data.supplements);
         applySupplementHighlights(response.data.supplements);
@@ -328,7 +328,7 @@ const EnhancedDocumentEditor: React.FC<EnhancedDocumentEditorProps> = ({
 
   const loadAttachments = async () => {
     try {
-      const response = await api.get(`/editor/documents/${documentId}/attachments`);
+      const response = await api.get(`/editor/documents/${documentId}/attachments`) as any;
       if (response.data?.attachments) {
         setAttachments(response.data.attachments);
       }
@@ -419,7 +419,7 @@ const EnhancedDocumentEditor: React.FC<EnhancedDocumentEditorProps> = ({
             'Content-Type': 'multipart/form-data'
           }
         }
-      );
+      ) as any;
 
       if (response.data?.attachments) {
         setAttachments(prev => [...prev, ...response.data.attachments]);

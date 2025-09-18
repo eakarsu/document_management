@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
 import { WorkflowRegistry } from '../services/WorkflowRegistry';
 import { WorkflowEngine } from '../services/WorkflowEngine';
 import { AirForce8StagePlugin } from '../plugins/AirForce8StagePlugin';
@@ -6,6 +7,8 @@ import { SimpleApprovalPlugin } from '../plugins/SimpleApprovalPlugin';
 import { CorporateReviewPlugin } from '../plugins/CorporateReviewPlugin';
 import { IWorkflowContext, IWorkflowConfig } from '../types/workflow.types';
 import { authMiddleware } from '../middleware/auth';
+
+const prisma = new PrismaClient();
 
 const router = Router();
 const registry = WorkflowRegistry.getInstance();
@@ -218,12 +221,32 @@ router.post('/documents/:id/workflow/action', authMiddleware, async (req: Reques
     const { id: documentId } = req.params;
     const { action, comment, metadata } = req.body;
     const user = (req as any).user;
-    
+
     if (!action) {
       return res.status(400).json({
         success: false,
         error: 'Action is required'
       });
+    }
+
+    // CRITICAL VALIDATION: Block publish actions unless at stage 10
+    const lowerAction = action.toLowerCase();
+    if (lowerAction.includes('publish') || lowerAction.includes('afdpo')) {
+      // Get current workflow stage
+      const workflowInstance = await prisma.jsonWorkflowInstance.findFirst({
+        where: {
+          documentId,
+          isActive: true
+        }
+      });
+
+      if (!workflowInstance || workflowInstance.currentStageId !== '10') {
+        console.error(`⚠️ BLOCKED: Attempt to publish document at stage ${workflowInstance?.currentStageId || 'unknown'} (must be at stage 10)`);
+        return res.status(403).json({
+          success: false,
+          error: 'Publishing is only allowed at the AFDPO Publication stage (stage 10)'
+        });
+      }
     }
     
     // Get document (simplified - would normally fetch from DB)
@@ -294,19 +317,50 @@ router.get('/documents/:id/workflow/actions', authMiddleware, async (req: Reques
 router.get('/documents/:id/workflow/status', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id: documentId } = req.params;
-    
-    const status = await engine.getWorkflowStatus(documentId);
-    
-    if (!status) {
-      return res.status(404).json({
+
+    // Use WorkflowManager to get the actual workflow from database
+    const { workflowManager } = require('../services/WorkflowManager');
+    const workflowInstance = await workflowManager.getWorkflowStatus(documentId);
+
+    if (!workflowInstance) {
+      return res.json({
         success: false,
-        error: 'Workflow status not found for document'
+        workflow: null
       });
     }
-    
+
+    // Load workflow definition to get stage names
+    const fs = require('fs');
+    const path = require('path');
+    let currentStageName = workflowInstance.currentStageId;
+
+    try {
+      const workflowPath = path.join(__dirname, '../../workflows', `${workflowInstance.workflowId}.json`);
+      if (fs.existsSync(workflowPath)) {
+        const workflowDef = JSON.parse(fs.readFileSync(workflowPath, 'utf-8'));
+        const currentStage = workflowDef.stages.find((s: any) => s.id === workflowInstance.currentStageId);
+        if (currentStage) {
+          currentStageName = currentStage.name;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load workflow definition for stage name:', err);
+    }
+
+    // Return in the format the frontend expects
     res.json({
       success: true,
-      status
+      workflow: {
+        id: workflowInstance.id,
+        document_id: documentId,
+        current_stage: currentStageName,
+        is_active: workflowInstance.isActive,
+        created_at: workflowInstance.createdAt,
+        updated_at: workflowInstance.updatedAt,
+        completed_at: workflowInstance.completedAt,
+        metadata: workflowInstance.metadata,
+        history: workflowInstance.history || []
+      }
     });
   } catch (error) {
     console.error('Error fetching workflow status:', error);

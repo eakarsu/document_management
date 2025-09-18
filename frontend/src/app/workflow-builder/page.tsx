@@ -1278,7 +1278,7 @@ export default function ProfessionalWorkflowBuilder() {
               }}
             >
               <Background 
-                variant="dots" 
+variant={"dots" as any} 
                 gap={gridSize} 
                 size={1} 
                 color="#ddd"

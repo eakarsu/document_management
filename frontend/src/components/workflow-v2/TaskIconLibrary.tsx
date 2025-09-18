@@ -48,8 +48,7 @@ import {
   FireIcon,
   BeakerIcon,
   WrenchScrewdriverIcon,
-  CpuChipIcon,
-  CircuitBoardIcon
+  CpuChipIcon
 } from '@heroicons/react/24/outline';
 
 export interface TaskTemplate {

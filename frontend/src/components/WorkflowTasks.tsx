@@ -23,9 +23,11 @@ import {
   Schedule,
   CheckCircle,
   Cancel,
-  Visibility
+  Visibility,
+  Send
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
+import DistributionModal from './DistributionModal';
 
 interface WorkflowTask {
   id: string;
@@ -55,14 +57,21 @@ interface WorkflowTasksProps {
   maxTasks?: number;
 }
 
-const WorkflowTasks: React.FC<WorkflowTasksProps> = ({ 
-  showHeader = true, 
-  maxTasks 
+const WorkflowTasks: React.FC<WorkflowTasksProps> = ({
+  showHeader = true,
+  maxTasks
 }) => {
   const router = useRouter();
   const [tasks, setTasks] = useState<WorkflowTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [distributionModal, setDistributionModal] = useState<{
+    open: boolean;
+    documentId?: string;
+    documentTitle?: string;
+    workflowInstanceId?: string;
+    stageId?: string;
+  }>({ open: false });
 
   const fetchTasks = async () => {
     try {
@@ -250,38 +259,57 @@ const WorkflowTasks: React.FC<WorkflowTasksProps> = ({
                               View Document
                             </Button>
                           )}
-                          
-                          {task.formData?.documentId && task.formData?.versionId && (
-                            <>
-                              <Button
-                                size="small"
-                                color="success"
-                                startIcon={<CheckCircle />}
-                                onClick={() => handleApprovalAction(
-                                  task.id, 
-                                  task.formData.documentId, 
-                                  task.formData.versionId, 
-                                  'approve'
-                                )}
-                                disabled={loading}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                size="small"
-                                color="error"
-                                startIcon={<Cancel />}
-                                onClick={() => handleApprovalAction(
-                                  task.id, 
-                                  task.formData.documentId, 
-                                  task.formData.versionId, 
-                                  'reject'
-                                )}
-                                disabled={loading}
-                              >
-                                Reject
-                              </Button>
-                            </>
+
+                          {task.formData?.action === 'DISTRIBUTE' ? (
+                            <Button
+                              size="small"
+                              color="primary"
+                              variant="contained"
+                              startIcon={<Send />}
+                              onClick={() => setDistributionModal({
+                                open: true,
+                                documentId: task.document!.id,
+                                documentTitle: task.document!.title,
+                                workflowInstanceId: task.formData.workflowInstanceId,
+                                stageId: task.formData.stageId
+                              })}
+                              disabled={loading}
+                            >
+                              Distribute to Sub-Reviewers
+                            </Button>
+                          ) : (
+                            task.formData?.documentId && task.formData?.versionId && (
+                              <>
+                                <Button
+                                  size="small"
+                                  color="success"
+                                  startIcon={<CheckCircle />}
+                                  onClick={() => handleApprovalAction(
+                                    task.id,
+                                    task.formData.documentId,
+                                    task.formData.versionId,
+                                    'approve'
+                                  )}
+                                  disabled={loading}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  startIcon={<Cancel />}
+                                  onClick={() => handleApprovalAction(
+                                    task.id,
+                                    task.formData.documentId,
+                                    task.formData.versionId,
+                                    'reject'
+                                  )}
+                                  disabled={loading}
+                                >
+                                  Reject
+                                </Button>
+                              </>
+                            )
                           )}
                         </Box>
                       </React.Fragment>
@@ -294,6 +322,20 @@ const WorkflowTasks: React.FC<WorkflowTasksProps> = ({
           </List>
         )}
       </Paper>
+
+      {distributionModal.open && (
+        <DistributionModal
+          open={distributionModal.open}
+          onClose={() => {
+            setDistributionModal({ open: false });
+            fetchTasks(); // Refresh tasks after distribution
+          }}
+          documentId={distributionModal.documentId || ''}
+          documentTitle={distributionModal.documentTitle || ''}
+          workflowInstanceId={distributionModal.workflowInstanceId || ''}
+          stageId={distributionModal.stageId || ''}
+        />
+      )}
     </Box>
   );
 };

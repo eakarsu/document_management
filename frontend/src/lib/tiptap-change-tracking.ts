@@ -107,7 +107,7 @@ export const ChangeTracking = Extension.create<ChangeTrackingOptions>({
         this.storage.changes = [];
         return true;
       },
-    };
+    } as any;
   },
 
   addProseMirrorPlugins() {

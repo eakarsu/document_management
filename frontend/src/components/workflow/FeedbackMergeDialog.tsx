@@ -134,7 +134,7 @@ export function FeedbackMergeDialog({
             Process Feedback - Line {lineNumber}
           </DialogTitle>
           <div className="flex items-center gap-2 mt-2">
-            <Badge variant={getSeverityColor(feedbackSeverity)}>
+            <Badge variant={getSeverityColor(feedbackSeverity) as any}>
               {feedbackSeverity}
             </Badge>
             {feedbackSeverity === 'CRITICAL' && (

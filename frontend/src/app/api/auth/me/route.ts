@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Forward request to backend API
-    const backendResponse = await fetch(`${process.env.BACKEND_URL || 'http://backend:4000'}/api/auth/me`, {
+    const backendResponse = await fetch(`${process.env.BACKEND_URL || 'http://localhost:4000'}/api/auth/me`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,

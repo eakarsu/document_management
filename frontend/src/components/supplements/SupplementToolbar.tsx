@@ -32,7 +32,7 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  SwapHoriz as ReplaceIcon,
+  SwapHorizOutlined as ReplaceIcon,
   Save as SaveIcon,
   Close as CloseIcon,
   Comment as CommentIcon,
@@ -42,7 +42,8 @@ import {
   AttachFile as AttachFileIcon,
   AddCircleOutline,
   RemoveCircleOutline,
-  EditOutlined as ChangeCircleOutline,
+  ChangeCircleOutlined,
+  SwapHorizOutlined,
   NoteAdd
 } from '@mui/icons-material';
 import { api } from '../../lib/api';
@@ -120,7 +121,7 @@ const SupplementToolbar: React.FC<SupplementToolbarProps> = ({
         effectiveDate: new Date().toISOString()
       };
 
-      const response = await api.post(`/editor/documents/${documentId}/supplement/section`, supplementData);
+      const response = await api.post(`/editor/documents/${documentId}/supplement/section`, supplementData) as any;
 
       if (response.data) {
         setSuccess(true);
@@ -181,8 +182,8 @@ const SupplementToolbar: React.FC<SupplementToolbarProps> = ({
     switch (type) {
       case 'ADD': return <AddCircleOutline />;
       case 'DELETE': return <RemoveCircleOutline />;
-      case 'REPLACE': return <SwapHoriz />;
-      case 'MODIFY': return <ChangeCircleOutline />;
+      case 'REPLACE': return <SwapHorizOutlined />;
+      case 'MODIFY': return <ChangeCircleOutlined />;
       default: return <NoteAdd />;
     }
   };
@@ -226,7 +227,7 @@ const SupplementToolbar: React.FC<SupplementToolbarProps> = ({
 
           <Tooltip title="Replace content">
             <Button
-              startIcon={<SwapHoriz />}
+              startIcon={<SwapHorizOutlined />}
               onClick={() => {
                 setSupplementType('REPLACE');
                 setOpen(true);
@@ -252,7 +253,7 @@ const SupplementToolbar: React.FC<SupplementToolbarProps> = ({
 
           <Tooltip title="Modify content">
             <Button
-              startIcon={<ChangeCircleOutline />}
+              startIcon={<ChangeCircleOutlined />}
               onClick={() => {
                 setSupplementType('MODIFY');
                 setOpen(true);
@@ -328,7 +329,7 @@ const SupplementToolbar: React.FC<SupplementToolbarProps> = ({
                   control={<Radio color="warning" />}
                   label={
                     <Chip
-                      icon={<SwapHoriz />}
+                      icon={<SwapHorizOutlined />}
                       label="Replace"
                       color="warning"
                       variant={supplementType === 'REPLACE' ? 'filled' : 'outlined'}
@@ -354,7 +355,7 @@ const SupplementToolbar: React.FC<SupplementToolbarProps> = ({
                   control={<Radio color="info" />}
                   label={
                     <Chip
-                      icon={<ChangeCircleOutline />}
+                      icon={<ChangeCircleOutlined />}
                       label="Modify"
                       color="info"
                       variant={supplementType === 'MODIFY' ? 'filled' : 'outlined'}

@@ -32,6 +32,7 @@ model User {
   organizationId                                                   String
   approval_step_reviewers                                          approval_step_reviewers[]
   approvalStepUsers                                                ApprovalStepUser[]            @relation("ApprovalStepUsers")
+  uploadedAttachments                                              Attachment[]
   auditLogs                                                        AuditLog[]
   collaboration_sessions                                           collaboration_sessions[]
   comments                                                         Comment[]
@@ -59,6 +60,7 @@ model User {
   session_activities                                               session_activities[]
   session_participants                                             session_participants[]
   stage_transitions                                                stage_transitions[]
+  supplementalSections                                             SupplementalSection[]
   sessions                                                         UserSession[]
   organization                                                     Organization                  @relation(fields: [organizationId], references: [id])
   role                                                             Role                          @relation(fields: [roleId], references: [id])
@@ -67,8 +69,6 @@ model User {
   workflow_stage_history                                           workflow_stage_history[]
   assignedTasks                                                    WorkflowTask[]                @relation("TaskAssignee")
   createdTasks                                                     WorkflowTask[]                @relation("TaskCreator")
-  supplementalSections                                             SupplementalSection[]
-  uploadedAttachments                                              Attachment[]
 
   @@map("users")
 }
@@ -149,13 +149,6 @@ model Document {
   parentDocumentId          String?
   currentVersion            Int                         @default(1)
   ocrProcessed              Boolean                     @default(false)
-  
-  // Supplemental document fields
-  supplementType            String?                     // 'MAJCOM', 'BASE', 'UNIT', 'INTERIM_CHANGE'
-  supplementLevel           Int?                        // 1=Service, 2=MAJCOM, 3=Wing, 4=Squadron
-  supplementOrganization    String?                     // e.g., 'PACAF', 'Kadena AB', '36th Wing'
-  effectiveDate             DateTime?
-  expirationDate            DateTime?
   ocrText                   String?
   aiClassification          String?
   aiTags                    String[]
@@ -163,6 +156,12 @@ model Document {
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @updatedAt
   lastAccessedAt            DateTime?
+  effectiveDate             DateTime?
+  expirationDate            DateTime?
+  supplementLevel           Int?
+  supplementOrganization    String?
+  supplementType            String?
+  attachments               Attachment[]
   collaboration_sessions    collaboration_sessions[]
   comment_resolution_matrix comment_resolution_matrix[]
   comments                  Comment[]
@@ -173,16 +172,15 @@ model Document {
   document_sections         document_sections[]
   versions                  DocumentVersion[]
   workflows                 DocumentWorkflow[]
-  jsonWorkflowInstances     JsonWorkflowInstance[]
   createdBy                 User                        @relation("DocumentCreator", fields: [createdById], references: [id])
   folder                    Folder?                     @relation(fields: [folderId], references: [id])
   organization              Organization                @relation(fields: [organizationId], references: [id])
   parentDocument            Document?                   @relation("DocumentHierarchy", fields: [parentDocumentId], references: [id])
   childDocuments            Document[]                  @relation("DocumentHierarchy")
+  jsonWorkflowInstances     JsonWorkflowInstance[]
   sequential_workflows      sequential_workflows?
-  workflow_instances        workflow_instances[]
   supplementalSections      SupplementalSection[]
-  attachments               Attachment[]
+  workflow_instances        workflow_instances[]
 
   @@map("documents")
 }
@@ -300,18 +298,18 @@ model DocumentWorkflow {
 }
 
 model JsonWorkflowInstance {
-  id              String                @id @default(cuid())
-  documentId      String
-  workflowId      String
-  currentStageId  String
-  isActive        Boolean               @default(true)
-  metadata        Json                  @default("{}")
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  completedAt     DateTime?
-  document        Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  history         JsonWorkflowHistory[]
-  
+  id             String                @id @default(cuid())
+  documentId     String
+  workflowId     String
+  currentStageId String
+  isActive       Boolean               @default(true)
+  metadata       Json                  @default("{}")
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  completedAt    DateTime?
+  history        JsonWorkflowHistory[]
+  document       Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
   @@unique([documentId, isActive])
   @@map("json_workflow_instances")
 }
@@ -326,7 +324,7 @@ model JsonWorkflowHistory {
   metadata           Json                 @default("{}")
   createdAt          DateTime             @default(now())
   workflowInstance   JsonWorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
-  
+
   @@map("json_workflow_history")
 }
 
@@ -666,7 +664,7 @@ model comment_resolution_matrix {
   documentId             String?
   workflow_instances     workflow_instances?   @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
   document               Document?             @relation(fields: [documentId], references: [id], map: "crm_document_fkey")
-  sequential_workflow    sequential_workflows? @relation(fields: [documentId], references: [documentId], map: "crm_sequential_workflow_fkey")
+  sequential_workflow    sequential_workflows? @relation(fields: [documentId], references: [documentId], map: "crm_seq_workflow_fkey")
   crm_entries            crm_entries[]
 
   @@index([documentId])
@@ -1109,103 +1107,86 @@ model workflow_supporting_documents {
   workflow_instances   workflow_instances @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
 }
 
-// Supplemental Section model for tracking document supplements
 model SupplementalSection {
-  id                  String    @id @default(cuid())
+  id                  String   @id @default(cuid())
   documentId          String
-  document            Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  
-  // Reference to parent document section
-  parentSectionNumber String    // e.g., "2.3.1"
+  parentSectionNumber String
   parentSectionTitle  String
-  
-  // Supplement content
-  action              String    // 'ADD', 'REPLACE', 'DELETE', 'MODIFY'
-  content             String    @db.Text // The supplemental content
-  rationale           String?   // Why this supplement is needed
-  
-  // Metadata
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  action              String
+  content             String
+  rationale           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
   createdById         String
-  createdBy           User      @relation(fields: [createdById], references: [id])
-  
+  createdBy           User     @relation(fields: [createdById], references: [id])
+  document            Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
   @@map("supplemental_sections")
 }
 
 model Attachment {
   id              String   @id @default(cuid())
   documentId      String
-  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-
-  // File information
   fileName        String
   originalName    String
   mimeType        String
   fileSize        Int
   storagePath     String
   storageProvider String   @default("minio")
-
-  // Metadata
   description     String?
-  attachmentType  String?  // 'REFERENCE', 'SUPPORTING', 'APPENDIX', 'FORM', 'IMAGE'
-  attachmentOrder Int?     // For ordering attachments
-
-  // Upload information
+  attachmentType  String?
+  attachmentOrder Int?
   uploadedAt      DateTime @default(now())
   uploadedById    String
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   uploadedBy      User     @relation(fields: [uploadedById], references: [id])
 
   @@map("attachments")
 }
 
-// Pluggable Workflow System Tables
 model WorkflowPlugin {
-  id                  String                @id @default(cuid())
-  name                String
-  version             String
-  description         String?
-  organization        String?
-  author              String?
-  config              Json                  // IWorkflowConfig
-  isActive            Boolean               @default(true)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  
-  activations         WorkflowActivation[]
-  states              WorkflowState[]
-  
+  id           String               @id @default(cuid())
+  name         String
+  version      String
+  description  String?
+  organization String?
+  author       String?
+  config       Json
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  activations  WorkflowActivation[]
+  states       WorkflowState[]
+
   @@unique([name, version])
   @@map("workflow_plugins")
 }
 
 model WorkflowActivation {
-  id                  String                @id @default(cuid())
-  documentType        String                @unique
-  pluginId            String
-  activatedAt         DateTime              @default(now())
-  activatedBy         String?
-  
-  plugin              WorkflowPlugin        @relation(fields: [pluginId], references: [id])
-  
+  id           String         @id @default(cuid())
+  documentType String         @unique
+  pluginId     String
+  activatedAt  DateTime       @default(now())
+  activatedBy  String?
+  plugin       WorkflowPlugin @relation(fields: [pluginId], references: [id])
+
   @@map("workflow_activations")
 }
 
 model WorkflowState {
-  id                  String                @id @default(cuid())
-  documentId          String                @unique
-  workflowId          String
-  currentStage        String
-  previousStage       String?
-  status              String                // 'active' | 'completed' | 'cancelled' | 'suspended' | 'error'
-  startedAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  completedAt         DateTime?
-  data                Json                  @default("{}")
-  history             Json                  @default("[]")  // Array of IWorkflowHistory
-  
-  plugin              WorkflowPlugin        @relation(fields: [workflowId], references: [id])
-  
+  id            String         @id @default(cuid())
+  documentId    String         @unique
+  workflowId    String
+  currentStage  String
+  previousStage String?
+  status        String
+  startedAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  completedAt   DateTime?
+  data          Json           @default("{}")
+  history       Json           @default("[]")
+  plugin        WorkflowPlugin @relation(fields: [workflowId], references: [id])
+
   @@index([status])
   @@index([workflowId])
   @@map("workflow_states")

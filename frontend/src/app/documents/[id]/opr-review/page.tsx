@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { authTokenService } from '../../../../lib/authTokenService';
 import DocumentNumbering from '../../../../components/DocumentNumbering';
+import CollectedFeedbackView from '../../../../components/workflow/CollectedFeedbackView';
 import {
   Container,
   Paper,
@@ -97,6 +98,7 @@ const OPRReviewPage = () => {
   const [mergeResult, setMergeResult] = useState<string>('');
   const [mergeResultContent, setMergeResultContent] = useState<string>('');
   const [highlightedText, setHighlightedText] = useState<string>(''); // Store text to highlight // Store actual content separately
+  const [loading, setLoading] = useState(false);
   const [savingDocument, setSavingDocument] = useState(false);
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [showPageNumbers, setShowPageNumbers] = useState(true);
@@ -628,8 +630,8 @@ const OPRReviewPage = () => {
       const updatedList = feedback.map(f => 
         f.id === selectedFeedback.id ? updatedFeedback : f
       );
-      setFeedback(updatedList);
-      setSelectedFeedback(updatedFeedback);
+      setFeedback(updatedList as CRMComment[]);
+      setSelectedFeedback(updatedFeedback as CRMComment);
       
       // Save to database
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
@@ -753,6 +755,73 @@ const OPRReviewPage = () => {
     }
   };
 
+  const handleSubmitFeedbackToOPR = async () => {
+    try {
+      setLoading(true);
+      setAlert(null);
+
+      // Get the current task ID from the workflow
+      const tasksResponse = await fetch('/api/tasks', {
+        headers: {
+          'Authorization': `Bearer ${authTokenService.getAccessToken()}`
+        }
+      });
+
+      if (!tasksResponse.ok) {
+        throw new Error('Failed to fetch tasks');
+      }
+
+      const tasks = await tasksResponse.json();
+      const currentTask = tasks.find((t: any) =>
+        t.formData?.documentId === documentId &&
+        t.status === 'PENDING'
+      );
+
+      if (!currentTask) {
+        setAlert({ severity: 'warning', message: 'No active review task found' });
+        return;
+      }
+
+      // Complete the task and submit feedback
+      const completeResponse = await fetch(`/api/tasks/${currentTask.id}/complete`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authTokenService.getAccessToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: 'completed',
+          feedback: feedback,
+          reviewNotes: 'Feedback submitted to OPR',
+          reviewDate: new Date().toISOString()
+        })
+      });
+
+      if (!completeResponse.ok) {
+        throw new Error('Failed to submit feedback');
+      }
+
+      setAlert({
+        severity: 'success',
+        message: 'Feedback successfully submitted to OPR! Redirecting to dashboard...'
+      });
+
+      // Redirect to dashboard after 2 seconds
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      setAlert({
+        severity: 'error',
+        message: 'Failed to submit feedback to OPR'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveDocument = async () => {
     setSavingDocument(true);
     
@@ -815,7 +884,7 @@ const OPRReviewPage = () => {
     <>
       <AppBar position="sticky" color="primary">
         <Toolbar>
-          <IconButton edge="start" color="inherit" onClick={() => router.push(`/documents/${documentId}`)}>
+          <IconButton edge="start" color="inherit" onClick={() => router.push('/dashboard')}>
             <ArrowBack />
           </IconButton>
           <DocumentIcon sx={{ ml: 2, mr: 1 }} />
@@ -1106,6 +1175,9 @@ const OPRReviewPage = () => {
 
         {/* Right Side: OPR Response Form and Feedback List */}
         <Box sx={{ width: '600px', overflow: 'auto', p: 3, bgcolor: 'background.default' }}>
+          {/* Collected Feedback View - Shows all reviewer feedback */}
+          <CollectedFeedbackView documentId={documentId} userRole="OPR" />
+
           {/* Merge Mode Selection */}
           <Paper sx={{ p: 2, mb: 2 }}>
             <Typography variant="h6" gutterBottom>
@@ -1425,9 +1497,22 @@ const OPRReviewPage = () => {
 
           {/* Feedback List */}
           <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Comment Matrix ({feedback.length})
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                Comment Matrix ({feedback.length})
+              </Typography>
+              {feedback.length > 0 && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<SendIcon />}
+                  onClick={handleSubmitFeedbackToOPR}
+                  disabled={loading}
+                >
+                  Submit Feedback to OPR
+                </Button>
+              )}
+            </Box>
             
             {feedback.length === 0 ? (
               <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
@@ -1620,7 +1705,7 @@ const OPRReviewPage = () => {
                     
                     // If still not found, look for any element with document content
                     if (!editorElement) {
-                      const allDivs = document.querySelectorAll('div');
+                      const allDivs = Array.from(document.querySelectorAll('div'));
                       for (const div of allDivs) {
                         if (div.innerHTML.includes('AIR FORCE') || 
                             div.innerHTML.includes('SECTION') ||
@@ -1836,7 +1921,7 @@ const OPRReviewPage = () => {
                         
                         if (!targetElement) {
                           // Try partial match (e.g., "1.2.3" might be stored as "1.2.3.1")
-                          const allParas = editorElement.querySelectorAll('[data-paragraph]');
+                          const allParas = Array.from(editorElement.querySelectorAll('[data-paragraph]'));
                           for (const para of allParas) {
                             const paraNum = para.getAttribute('data-paragraph');
                             if (paraNum && paraNum.startsWith(feedbackLocation.paragraph)) {

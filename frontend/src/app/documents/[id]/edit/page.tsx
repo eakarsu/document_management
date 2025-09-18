@@ -514,11 +514,6 @@ export default function EditDocumentPage() {
         )}
         
         {/* Always visible floating page indicator */}
-        {console.log('Floating indicator check:', { 
-          hasContent: !!documentContent, 
-          contentLength: documentContent?.length,
-          calculatedPages: Math.max(1, Math.ceil((documentContent?.length || 0) / 3000))
-        })}
         {documentContent && (
           <Box
             sx={{ 
@@ -567,10 +562,8 @@ export default function EditDocumentPage() {
               </Box>
             </Paper>
 
-            {console.log('Tab check:', { tabValue, canUse: canUseRichTextEditor(documentData?.mimeType || ''), mimeType: documentData?.mimeType })}
             {tabValue === 0 && canUseRichTextEditor(documentData?.mimeType || '') && (
               <>
-                {console.log('Edit mode - showPreview:', showPreview, 'mimeType:', documentData?.mimeType)}
                 {showPreview ? (
                   <Paper sx={{ p: 3, minHeight: 'calc(100vh - 300px)' }}>
                     {/* Numbering Controls */}
@@ -613,10 +606,10 @@ export default function EditDocumentPage() {
                     </Box>
                     
                     {/* Air Force Header if exists */}
-                    {documentData?.customFields?.headerHtml && (
+                    {(documentData as any)?.customFields?.headerHtml && (
                       <Box 
                         sx={{ mb: 3 }}
-                        dangerouslySetInnerHTML={{ __html: documentData.customFields.headerHtml }}
+                        dangerouslySetInnerHTML={{ __html: (documentData as any).customFields.headerHtml }}
                       />
                     )}
                     
@@ -627,14 +620,12 @@ export default function EditDocumentPage() {
                         <p>Start editing your document content here...</p>
                       `}
                       enableLineNumbers={showLineNumbers}
-                      enableParagraphNumbers={showParagraphNumbers}
                       enablePageNumbers={showPageNumbers}
                       linesPerPage={50}
                     />
                   </Paper>
                 ) : (
                   <>
-                    {console.log('Rendering floating indicator:', { currentPage, totalPages, showPreview })}
                     {/* Floating page indicator - always visible in edit mode */}
                     <Box
                       sx={{ 

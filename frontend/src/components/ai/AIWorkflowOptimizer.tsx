@@ -394,7 +394,7 @@ const AIWorkflowOptimizer: React.FC<AIWorkflowOptimizerProps> = ({
 
     } catch (error) {
       console.error('Failed to analyze workflow:', error);
-      setError(error instanceof Error ? error.message : String(error) || 'Failed to analyze workflow');
+      setError('Failed to analyze workflow');
     } finally {
       setLoading(false);
     }
@@ -431,7 +431,7 @@ const AIWorkflowOptimizer: React.FC<AIWorkflowOptimizerProps> = ({
 
     } catch (error) {
       console.error('Failed to apply optimizations:', error);
-      setError(error instanceof Error ? error.message : String(error) || 'Failed to apply optimizations');
+      setError('Failed to apply optimizations');
     } finally {
       setOptimizing(false);
     }
