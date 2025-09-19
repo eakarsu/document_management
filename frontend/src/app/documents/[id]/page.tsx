@@ -1405,9 +1405,13 @@ const DocumentViewPage: React.FC = () => {
               <Divider sx={{ my: 3 }} />
 
               {/* JSON-Based Workflow System */}
-              <JsonWorkflowDisplay 
+              <JsonWorkflowDisplay
                 documentId={documentId}
-                userRole={userRole?.roleType || userRole?.role || 'USER'}
+                userRole={(() => {
+                  const role = userRole?.roleType || userRole?.role || 'USER';
+                  console.log('📊 Passing userRole to JsonWorkflowDisplay:', role, 'from userRole object:', userRole);
+                  return role;
+                })()}
                 onWorkflowChange={(instance) => {
                   // Update old workflow state to maintain compatibility
                   console.log('🔍 DEBUG onWorkflowChange: Instance received:', instance);

@@ -261,7 +261,7 @@ router.post('/workflow-instances/:documentId/start', authMiddleware, async (req,
 router.post('/workflow-instances/:documentId/advance', authMiddleware, async (req, res) => {
   try {
     const { documentId } = req.params;
-    const { targetStageId, action, metadata } = req.body;
+    let { targetStageId, action, metadata } = req.body;
     const userId = (req as any).user?.userId || (req as any).user?.id || 'system';
     
     // Get active workflow instance
@@ -290,8 +290,29 @@ router.post('/workflow-instances/:documentId/advance', authMiddleware, async (re
       return res.status(400).json({ error: 'Invalid current stage' });
     }
 
+    // Debug logging for Stage 9 Leadership actions
+    if (workflowInstance.currentStageId === '9') {
+      console.log('[WORKFLOW DEBUG] Stage 9 Leadership action:', {
+        action,
+        targetStageId,
+        metadata,
+        currentStageId: workflowInstance.currentStageId
+      });
+    }
+
     // Check if this is a workflow completion action
-    const isCompletionAction = metadata?.completeWorkflow === true || !targetStageId;
+    // Only treat as completion if explicitly marked OR if it's the final stage (10) with a PUBLISH action
+    // IMPORTANT: Stage 9 (Leadership) should NEVER complete - it must transition to Stage 10
+    // IMPORTANT: Stage 10 (AFDPO) should only complete when "Publish Document" action is taken
+    const isCompletionAction = metadata?.completeWorkflow === true ||
+                              (workflowInstance.currentStageId === '10' && action === 'Publish Document' && !targetStageId);
+
+    // Special handling for Leadership Stage (id: 9) - if no targetStageId provided, default to Stage 10 (AFDPO)
+    // Note: Stage 9 in workflow definition is "OPR Leadership Final Review & Signature" (Stage 11 in test numbering)
+    if (workflowInstance.currentStageId === '9' && !targetStageId && action === 'Sign and Approve') {
+      console.log('[WORKFLOW FIX] Leadership Stage (9) Sign and Approve missing targetStageId, setting to 10 (AFDPO)');
+      targetStageId = '10';
+    }
 
     // Initialize variables that might be used later
     let targetStage: any = null;
@@ -522,17 +543,9 @@ router.post('/workflow-instances/:documentId/advance', authMiddleware, async (re
     }
 
     // Check if workflow is complete
-    const isComplete = !workflowDef.transitions.find((t: any) => t.from === targetStageId);
-    
-    if (isComplete) {
-      await prisma.jsonWorkflowInstance.update({
-        where: { id: workflowInstance.id },
-        data: {
-          isActive: false,
-          completedAt: new Date()
-        }
-      });
-    }
+    // IMPORTANT: Don't mark as complete just because there are no transitions
+    // Stage 10 (AFDPO) has no outgoing transitions but should remain active until "Publish Document" is clicked
+    const isComplete = false; // Never auto-complete based on transitions - only complete via explicit action
     
     res.json({
       success: true,

@@ -144,6 +144,8 @@ const DistributionModal: React.FC<DistributionModalProps> = ({
 
       setTimeout(() => {
         onClose();
+        // Reload the page to show updated workflow state
+        window.location.reload();
       }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to distribute document. Please try again.');

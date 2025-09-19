@@ -458,7 +458,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     });
 
     // Get all defined actions for this stage
-    const actions: Array<{ id: string; label: string; target: string; disabled: boolean; disabledReason?: string }> =
+    let actions: Array<{ id: string; label: string; target: string; disabled: boolean; disabledReason?: string }> =
       [...(currentStage.actions || [])].map(action => {
         // Handle both string actions and object actions
         if (typeof action === 'string') {
@@ -492,8 +492,9 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     );
     
     
-    // Special handling for Review Collection Phases - enable for all users in these stages
-    const isReviewCollectionPhase = currentStage.id === '4' || currentStage.id === '3.5' || currentStage.id === '5.5' ||
+    // Special handling for Review Collection Phases - ONLY stages 3.5 and 5.5
+    // Stage 4 is OPR Feedback Incorporation, NOT a review collection phase!
+    const isReviewCollectionPhase = currentStage.id === '3.5' || currentStage.id === '5.5' ||
                                    currentStage.name?.toLowerCase().includes('review collection');
 
     if (isReviewCollectionPhase) {
@@ -503,8 +504,45 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         existingActions: actions.map(a => ({ id: a.id, label: a.label, disabled: a.disabled }))
       });
 
-      // Enable all existing actions in Review Collection Phase
-      console.log('🚀 Enabling all actions for Review Collection Phase');
+      // Check user role for coordinator
+      const roleToCheck = userRole?.toLowerCase() || '';
+      const isCoordinator = roleToCheck.includes('coordinator') ||
+                           roleToCheck === 'coordinator1' ||
+                           roleToCheck === 'coordinator';
+
+      console.log('🔍 Role check in Review Phase - roleToCheck:', roleToCheck, 'isCoordinator:', isCoordinator);
+
+      // Filter actions based on role
+      if (!isCoordinator) {
+        console.log('👤 User is NOT coordinator (reviewer) - keeping only Submit Review button');
+        console.log('   Actions before filtering:', actions.map(a => a.label));
+        // Remove "All Reviews Complete" and "Process Feedback" actions for non-coordinators
+        actions = actions.filter(action => {
+          const shouldRemove = action.label?.toLowerCase().includes('all reviews complete') ||
+                               action.label?.toLowerCase().includes('process feedback');
+          if (shouldRemove) {
+            console.log('   ❌ Removing action:', action.label);
+          }
+          return !shouldRemove;
+        });
+        console.log('   Actions after filtering:', actions.map(a => a.label));
+      } else {
+        console.log('👮 User is coordinator - removing Submit Review button');
+        console.log('   Actions before filtering:', actions.map(a => a.label));
+        // Remove "Submit Review" action for coordinators - they only need management buttons
+        actions = actions.filter(action => {
+          const shouldRemove = action.label?.toLowerCase() === 'submit review' ||
+                               action.type === 'REVIEW_SUBMIT';
+          if (shouldRemove) {
+            console.log('   ❌ Removing action:', action.label);
+          }
+          return !shouldRemove;
+        });
+        console.log('   Actions after filtering (coordinator sees):', actions.map(a => a.label));
+      }
+
+      // Enable remaining actions
+      console.log('🚀 Enabling actions for Review Collection Phase');
       actions.forEach(action => {
         action.disabled = false;
         action.disabledReason = undefined;
@@ -520,36 +558,65 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       console.log('🔍 Has existing review actions:', hasReviewActions);
 
       if (!hasReviewActions) {
-        console.log('🚀 Adding Review Collection Phase actions for stage:', currentStage.id);
+        console.log('🚀 Adding Review Collection Phase actions for stage:', currentStage.id, 'User role:', userRole);
 
-        // Add "All Reviews Complete" action
-        actions.push({
-          id: 'opr-complete-reviews',
-          label: 'All Reviews Complete',
-          target: currentStage.id,
-          disabled: false,
-          disabledReason: undefined
-        });
+        // Only add "All Reviews Complete" action for coordinators
+        const roleToCheck = userRole?.toLowerCase() || '';
+        const isCoordinator = roleToCheck.includes('coordinator') ||
+                             roleToCheck === 'coordinator1' ||
+                             roleToCheck === 'coordinator';
 
-        // Add "Process Feedback" action
-        actions.push({
-          id: 'opr-process-feedback',
-          label: 'Process Feedback & Continue',
-          target: currentStage.id,
-          disabled: false,
-          disabledReason: undefined
-        });
+        console.log('🔍 Role check - roleToCheck:', roleToCheck, 'isCoordinator:', isCoordinator);
+
+        if (isCoordinator) {
+          console.log('👮 User is coordinator - adding All Reviews Complete button');
+          // Add "All Reviews Complete" action - ONLY for coordinators
+          actions.push({
+            id: 'opr-complete-reviews',
+            label: 'All Reviews Complete',
+            target: currentStage.id,
+            disabled: false,
+            disabledReason: undefined
+          });
+
+          // Add "Process Feedback" action - ONLY for coordinators
+          actions.push({
+            id: 'opr-process-feedback',
+            label: 'Process Feedback & Continue',
+            target: currentStage.id,
+            disabled: false,
+            disabledReason: undefined
+          });
+        } else {
+          console.log('👤 User is NOT coordinator (role:', userRole, ') - NOT adding All Reviews Complete button');
+          console.log('   Reviewers should only see Submit Review button');
+        }
       } else {
         console.log('🔍 Existing review actions found and enabled');
       }
     }
 
     // Add transition buttons for all users (but disabled if no permission)
-    availableTransitions.forEach((transition: any) => {
-      const targetStage = workflowDef.stages.find((s: any) => s.id === transition.to);
-      const hasAction = actions.some(a => a.target === transition.to);
+    // IMPORTANT: In Review Collection Phase, only coordinators should see transition buttons
+    const roleToCheck = userRole?.toLowerCase() || '';
+    const isCoordinator = roleToCheck.includes('coordinator');
+    const shouldShowTransitions = !isReviewCollectionPhase || isCoordinator;
 
-      if (isAdmin && !hasAction) {
+    console.log('🚦 Transition button check:', {
+      isReviewCollectionPhase,
+      isCoordinator,
+      shouldShowTransitions,
+      userRole,
+      availableTransitions: availableTransitions.length
+    });
+
+    if (shouldShowTransitions) {
+      console.log('✅ Adding transition buttons for user');
+      availableTransitions.forEach((transition: any) => {
+        const targetStage = workflowDef.stages.find((s: any) => s.id === transition.to);
+        const hasAction = actions.some(a => a.target === transition.to);
+
+        if (isAdmin && !hasAction) {
         // Admin override button (always enabled for admins)
         actions.push({
           id: `admin-override-${transition.to}`,
@@ -578,6 +645,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         });
       }
     });
+    } // End of shouldShowTransitions check
 
     // CRITICAL FIX: Filter out any publish-related actions unless at stage 10 (AFDPO Publication)
     const filteredActions = actions.filter(action => {
@@ -594,6 +662,8 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
       return true;
     });
+
+    console.log('📊 FINAL ACTIONS for', userRole, ':', filteredActions.map(a => a.label));
 
     return filteredActions;
   };
@@ -1143,12 +1213,8 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                           // Special handling for Stage 3.5 review submission
                           if (workflowInstance?.currentStageId === '3.5' &&
                               action.type === 'REVIEW_SUBMIT') {
-                            // Show review submission interface
-                            const feedback = prompt('Please provide your review feedback:');
-                            if (feedback) {
-                              const approved = confirm('Do you approve this document?');
-                              submitReview(feedback, approved);
-                            }
+                            // Navigate to Review & CRM page instead of showing popup
+                            window.location.href = `/documents/${documentId}/review`;
                             return;
                           }
 
@@ -1170,8 +1236,14 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                             return;
                           }
 
+                          // Special handling for Stage 9 Leadership "Sign and Approve" - MUST transition to Stage 10
+                          if (workflowInstance?.currentStageId === '9' &&
+                              (action.label === 'Sign and Approve' || action.id === 'sign_and_approve')) {
+                            console.log('🚀 Leadership Sign and Approve - transitioning to AFDPO (Stage 10)');
+                            advanceWorkflow('10', action.label);
+                          }
                           // Check if this action has a target stage different from current (i.e., it's a transition)
-                          if (action.target !== workflowInstance?.currentStageId) {
+                          else if (action.target !== workflowInstance?.currentStageId) {
                             advanceWorkflow(action.target, action.label);
                           } else {
                             // Non-transitioning action (like "Review Document")
