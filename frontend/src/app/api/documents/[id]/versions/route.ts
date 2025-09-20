@@ -1,41 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const cookieStore = cookies();
-    const accessToken = cookieStore.get('accessToken')?.value;
+    const authHeader = request.headers.get('authorization');
 
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
-    const response = await fetch(`${backendUrl}/api/documents/${params.id}/versions`, {
+    const response = await fetch(`${BACKEND_URL}/api/documents/${params.id}/versions`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': authHeader || '',
         'Content-Type': 'application/json',
       },
     });
 
     if (!response.ok) {
-      if (response.status === 401) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-      throw new Error(`Backend responded with status: ${response.status}`);
+      const error = await response.text();
+      return NextResponse.json(
+        { error: error || 'Failed to fetch versions' },
+        { status: response.status }
+      );
     }
 
     const data = await response.json();
     return NextResponse.json(data);
-
   } catch (error) {
-    console.error('Document versions API error:', error);
+    console.error('Error fetching versions:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch document versions' },
+      { error: 'Failed to fetch versions' },
       { status: 500 }
     );
   }
@@ -46,47 +41,32 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const cookieStore = cookies();
-    const accessToken = cookieStore.get('accessToken')?.value;
+    const authHeader = request.headers.get('authorization');
+    const body = await request.json();
 
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const formData = await request.formData();
-
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
-    const response = await fetch(`${backendUrl}/api/documents/${params.id}/versions`, {
+    const response = await fetch(`${BACKEND_URL}/api/documents/${params.id}/versions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': authHeader || '',
+        'Content-Type': 'application/json',
       },
-      body: formData,
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      if (response.status === 401) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-      
-      const errorData = await response.text();
-      let parsedError;
-      try {
-        parsedError = JSON.parse(errorData);
-      } catch {
-        parsedError = { error: errorData || 'Upload failed' };
-      }
-      
-      return NextResponse.json(parsedError, { status: response.status });
+      const error = await response.text();
+      return NextResponse.json(
+        { error: error || 'Failed to create version' },
+        { status: response.status }
+      );
     }
 
     const data = await response.json();
     return NextResponse.json(data);
-
   } catch (error) {
-    console.error('Document version upload API error:', error);
+    console.error('Error creating version:', error);
     return NextResponse.json(
-      { error: 'Failed to upload document version' },
+      { error: 'Failed to create version' },
       { status: 500 }
     );
   }

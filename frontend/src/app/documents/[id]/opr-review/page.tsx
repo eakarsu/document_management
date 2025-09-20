@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { authTokenService } from '../../../../lib/authTokenService';
 import DocumentNumbering from '../../../../components/DocumentNumbering';
 import CollectedFeedbackView from '../../../../components/workflow/CollectedFeedbackView';
+import OPRFeedbackProcessorV2Enhanced from '../../../../components/feedback/OPRFeedbackProcessorV2Enhanced';
 import {
   Container,
   Paper,
@@ -125,18 +126,17 @@ const OPRReviewPage = () => {
     originatorJustification: ''
   });
 
-  useEffect(() => {
-    // Fetch document and feedback
-    const fetchDocumentAndFeedback = async () => {
-      try {
-        let hasFeedbackFromDoc = false;
-        
-        // Fetch document
-        const docResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`);
-        if (docResponse.ok) {
-          const data = await docResponse.json();
-          const doc = data.document || data;
-          setDocumentData(doc);
+  // Define fetchDocumentAndFeedback function before useEffect
+  const fetchDocumentAndFeedback = async () => {
+    try {
+      let hasFeedbackFromDoc = false;
+
+      // Fetch document
+      const docResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`);
+      if (docResponse.ok) {
+        const data = await docResponse.json();
+        const doc = data.document || data;
+        setDocumentData(doc);
           
           // Get content - use editableContent to avoid duplicate header
           let content = '';
@@ -239,10 +239,11 @@ const OPRReviewPage = () => {
           }
         }
       } catch (error) {
-        console.error('Error fetching document or feedback:', error);
-      }
-    };
-    
+      console.error('Error fetching document or feedback:', error);
+    }
+  };
+
+  useEffect(() => {
     fetchDocumentAndFeedback();
   }, [documentId, router]);
 
@@ -1173,433 +1174,36 @@ const OPRReviewPage = () => {
           </Paper>
         </Box>
 
-        {/* Right Side: OPR Response Form and Feedback List */}
-        <Box sx={{ width: '600px', overflow: 'auto', p: 3, bgcolor: 'background.default' }}>
-          {/* Collected Feedback View - Shows all reviewer feedback */}
-          <CollectedFeedbackView documentId={documentId} userRole="OPR" />
+        {/* Right Side: Version Control Feedback Processor */}
+        <Box sx={{ width: '700px', overflow: 'auto' }}>
+          {/* Version Control Feedback Processor - Handles feedback with automatic position tracking */}
+          <OPRFeedbackProcessorV2Enhanced
+            documentId={documentId}
+            documentTitle={documentData?.title || 'Document'}
+            documentContent={documentContent}
+            onUpdate={() => {
+              // Refresh the document data after feedback processing
+              fetchDocumentAndFeedback();
+            }}
+            onContentChange={(newContent: string) => {
+              setDocumentContent(newContent);
+              setEditableContent(newContent);
 
-          {/* Merge Mode Selection */}
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Merge Mode
-            </Typography>
-            <ToggleButtonGroup
-              value={mergeMode}
-              exclusive
-              onChange={handleMergeModeChange}
-              fullWidth
-            >
-              <ToggleButton value="manual">
-                <ManualIcon sx={{ mr: 1 }} />
-                Manual
-              </ToggleButton>
-              <ToggleButton value="ai">
-                <AIIcon sx={{ mr: 1 }} />
-                AI-Assisted
-              </ToggleButton>
-              <ToggleButton value="hybrid">
-                <HybridIcon sx={{ mr: 1 }} />
-                Hybrid
-              </ToggleButton>
-            </ToggleButtonGroup>
-            
-            {selectedFeedback && (
-              <>
-                {/* Text Preview Section */}
-                <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" color="primary" gutterBottom>
-                    📍 Location: Page {selectedFeedback.page || '?'}, Para {selectedFeedback.paragraphNumber || '?'}, Line {selectedFeedback.lineNumber || '?'}
-                  </Typography>
-                  
-                  {selectedFeedback.changeFrom && (
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="caption" color="error" fontWeight="bold">
-                        ❌ Original Text (to be replaced):
-                      </Typography>
-                      <Paper sx={{ p: 1, mt: 0.5, bgcolor: 'error.50', border: '1px solid', borderColor: 'error.main' }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                          {selectedFeedback.changeFrom}
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  )}
-                  
-                  {selectedFeedback.changeTo && (
-                    <Box>
-                      <Typography variant="caption" color="success.main" fontWeight="bold">
-                        ✅ Replacement Text (AI will enhance this):
-                      </Typography>
-                      <Paper sx={{ p: 1, mt: 0.5, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.main' }}>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                          {selectedFeedback.changeTo}
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  )}
-                  
-                  {!selectedFeedback.changeFrom && !selectedFeedback.changeTo && (
-                    <Alert severity="info" sx={{ mt: 1 }}>
-                      <Typography variant="body2">
-                        No specific text changes provided. The AI will attempt to locate and improve text at the specified paragraph location based on the feedback comment:
-                      </Typography>
-                      <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                        "{selectedFeedback.coordinatorComment}"
-                      </Typography>
-                    </Alert>
-                  )}
-                  
-                  {mergeMode === 'ai' && (
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      AI will process this feedback and generate an improved version based on the context and requirements.
-                    </Alert>
-                  )}
-                </Box>
-                
-                <Button
-                  variant="contained"
-                  fullWidth
-                  sx={{ mt: 2 }}
-                  startIcon={<MergeIcon />}
-                  onClick={handleMergeFeedback}
-                  disabled={!selectedFeedback || processingMerge || selectedFeedback?.commentType === 'C'}
-                  title={selectedFeedback?.commentType === 'C' ? 'Critical feedback must be resolved or downgraded before merging' : ''}
-                >
-                  {processingMerge ? 'Processing...' : 
-                   selectedFeedback?.commentType === 'C' ? 'Critical - Cannot Merge (Resolve First)' : 
-                   'Merge Selected Feedback'}
-                </Button>
-                
-                {selectedFeedback?.commentType === 'C' && (
-                  <Alert severity="error" sx={{ mt: 1 }}>
-                    Critical feedback cannot be merged. You must either:
-                    <br />• Provide a resolution in the OPR Response Form, OR
-                    <br />• Make a phone call to {selectedFeedback.pocName || 'the submitter'} ({selectedFeedback.pocPhone || 'phone not provided'}) to discuss and then downgrade the feedback type
-                  </Alert>
-                )}
-              </>
-            )}
-          </Paper>
-
-          {/* OPR Response Form */}
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              OPR Response Form
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            
-            <Grid container spacing={2}>
-              {/* Column 1: Component and POC */}
-              <Grid item xs={12}>
-                <Typography variant="caption" color="primary">
-                  COLUMN 1: Component & POC
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Component *"
-                  value={currentComment.component}
-                  onChange={(e) => setCurrentComment({ ...currentComment, component: e.target.value })}
-                  placeholder="AF/A1"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="POC Name"
-                  value={currentComment.pocName}
-                  onChange={(e) => setCurrentComment({ ...currentComment, pocName: e.target.value })}
-                  placeholder="Col Smith"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="POC Phone"
-                  value={currentComment.pocPhone}
-                  onChange={(e) => setCurrentComment({ ...currentComment, pocPhone: e.target.value })}
-                  placeholder="555-0100"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="POC Email"
-                  value={currentComment.pocEmail}
-                  onChange={(e) => setCurrentComment({ ...currentComment, pocEmail: e.target.value })}
-                  placeholder="smith@af.mil"
-                />
-              </Grid>
-
-              {/* Column 2: Comment Type */}
-              <Grid item xs={12}>
-                <Typography variant="caption" color="primary">
-                  COLUMN 2: Comment Type
-                </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth size="small" required>
-                  <InputLabel>Type *</InputLabel>
-                  <Select
-                    value={currentComment.commentType}
-                    onChange={(e) => setCurrentComment({ ...currentComment, commentType: e.target.value })}
-                    label="Type *"
-                  >
-                    <MenuItem value="C">🔴 Critical (Non-concur if not resolved)</MenuItem>
-                    <MenuItem value="M">🟠 Major (Significant issue)</MenuItem>
-                    <MenuItem value="S">🔵 Substantive (Important)</MenuItem>
-                    <MenuItem value="A">🟢 Administrative (Minor)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              {/* Columns 3-5: Location */}
-              <Grid item xs={12}>
-                <Typography variant="caption" color="primary">
-                  COLUMNS 3-5: Location in Document
-                </Typography>
-              </Grid>
-              <Grid item xs={4}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Page"
-                  value={currentComment.page}
-                  onChange={(e) => setCurrentComment({ ...currentComment, page: e.target.value })}
-                  placeholder="12"
-                />
-              </Grid>
-              <Grid item xs={4}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Paragraph"
-                  value={currentComment.paragraphNumber}
-                  onChange={(e) => setCurrentComment({ ...currentComment, paragraphNumber: e.target.value })}
-                  placeholder="3.2.1"
-                />
-              </Grid>
-              <Grid item xs={4}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Line"
-                  value={currentComment.lineNumber}
-                  onChange={(e) => setCurrentComment({ ...currentComment, lineNumber: e.target.value })}
-                  placeholder="15-18"
-                />
-              </Grid>
-
-              {/* Column 6: Comments */}
-              <Grid item xs={12}>
-                <Typography variant="caption" color="primary">
-                  COLUMN 6: Comments & Justification
-                </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
-                  label="Comment/Issue"
-                  value={currentComment.coordinatorComment}
-                  onChange={(e) => setCurrentComment({ ...currentComment, coordinatorComment: e.target.value })}
-                  placeholder="Describe the issue..."
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
-                  label="Change From"
-                  value={currentComment.changeFrom}
-                  onChange={(e) => setCurrentComment({ ...currentComment, changeFrom: e.target.value })}
-                  placeholder="Current text..."
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
-                  label="Change To"
-                  value={currentComment.changeTo}
-                  onChange={(e) => setCurrentComment({ ...currentComment, changeTo: e.target.value })}
-                  placeholder="Suggested text..."
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
-                  label="Coordinator Justification"
-                  value={currentComment.coordinatorJustification}
-                  onChange={(e) => setCurrentComment({ ...currentComment, coordinatorJustification: e.target.value })}
-                  placeholder="Why this change is needed..."
-                />
-              </Grid>
-
-              {/* OPR Response Fields */}
-              <Grid item xs={12}>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="caption" color="secondary">
-                  OPR RESPONSE:
-                </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
-                  label="OPR Resolution"
-                  value={currentComment.resolution}
-                  onChange={(e) => setCurrentComment({ ...currentComment, resolution: e.target.value })}
-                  placeholder="How this feedback will be addressed..."
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={2}
-                  size="small"
-                  label="Originator Justification"
-                  value={currentComment.originatorJustification}
-                  onChange={(e) => setCurrentComment({ ...currentComment, originatorJustification: e.target.value })}
-                  placeholder="Rationale for the resolution..."
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  startIcon={<SaveIcon />}
-                  onClick={handleSaveResponse}
-                  disabled={!selectedFeedback}
-                >
-                  Save OPR Response
-                </Button>
-              </Grid>
-            </Grid>
-          </Paper>
-
-          {/* Feedback List */}
-          <Paper sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">
-                Comment Matrix ({feedback.length})
-              </Typography>
-              {feedback.length > 0 && (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<SendIcon />}
-                  onClick={handleSubmitFeedbackToOPR}
-                  disabled={loading}
-                >
-                  Submit Feedback to OPR
-                </Button>
-              )}
-            </Box>
-            
-            {feedback.length === 0 ? (
-              <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
-                No feedback available
-              </Box>
-            ) : (
-              <List>
-                {feedback.map((comment, index) => (
-                  <ListItem
-                    key={comment.id}
-                    sx={{ 
-                      mb: 1, 
-                      border: 1, 
-                      borderColor: selectedFeedback?.id === comment.id ? 'primary.main' : 'divider',
-                      borderRadius: 1,
-                      display: 'block',
-                      p: 2,
-                      cursor: 'pointer',
-                      bgcolor: selectedFeedback?.id === comment.id ? 'primary.50' : 'background.paper',
-                      '&:hover': {
-                        bgcolor: 'grey.50'
-                      }
-                    }}
-                    onClick={() => handleFeedbackClick(comment)}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
-                        #{index + 1} - {comment.component}
-                      </Typography>
-                      <Chip 
-                        label={getCommentTypeLabel(comment.commentType)}
-                        color={getCommentTypeColor(comment.commentType) as any}
-                        size="small"
-                        sx={{ mr: 1 }}
-                      />
-                      {comment.status && (
-                        <Chip 
-                          label={comment.status}
-                          color={getStatusColor(comment.status) as any}
-                          size="small"
-                        />
-                      )}
-                      {comment.resolution?.includes('[DOWNGRADED FROM CRITICAL]') && (
-                        <Chip 
-                          label="📞 Downgraded"
-                          color="warning"
-                          size="small"
-                          sx={{ ml: 1 }}
-                        />
-                      )}
-                    </Box>
-                    
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      📍 Page {comment.page || '-'}, Para {comment.paragraphNumber || '-'}, Line {comment.lineNumber || '-'}
-                    </Typography>
-                    
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        mt: 1,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical'
-                      }}
-                    >
-                      {comment.coordinatorComment}
-                    </Typography>
-                    
-                    {comment.changeFrom && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        Change requested
-                      </Typography>
-                    )}
-                    
-                    {comment.resolution && (
-                      <Box sx={{ mt: 1, p: 1, bgcolor: 'info.50', borderRadius: 1 }}>
-                        <Typography variant="caption" fontWeight="bold">OPR Resolution:</Typography>
-                        <Typography variant="caption" display="block">{comment.resolution}</Typography>
-                      </Box>
-                    )}
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </Paper>
+              // Update document data as well
+              if (documentData) {
+                setDocumentData((prevData: any) => ({
+                  ...prevData,
+                  content: newContent,
+                  customFields: {
+                    ...prevData.customFields,
+                    content: newContent,
+                    editableContent: newContent
+                  }
+                }));
+              }
+            }}
+          />
+          {/* The version control processor handles all feedback now */}
         </Box>
       </Box>
 
