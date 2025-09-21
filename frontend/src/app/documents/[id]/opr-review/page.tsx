@@ -22,6 +22,7 @@ import {
   Chip,
   List,
   ListItem,
+  ListItemText,
   Divider,
   FormControl,
   InputLabel,
@@ -37,7 +38,9 @@ import {
   DialogActions,
   CircularProgress,
   Tooltip,
-  Menu
+  Menu,
+  Checkbox,
+  Stack
 } from '@mui/material';
 import {
   ArrowBack,
@@ -58,8 +61,36 @@ import {
   CheckCircle as AcceptIcon,
   Cancel as RejectIcon,
   Visibility as ViewIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  Cancel,
+  CheckBox as SelectAllIcon,
+  CheckBoxOutlineBlank as DeselectAllIcon,
+  BatchPrediction as BatchIcon,
+  History as HistoryIcon,
+  TrackChanges as TrackChangesIcon,
+  AutoAwesome as GenerateAIIcon,
+  Build,
+  List as ListIcon,
+  Undo as UndoIcon,
+  Redo as RedoIcon,
+  NavigateNext as NextIcon,
+  NavigateBefore as PrevIcon,
+  Compare as CompareIcon,
+  CheckCircleOutline as AcceptAllIcon,
+  HighlightOff as RejectAllIcon,
+  Timeline as TimelineIcon
 } from '@mui/icons-material';
+
+interface CommentThread {
+  id: string;
+  feedbackId: string;
+  comments: Array<{
+    id: string;
+    author: string;
+    text: string;
+    timestamp: Date;
+  }>;
+}
 
 interface CRMComment {
   id?: string;
@@ -78,6 +109,8 @@ interface CRMComment {
   resolution?: string;
   originatorJustification?: string;
   status?: 'pending' | 'accepted' | 'rejected' | 'merged';
+  selected?: boolean;
+  threadId?: string;
 }
 
 const OPRReviewPage = () => {
@@ -95,6 +128,12 @@ const OPRReviewPage = () => {
   const [exportAnchorEl, setExportAnchorEl] = useState<null | HTMLElement>(null);
   const [exporting, setExporting] = useState(false);
   const [processingMerge, setProcessingMerge] = useState(false);
+  const [selectAll, setSelectAll] = useState(false);
+  const [autoSave, setAutoSave] = useState(false);
+  const [showPositionDetails, setShowPositionDetails] = useState(true);
+  const [generatingAIFeedback, setGeneratingAIFeedback] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeResult, setMergeResult] = useState<string>('');
   const [mergeResultContent, setMergeResultContent] = useState<string>('');
@@ -107,7 +146,104 @@ const OPRReviewPage = () => {
   const [phoneCallMade, setPhoneCallMade] = useState(false);
   const [downgradedType, setDowngradedType] = useState<string>('M');
   const [phoneCallNotes, setPhoneCallNotes] = useState<string>('');
-  
+  const [alert, setAlert] = useState<{ severity: 'success' | 'warning' | 'error' | 'info'; message: string } | null>(null);
+
+  // Track changes state management
+  const [changeHistory, setChangeHistory] = useState<Array<{ content: string, feedback: CRMComment[], timestamp: Date }>>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [showComparisonView, setShowComparisonView] = useState(false);
+  const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
+  const [appliedChanges, setAppliedChanges] = useState<Map<string, { original: string, changed: string, feedbackId: string }>>(new Map());
+  const [showDetailedHistory, setShowDetailedHistory] = useState(false);
+  const [changeMarkers, setChangeMarkers] = useState<Array<{ id: string, start: number, end: number, type: 'added' | 'removed' | 'modified' }>>([])
+  const [commentThreads, setCommentThreads] = useState<CommentThread[]>([]);
+  const [showCommentDialog, setShowCommentDialog] = useState(false);
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const [newComment, setNewComment] = useState('');
+
+  // Helper function to save to history
+  const saveToHistory = () => {
+    const newHistory = [...changeHistory.slice(0, historyIndex + 1), {
+      content: editableContent,
+      feedback: [...feedback],
+      timestamp: new Date()
+    }];
+    setChangeHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  // Undo functionality
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prevState = changeHistory[historyIndex - 1];
+      setEditableContent(prevState.content);
+      setFeedback(prevState.feedback);
+      setHistoryIndex(historyIndex - 1);
+    }
+  };
+
+  // Redo functionality
+  const handleRedo = () => {
+    if (historyIndex < changeHistory.length - 1) {
+      const nextState = changeHistory[historyIndex + 1];
+      setEditableContent(nextState.content);
+      setFeedback(nextState.feedback);
+      setHistoryIndex(historyIndex + 1);
+    }
+  };
+
+  // Navigate to next change
+  const navigateToNextChange = () => {
+    if (changeMarkers.length > 0) {
+      const nextIndex = (currentChangeIndex + 1) % changeMarkers.length;
+      setCurrentChangeIndex(nextIndex);
+      scrollToChange(changeMarkers[nextIndex]);
+    }
+  };
+
+  // Navigate to previous change
+  const navigateToPreviousChange = () => {
+    if (changeMarkers.length > 0) {
+      const prevIndex = currentChangeIndex === 0 ? changeMarkers.length - 1 : currentChangeIndex - 1;
+      setCurrentChangeIndex(prevIndex);
+      scrollToChange(changeMarkers[prevIndex]);
+    }
+  };
+
+  // Scroll to a specific change
+  const scrollToChange = (marker: { id: string, start: number, end: number }) => {
+    const element = document.getElementById(`change-${marker.id}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.style.animation = 'pulse 2s';
+      setTimeout(() => {
+        element.style.animation = '';
+      }, 2000);
+    }
+  };
+
+  // Accept all changes
+  const handleAcceptAllChanges = async () => {
+    if (confirm('Accept all pending changes? This will apply all feedback items.')) {
+      for (const item of feedback) {
+        if (item.status === 'pending' && item.changeTo) {
+          setSelectedFeedback(item);
+          await handleMergeFeedback();
+        }
+      }
+      saveToHistory();
+    }
+  };
+
+  // Reject all changes
+  const handleRejectAllChanges = () => {
+    if (confirm('Reject all pending changes? This will remove all pending feedback items.')) {
+      const acceptedFeedback = feedback.filter(f => f.status !== 'pending');
+      setFeedback(acceptedFeedback);
+      saveToHistory();
+    }
+  };
+
   // OPR response fields
   const [currentComment, setCurrentComment] = useState<CRMComment>({
     component: '',
@@ -137,88 +273,87 @@ const OPRReviewPage = () => {
         const data = await docResponse.json();
         const doc = data.document || data;
         setDocumentData(doc);
-          
-          // Get content - use editableContent to avoid duplicate header
-          let content = '';
-          if (doc.customFields?.editableContent) {
-            // Use editable content (has styles but no header)
-            content = doc.customFields.editableContent;
-          } else if (doc.customFields?.htmlContent) {
-            // Fallback to full HTML if no editableContent
-            content = doc.customFields.htmlContent;
-          } else if (doc.customFields?.content) {
-            // Fallback to plain text content (no styles)
-            content = doc.customFields.content;
-          } else if (doc.content) {
-            content = doc.content;
-          } else if (doc.description) {
-            content = `<p>${doc.description}</p>`;
-          }
-          
-          // Check for duplicates WHEN LOADING
-          const h1CountOnLoad = (content.match(/<h1>/g) || []).length;
-          const sectionICountOnLoad = (content.match(/SECTION I - INTRODUCTION/g) || []).length;
-          
-          setDocumentContent(content);
-          setEditableContent(content);
-          
-          // DEBUG: Log what we're loading
-          console.log('🔍 OPR PAGE - Loading document content:', {
-            hasInlineStyles: content.includes('style='),
-            styleCount: (content.match(/style="/g) || []).length,
-            firstStyle: content.indexOf('style=') > -1 ? content.substring(content.indexOf('style='), content.indexOf('style=') + 150) : 'NO STYLES FOUND',
-            contentLength: content.length,
-            hasContent: !!content,
-            contentSource: doc.customFields?.content ? 'customFields.content' : 
-                          doc.content ? 'content' : 
-                          doc.description ? 'description' : 'unknown',
-            first100: content.substring(0, 100),
-            rawCustomFieldsLength: doc.customFields?.content?.length || 0,
-            fullDocSize: JSON.stringify(doc).length,
-            h1Count: h1CountOnLoad,
-            sectionICount: sectionICountOnLoad,
-            hasDuplicates: h1CountOnLoad > 1 || sectionICountOnLoad > 1 ? '❌ YES' : '✅ NO'
-          });
-          
-          if (h1CountOnLoad > 1 || sectionICountOnLoad > 1) {
-            console.error('❌ CRITICAL: Document loaded from database ALREADY HAS DUPLICATES!');
-            console.error('  - H1 headers:', h1CountOnLoad);
-            console.error('  - Section I occurrences:', sectionICountOnLoad);
-          }
-          
-          // Load feedback from document's customFields
-          if (doc.customFields && typeof doc.customFields === 'object') {
-            const customFields = doc.customFields as any;
-            
-            // Check for draftFeedback (from Review & CRM page)
-            if (customFields.draftFeedback && Array.isArray(customFields.draftFeedback)) {
-              setFeedback(customFields.draftFeedback);
-              console.log('Loaded', customFields.draftFeedback.length, 'draft feedback items from database');
-              hasFeedbackFromDoc = true;
-            } 
-            // Check for CRM feedback (from AI generated documents)
-            else if (customFields.crmFeedback && Array.isArray(customFields.crmFeedback)) {
-              setFeedback(customFields.crmFeedback);
-              console.log('Loaded', customFields.crmFeedback.length, 'CRM feedback items from database');
-              hasFeedbackFromDoc = true;
-            }
-            // Also check for submitted feedback
-            else if (customFields.feedback && Array.isArray(customFields.feedback)) {
-              setFeedback(customFields.feedback);
-              console.log('Loaded', customFields.feedback.length, 'feedback items from database');
-              hasFeedbackFromDoc = true;
-            }
-            // Check for comments
-            else if (customFields.comments && Array.isArray(customFields.comments)) {
-              setFeedback(customFields.comments);
-              console.log('Loaded', customFields.comments.length, 'comments from database');
-              hasFeedbackFromDoc = true;
-            } else {
-              console.log('No feedback found in database customFields');
-            }
-          }
+
+        // Get content - use editableContent to avoid duplicate header
+        let content = '';
+        if (doc.customFields?.editableContent) {
+        // Use editable content (has styles but no header)
+        content = doc.customFields.editableContent;
+        } else if (doc.customFields?.htmlContent) {
+        // Fallback to full HTML if no editableContent
+        content = doc.customFields.htmlContent;
+        } else if (doc.customFields?.content) {
+          // Fallback to plain text content (no styles)
+          content = doc.customFields.content;
+        } else if (doc.content) {
+          content = doc.content;
+        } else if (doc.description) {
+          content = `<p>${doc.description}</p>`;
         }
         
+        // Check for duplicates WHEN LOADING
+        const h1CountOnLoad = (content.match(/<h1>/g) || []).length;
+        const sectionICountOnLoad = (content.match(/SECTION I - INTRODUCTION/g) || []).length;
+        
+        setDocumentContent(content);
+        setEditableContent(content);
+        
+        // DEBUG: Log what we're loading
+        console.log('🔍 OPR PAGE - Loading document content:', {
+          hasInlineStyles: content.includes('style='),
+          styleCount: (content.match(/style="/g) || []).length,
+          firstStyle: content.indexOf('style=') > -1 ? content.substring(content.indexOf('style='), content.indexOf('style=') + 150) : 'NO STYLES FOUND',
+          contentLength: content.length,
+          hasContent: !!content,
+          contentSource: doc.customFields?.content ? 'customFields.content' : 
+                        doc.content ? 'content' : 
+                        doc.description ? 'description' : 'unknown',
+          first100: content.substring(0, 100),
+          rawCustomFieldsLength: doc.customFields?.content?.length || 0,
+          fullDocSize: JSON.stringify(doc).length,
+          h1Count: h1CountOnLoad,
+          sectionICount: sectionICountOnLoad,
+          hasDuplicates: h1CountOnLoad > 1 || sectionICountOnLoad > 1 ? '❌ YES' : '✅ NO'
+        });
+        
+        if (h1CountOnLoad > 1 || sectionICountOnLoad > 1) {
+          console.error('❌ CRITICAL: Document loaded from database ALREADY HAS DUPLICATES!');
+          console.error('  - H1 headers:', h1CountOnLoad);
+          console.error('  - Section I occurrences:', sectionICountOnLoad);
+        }
+        
+        // Load feedback from document's customFields
+        if (doc.customFields && typeof doc.customFields === 'object') {
+          const customFields = doc.customFields as any;
+          
+          // Check for draftFeedback (from Review & CRM page)
+          if (customFields.draftFeedback && Array.isArray(customFields.draftFeedback)) {
+            setFeedback(customFields.draftFeedback);
+            console.log('Loaded', customFields.draftFeedback.length, 'draft feedback items from database');
+            hasFeedbackFromDoc = true;
+          } 
+          // Check for CRM feedback (from AI generated documents)
+          else if (customFields.crmFeedback && Array.isArray(customFields.crmFeedback)) {
+            setFeedback(customFields.crmFeedback);
+            console.log('Loaded', customFields.crmFeedback.length, 'CRM feedback items from database');
+            hasFeedbackFromDoc = true;
+          }
+          // Also check for submitted feedback
+          else if (customFields.feedback && Array.isArray(customFields.feedback)) {
+            setFeedback(customFields.feedback);
+            console.log('Loaded', customFields.feedback.length, 'feedback items from database');
+            hasFeedbackFromDoc = true;
+          }
+          // Check for comments
+          else if (customFields.comments && Array.isArray(customFields.comments)) {
+            setFeedback(customFields.comments);
+            console.log('Loaded', customFields.comments.length, 'comments from database');
+            hasFeedbackFromDoc = true;
+          } else {
+            console.log('No feedback found in database customFields');
+          }
+        }
+
         // Also try to fetch from feedback endpoint (for submitted feedback)
         // Only if we haven't found any feedback in customFields
         if (!hasFeedbackFromDoc) {
@@ -238,7 +373,8 @@ const OPRReviewPage = () => {
             console.log('Could not fetch from feedback endpoint:', error);
           }
         }
-      } catch (error) {
+      }
+    } catch (error) {
       console.error('Error fetching document or feedback:', error);
     }
   };
@@ -246,6 +382,18 @@ const OPRReviewPage = () => {
   useEffect(() => {
     fetchDocumentAndFeedback();
   }, [documentId, router]);
+
+  // Initialize history when document is loaded
+  useEffect(() => {
+    if (documentContent && changeHistory.length === 0) {
+      setChangeHistory([{
+        content: documentContent,
+        feedback: [...feedback],
+        timestamp: new Date()
+      }]);
+      setHistoryIndex(0);
+    }
+  }, [documentContent]);
 
   // Effect to handle highlighting when text needs to be highlighted
   useEffect(() => {
@@ -355,7 +503,127 @@ const OPRReviewPage = () => {
 
   const handleFeedbackClick = (comment: CRMComment) => {
     setSelectedFeedback(comment);
-    setCurrentComment(comment);
+    // Note: Don't set currentComment here as it's used for form editing, not viewing
+  };
+
+  // Toggle select all feedback items
+  const handleSelectAll = () => {
+    const newSelectAll = !selectAll;
+    setSelectAll(newSelectAll);
+    setFeedback(items =>
+      items.map(item => ({ ...item, selected: newSelectAll }))
+    );
+  };
+
+  // Toggle individual item selection
+  const handleToggleSelect = (id: string) => {
+    setFeedback(items =>
+      items.map(item =>
+        item.id === id ? { ...item, selected: !item.selected } : item
+      )
+    );
+  };
+
+  // Apply selected feedback items
+  const applySelectedFeedback = async () => {
+    const selected = feedback.filter(item => item.selected);
+    if (selected.length === 0) {
+      window.alert('No feedback items selected');
+      return;
+    }
+
+    // Apply each selected item
+    for (const item of selected) {
+      setSelectedFeedback(item);
+      await handleMergeFeedback();
+    }
+  };
+
+  // Apply all feedback items
+  const applyAllFeedback = async () => {
+    if (feedback.length === 0) {
+      window.alert('No feedback items to apply');
+      return;
+    }
+
+    // Apply each feedback item
+    for (const item of feedback) {
+      setSelectedFeedback(item);
+      await handleMergeFeedback();
+    }
+  };
+
+  // Generate AI feedback
+  const generateAIFeedback = async () => {
+    setGeneratingAIFeedback(true);
+    try {
+      const response = await authTokenService.authenticatedFetch('/api/generate-ai-feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          documentId,
+          documentContent: editableContent,
+          documentType: 'OPR'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Convert AI feedback to CRM format
+        const aiFeedback = result.feedback.map((item: any, index: number) => ({
+          id: `ai_${Date.now()}_${index}`,
+          component: item.category || 'AI Generated',
+          pocName: 'AI Assistant',
+          pocPhone: '',
+          pocEmail: '',
+          commentType: item.severity === 'CRITICAL' ? 'C' :
+                      item.severity === 'MAJOR' ? 'M' :
+                      item.severity === 'SUBSTANTIVE' ? 'S' : 'A',
+          page: item.page?.toString() || '1',
+          paragraphNumber: item.paragraph?.toString() || '1',
+          lineNumber: item.line?.toString() || '1',
+          coordinatorComment: item.comment,
+          changeFrom: item.originalText || '',
+          changeTo: item.suggestedText || '',
+          coordinatorJustification: `AI Analysis: ${item.category}`,
+          status: 'pending' as const,
+          selected: false
+        }));
+
+        setFeedback(prev => [...prev, ...aiFeedback]);
+
+        // Save the AI feedback to database
+        const allFeedback = [...feedback, ...aiFeedback];
+        console.log('Saving AI feedback to database:', {
+          documentId,
+          feedbackCount: allFeedback.length,
+          newFeedbackCount: aiFeedback.length
+        });
+
+        const saveResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            customFields: {
+              crmFeedback: allFeedback,
+              lastAIFeedbackGenerated: new Date().toISOString()
+            }
+          })
+        });
+
+        if (!saveResponse.ok) {
+          const errorText = await saveResponse.text();
+          console.error('Failed to save feedback to database:', errorText);
+          window.alert(`Generated ${aiFeedback.length} AI feedback items but failed to save to database`);
+        } else {
+          console.log('AI feedback saved successfully to database');
+          window.alert(`Generated ${aiFeedback.length} AI feedback items and saved to database`);
+        }
+      }
+    } catch (error) {
+      console.error('Error generating AI feedback:', error);
+      window.alert('Failed to generate AI feedback');
+    } finally {
+      setGeneratingAIFeedback(false);
+    }
   };
 
   const handleMergeModeChange = (event: React.MouseEvent<HTMLElement>, newMode: 'manual' | 'ai' | 'hybrid' | null) => {
@@ -364,15 +632,164 @@ const OPRReviewPage = () => {
     }
   };
 
+  const handleClearSelectedFeedback = async () => {
+    const selectedItems = feedback.filter(item => item.selected);
+    const selectedCount = selectedItems.length;
+
+    if (selectedCount === 0) {
+      window.alert('No feedback items selected.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedCount} selected feedback items? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      console.log('Delete Selected: Starting deletion for', selectedCount, 'items');
+
+      // Get the IDs of selected items
+      const idsToDelete = selectedItems.map(item => item.id).filter(id => id);
+
+      console.log('Delete Selected: IDs to delete:', idsToDelete);
+
+      // Remove selected items from local state immediately
+      const remainingFeedback = feedback.filter(item => !item.selected);
+      setFeedback(remainingFeedback);
+
+      // Clear selected feedback if it was selected
+      if (selectedFeedback?.selected) {
+        setSelectedFeedback(null);
+      }
+
+      // Delete selected feedback from database
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}/feedback`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          feedbackIdsToDelete: idsToDelete
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Delete Selected: Success response:', result);
+
+        // Also update documentData
+        if (documentData) {
+          setDocumentData((prevData: any) => ({
+            ...prevData,
+            customFields: {
+              ...prevData.customFields,
+              crmFeedback: remainingFeedback,
+              draftFeedback: remainingFeedback
+            }
+          }));
+        }
+
+        window.alert(`${result.deletedCount || selectedCount} feedback items deleted successfully from database.`);
+      } else {
+        const errorData = await response.json();
+        console.error('Delete Selected: Error response:', errorData);
+        window.alert(`Failed to delete feedback: ${errorData.error || 'Unknown error'}`);
+        // Reload feedback in case of failure
+        await fetchDocumentAndFeedback();
+      }
+    } catch (error) {
+      console.error('Error deleting selected feedback:', error);
+      window.alert('Error deleting feedback. Please try again.');
+      // Reload feedback in case of error
+      await fetchDocumentAndFeedback();
+    }
+  };
+
+  const handleClearAllFeedback = async () => {
+    if (!confirm(`Are you sure you want to clear all ${feedback.length} feedback items? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      console.log('Clear All: Starting clear operation for document:', documentId);
+      console.log('Clear All: Current feedback count:', feedback.length);
+
+      // Clear feedback from local state first
+      setFeedback([]);
+      setSelectedFeedback(null);
+
+      console.log('Clear All: Calling DELETE endpoint to clear all feedback from database');
+
+      // Call the DELETE endpoint to clear all feedback from database
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}/feedback`, {
+        method: 'DELETE'
+      });
+
+      console.log('Clear All: Response status:', response.status);
+      console.log('Clear All: Response ok:', response.ok);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Clear All: Success response:', result);
+
+        // Also update documentData to clear feedback
+        if (documentData) {
+          setDocumentData((prevData: any) => ({
+            ...prevData,
+            customFields: {
+              ...prevData.customFields,
+              draftFeedback: [],
+              crmFeedback: [],
+              feedback: [],
+              comments: []
+            }
+          }));
+        }
+
+        window.alert('All feedback has been cleared successfully from the database.');
+      } else {
+        const errorData = await response.json();
+        console.error('Clear All: Error response:', errorData);
+        window.alert(`Failed to clear feedback: ${errorData.error || 'Unknown error'}`);
+        // Reload feedback in case of failure
+        await fetchDocumentAndFeedback();
+      }
+    } catch (error) {
+      console.error('Error clearing feedback:', error);
+      window.alert('Error clearing feedback. Please try again.');
+      // Reload feedback in case of error
+      await fetchDocumentAndFeedback();
+    }
+  };
+
   const handleMergeFeedback = async () => {
     if (!selectedFeedback) return;
-    
+
+    // Save current state to history before making changes
+    saveToHistory();
+
+    // Track the change
+    const changeId = `change_${Date.now()}`;
+    const newAppliedChanges = new Map(appliedChanges);
+    newAppliedChanges.set(changeId, {
+      original: selectedFeedback.changeFrom || '',
+      changed: selectedFeedback.changeTo || '',
+      feedbackId: selectedFeedback.id || ''
+    });
+    setAppliedChanges(newAppliedChanges);
+
+    // Add change marker
+    const newMarker = {
+      id: changeId,
+      start: editableContent.indexOf(selectedFeedback.changeFrom || ''),
+      end: editableContent.indexOf(selectedFeedback.changeFrom || '') + (selectedFeedback.changeTo?.length || 0),
+      type: 'modified' as const
+    };
+    setChangeMarkers([...changeMarkers, newMarker]);
+
     // Check if this is critical feedback - critical feedback cannot be merged without resolution
     if (selectedFeedback.commentType === 'C') {
       const pocInfo = selectedFeedback.pocName ? 
         `${selectedFeedback.pocName}${selectedFeedback.pocPhone ? ' at ' + selectedFeedback.pocPhone : ''}` : 
         'the feedback submitter';
-      alert(`Critical feedback cannot be merged without proper resolution.\n\nYou must either:\n1. Provide a resolution in the OPR Response Form, OR\n2. Make a phone call to ${pocInfo} to discuss the issue, then downgrade the feedback type.\n\nThe system will require confirmation of the phone call and notes from your discussion.`);
+      window.window.alert(`Critical feedback cannot be merged without proper resolution.\n\nYou must either:\n1. Provide a resolution in the OPR Response Form, OR\n2. Make a phone call to ${pocInfo} to discuss the issue, then downgrade the feedback type.\n\nThe system will require confirmation of the phone call and notes from your discussion.`);
       return;
     }
     
@@ -563,7 +980,7 @@ const OPRReviewPage = () => {
             body: JSON.stringify({
               customFields: {
                 content: newContent,
-                draftFeedback: updatedFeedback,  // Save the updated feedback list
+                crmFeedback: updatedFeedback,  // Save the updated feedback list as crmFeedback
                 lastManualMerge: new Date().toISOString()
               }
             })
@@ -576,25 +993,27 @@ const OPRReviewPage = () => {
         }
       }
       
-      // Only remove feedback immediately for AI and manual modes
-      // For hybrid mode, wait for user decision
+      // Mark feedback as merged instead of removing it
       if (mergeMode !== 'hybrid') {
-        // REMOVE the merged feedback from the list entirely
-        console.log('📝 REMOVING FEEDBACK FROM UI LIST');
-        console.log('  - Before removal: feedback count =', feedback.length);
-        console.log('  - Removing feedback ID:', selectedFeedback.id);
-        const updatedFeedback = feedback.filter(f => f.id !== selectedFeedback.id);
-        console.log('  - After removal: feedback count =', updatedFeedback.length);
+        // Mark the feedback as 'merged' instead of removing it
+        console.log('📝 MARKING FEEDBACK AS MERGED');
+        console.log('  - Feedback ID:', selectedFeedback.id);
+        const updatedFeedback = feedback.map(f =>
+          f.id === selectedFeedback.id
+            ? { ...f, status: 'merged' as const }
+            : f
+        );
+        console.log('  - Updated feedback status to merged');
         setFeedback(updatedFeedback);
         
         // Also update documentData to remove the feedback
         if (documentData) {
-          console.log('  - Updating documentData.customFields.draftFeedback');
+          console.log('  - Updating documentData.customFields.crmFeedback');
           setDocumentData(prevData => ({
             ...prevData,
             customFields: {
               ...prevData.customFields,
-              draftFeedback: updatedFeedback
+              crmFeedback: updatedFeedback
             }
           }));
         }
@@ -646,22 +1065,22 @@ const OPRReviewPage = () => {
       });
       
       if (response.ok) {
-        alert('Response saved successfully');
+        window.window.alert('Response saved successfully');
       }
     } catch (error) {
       console.error('Error saving response:', error);
-      alert('Failed to save response');
+      window.alert('Failed to save response');
     }
   };
 
   const handleCriticalBlockedConfirm = async () => {
     if (!phoneCallMade) {
-      alert('You must confirm that you have made a phone call to discuss this critical feedback.');
+      window.alert('You must confirm that you have made a phone call to discuss this critical feedback.');
       return;
     }
     
     if (!phoneCallNotes.trim()) {
-      alert('Please provide notes from your phone call discussion.');
+      window.alert('Please provide notes from your phone call discussion.');
       return;
     }
     
@@ -706,7 +1125,7 @@ const OPRReviewPage = () => {
       });
       
       if (response.ok) {
-        alert('Critical feedback has been downgraded and saved successfully.');
+        window.alert('Critical feedback has been downgraded and saved successfully.');
         setShowCriticalBlockedDialog(false);
         setPhoneCallMade(false);
         setPhoneCallNotes('');
@@ -714,46 +1133,122 @@ const OPRReviewPage = () => {
       }
     } catch (error) {
       console.error('Error saving downgraded feedback:', error);
-      alert('Failed to save downgraded feedback');
+      window.alert('Failed to save downgraded feedback');
     }
   };
 
-  const handleExport = async (format: string) => {
+  const handleExport = async (format: string, includeTrackChanges: boolean = false) => {
     setExporting(true);
     setExportAnchorEl(null);
-    
+
     try {
+      let contentToExport = editableContent;
+
+      // If including track changes, add markup to show changes
+      if (includeTrackChanges) {
+        // Apply track changes markup
+        for (const [id, change] of appliedChanges) {
+          const originalMarkup = `<del style="color: red; text-decoration: line-through;">${change.original}</del>`;
+          const changedMarkup = `<ins style="color: green; text-decoration: underline;">${change.changed}</ins>`;
+          contentToExport = contentToExport.replace(
+            change.changed,
+            `${originalMarkup}${changedMarkup}`
+          );
+        }
+
+        // Add pending feedback as comments
+        const pendingFeedback = feedback.filter(f => f.status === 'pending');
+        if (pendingFeedback.length > 0) {
+          let commentsSection = '<div style="page-break-before: always; margin-top: 40px;"><h2>Pending Feedback Comments</h2><ul>';
+          pendingFeedback.forEach((item, index) => {
+            commentsSection += `<li style="margin-bottom: 10px;">
+              <strong>[${index + 1}] ${getCommentTypeLabel(item.commentType)} - Page ${item.page}, Para ${item.paragraphNumber}</strong><br/>
+              <em>From: ${item.pocName || 'Anonymous'}</em><br/>
+              Comment: ${item.coordinatorComment}<br/>
+              ${item.changeFrom ? `<span style="color: red;">Original: ${item.changeFrom}</span><br/>` : ''}
+              ${item.changeTo ? `<span style="color: green;">Suggested: ${item.changeTo}</span>` : ''}
+            </li>`;
+          });
+          commentsSection += '</ul></div>';
+          contentToExport += commentsSection;
+        }
+      }
+
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}/export`, {
         method: 'POST',
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format,
-          includeNumbering: false 
+          includeNumbering: false,
+          content: contentToExport,
+          includeTrackChanges
         })
       });
-      
+
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        
-        // Set filename based on format
-        const filename = `${documentData?.title?.replace(/[^a-z0-9]/gi, '_') || 'document'}.${format}`;
+
+        // Set filename based on format and track changes
+        const trackChangesSuffix = includeTrackChanges ? '_with_changes' : '';
+        const filename = `${documentData?.title?.replace(/[^a-z0-9]/gi, '_') || 'document'}${trackChangesSuffix}.${format}`;
         a.download = filename;
-        
+
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
       } else {
-        alert('Failed to export document');
+        window.alert('Failed to export document');
       }
     } catch (error) {
       console.error('Export error:', error);
-      alert('Failed to export document');
+      window.alert('Failed to export document');
     } finally {
       setExporting(false);
     }
+  };
+
+  // Add comment to thread
+  const addCommentToThread = (feedbackId: string) => {
+    const thread = commentThreads.find(t => t.feedbackId === feedbackId);
+    if (thread) {
+      setCurrentThreadId(thread.id);
+    } else {
+      const newThread: CommentThread = {
+        id: `thread_${Date.now()}`,
+        feedbackId,
+        comments: []
+      };
+      setCommentThreads([...commentThreads, newThread]);
+      setCurrentThreadId(newThread.id);
+    }
+    setShowCommentDialog(true);
+  };
+
+  // Save comment to thread
+  const saveComment = () => {
+    if (!currentThreadId || !newComment.trim()) return;
+
+    const updatedThreads = commentThreads.map(thread => {
+      if (thread.id === currentThreadId) {
+        return {
+          ...thread,
+          comments: [...thread.comments, {
+            id: `comment_${Date.now()}`,
+            author: 'Current User',
+            text: newComment,
+            timestamp: new Date()
+          }]
+        };
+      }
+      return thread;
+    });
+
+    setCommentThreads(updatedThreads);
+    setNewComment('');
+    setShowCommentDialog(false);
   };
 
   const handleSubmitFeedbackToOPR = async () => {
@@ -840,13 +1335,13 @@ const OPRReviewPage = () => {
       if (response.ok) {
         setDocumentContent(editableContent);
         setIsEditingDocument(false);
-        alert('Document updated successfully');
+        window.alert('Document updated successfully');
       } else {
-        alert('Failed to save document');
+        window.alert('Failed to save document');
       }
     } catch (error) {
       console.error('Error saving document:', error);
-      alert('Error saving document');
+      window.alert('Error saving document');
     } finally {
       setSavingDocument(false);
     }
@@ -930,14 +1425,25 @@ const OPRReviewPage = () => {
             <MenuItem onClick={() => handleExport('pdf')}>
               <PdfIcon sx={{ mr: 1 }} /> Export as PDF
             </MenuItem>
+            <MenuItem onClick={() => handleExport('pdf', true)}>
+              <PdfIcon sx={{ mr: 1, color: 'warning.main' }} /> Export PDF with Track Changes
+            </MenuItem>
+            <Divider />
             <MenuItem onClick={() => handleExport('docx')}>
               <DocumentIcon sx={{ mr: 1 }} /> Export as Word
             </MenuItem>
+            <MenuItem onClick={() => handleExport('docx', true)}>
+              <DocumentIcon sx={{ mr: 1, color: 'warning.main' }} /> Export Word with Track Changes
+            </MenuItem>
+            <Divider />
             <MenuItem onClick={() => handleExport('txt')}>
               <TextIcon sx={{ mr: 1 }} /> Export as Text
             </MenuItem>
             <MenuItem onClick={() => handleExport('html')}>
               <HtmlIcon sx={{ mr: 1 }} /> Export as HTML
+            </MenuItem>
+            <MenuItem onClick={() => handleExport('html', true)}>
+              <HtmlIcon sx={{ mr: 1, color: 'warning.main' }} /> Export HTML with Track Changes
             </MenuItem>
           </Menu>
         </Toolbar>
@@ -1174,36 +1680,472 @@ const OPRReviewPage = () => {
           </Paper>
         </Box>
 
-        {/* Right Side: Version Control Feedback Processor */}
-        <Box sx={{ width: '700px', overflow: 'auto' }}>
-          {/* Version Control Feedback Processor - Handles feedback with automatic position tracking */}
-          <OPRFeedbackProcessorV2Enhanced
-            documentId={documentId}
-            documentTitle={documentData?.title || 'Document'}
-            documentContent={documentContent}
-            onUpdate={() => {
-              // Refresh the document data after feedback processing
-              fetchDocumentAndFeedback();
-            }}
-            onContentChange={(newContent: string) => {
-              setDocumentContent(newContent);
-              setEditableContent(newContent);
+        {/* Right Side: Feedback Management Panel */}
+        <Box sx={{ width: '450px', overflow: 'auto', bgcolor: 'grey.50', p: 2 }}>
+          {/* Professional Controls Layout */}
+          <Paper sx={{ p: 2, mb: 2 }}>
+              <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Build />
+                Feedback Management
+              </Typography>
 
-              // Update document data as well
-              if (documentData) {
-                setDocumentData((prevData: any) => ({
-                  ...prevData,
-                  content: newContent,
-                  customFields: {
-                    ...prevData.customFields,
-                    content: newContent,
-                    editableContent: newContent
-                  }
-                }));
-              }
-            }}
-          />
-          {/* The version control processor handles all feedback now */}
+              {/* Merge Strategy Selection */}
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>Strategy:</Typography>
+                <ToggleButtonGroup
+                  value={mergeMode}
+                  exclusive
+                  onChange={handleMergeModeChange}
+                  size="small"
+                  sx={{ mb: 1 }}
+                >
+                  <ToggleButton value="manual">
+                    <ManualIcon sx={{ mr: 0.5, fontSize: 16 }} />
+                    Manual
+                  </ToggleButton>
+                  <ToggleButton value="ai">
+                    <AIIcon sx={{ mr: 0.5, fontSize: 16 }} />
+                    AI
+                  </ToggleButton>
+                  <ToggleButton value="hybrid">
+                    <HybridIcon sx={{ mr: 0.5, fontSize: 16 }} />
+                    Hybrid
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
+              {/* Track Changes Controls */}
+              <Box sx={{ mb: 2, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 'bold' }}>Track Changes:</Typography>
+                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<UndoIcon />}
+                    onClick={handleUndo}
+                    disabled={historyIndex <= 0}
+                    title="Undo last change"
+                  >
+                    Undo
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<RedoIcon />}
+                    onClick={handleRedo}
+                    disabled={historyIndex >= changeHistory.length - 1}
+                    title="Redo last undone change"
+                  >
+                    Redo
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<CompareIcon />}
+                    onClick={() => setShowComparisonView(!showComparisonView)}
+                    color={showComparisonView ? 'primary' : 'inherit'}
+                    title="Toggle side-by-side comparison"
+                  >
+                    Compare
+                  </Button>
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<PrevIcon />}
+                    onClick={navigateToPreviousChange}
+                    disabled={changeMarkers.length === 0}
+                    title="Go to previous change"
+                  >
+                    Prev
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<NextIcon />}
+                    onClick={navigateToNextChange}
+                    disabled={changeMarkers.length === 0}
+                    title="Go to next change"
+                  >
+                    Next
+                  </Button>
+                  <Chip
+                    size="small"
+                    label={`${currentChangeIndex + 1}/${changeMarkers.length}`}
+                    sx={{ ml: 1 }}
+                  />
+                </Stack>
+              </Box>
+
+              {/* Batch Operations */}
+              <Box sx={{ mb: 2, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 'bold' }}>Batch Operations:</Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="success"
+                    startIcon={<AcceptAllIcon />}
+                    onClick={handleAcceptAllChanges}
+                    disabled={feedback.filter(f => f.status === 'pending').length === 0}
+                  >
+                    Accept All
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="error"
+                    startIcon={<RejectAllIcon />}
+                    onClick={handleRejectAllChanges}
+                    disabled={feedback.filter(f => f.status === 'pending').length === 0}
+                  >
+                    Reject All
+                  </Button>
+                </Stack>
+              </Box>
+
+              {/* Action Buttons Grid */}
+              <Grid container spacing={1}>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    size="small"
+                    startIcon={<TrackChangesIcon />}
+                    onClick={applyAllFeedback}
+                    disabled={feedback.length === 0}
+                  >
+                    Apply All ({feedback.length})
+                  </Button>
+                </Grid>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    startIcon={<BatchIcon />}
+                    onClick={applySelectedFeedback}
+                    disabled={!feedback.some(i => i.selected)}
+                  >
+                    Selected ({feedback.filter(i => i.selected).length})
+                  </Button>
+                </Grid>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    startIcon={selectAll ? <DeselectAllIcon /> : <SelectAllIcon />}
+                    onClick={handleSelectAll}
+                  >
+                    {selectAll ? 'Deselect' : 'Select'} All
+                  </Button>
+                </Grid>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    startIcon={<SaveIcon />}
+                    onClick={handleSaveDocument}
+                    disabled={savingDocument}
+                  >
+                    Save Changes
+                  </Button>
+                </Grid>
+
+
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    startIcon={<HistoryIcon />}
+                    onClick={() => setShowDetailedHistory(true)}
+                  >
+                    History
+                  </Button>
+                </Grid>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    startIcon={<ViewIcon />}
+                    onClick={() => setShowPreview(!showPreview)}
+                  >
+                    Preview
+                  </Button>
+                </Grid>
+
+              </Grid>
+
+              {/* Settings Toggles */}
+              <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                <Stack direction="row" spacing={3}>
+                  <FormControlLabel
+                    control={<Switch checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)} size="small" />}
+                    label="Auto-save"
+                  />
+                  <FormControlLabel
+                    control={<Switch checked={showPositionDetails} onChange={(e) => setShowPositionDetails(e.target.checked)} size="small" />}
+                    label="Position Details"
+                  />
+                </Stack>
+              </Box>
+            </Paper>
+
+            {/* Selected Feedback Details */}
+            {selectedFeedback && (
+              <Paper sx={{ p: 2, mb: 2 }}>
+                <Typography variant="subtitle1" gutterBottom color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CommentIcon />
+                  Selected Feedback Details
+                </Typography>
+
+                <Grid container spacing={1} sx={{ mt: 1 }}>
+                  {/* Basic Information */}
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">ID</Typography>
+                    <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.id || 'Not set'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Type</Typography>
+                    <Box sx={{ mt: 0.5 }}>
+                      <Chip
+                        label={getCommentTypeLabel(selectedFeedback.commentType)}
+                        size="small"
+                        color={getCommentTypeColor(selectedFeedback.commentType) as any}
+                        sx={{ fontSize: '0.65rem' }}
+                      />
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Component</Typography>
+                    <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.component || 'Not specified'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Status</Typography>
+                    <Box sx={{ mt: 0.5 }}>
+                      <Chip
+                        label={selectedFeedback.status || 'Pending'}
+                        size="small"
+                        variant="outlined"
+                        color={getStatusColor(selectedFeedback.status) as any}
+                        sx={{ fontSize: '0.65rem' }}
+                      />
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Reviewer</Typography>
+                    <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.pocName || 'Anonymous'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Contact</Typography>
+                    <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.pocEmail || selectedFeedback.pocPhone || 'N/A'}</Typography>
+                  </Grid>
+
+                  <Grid item xs={3}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Page</Typography>
+                    <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.page || '?'}</Typography>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Paragraph</Typography>
+                    <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.paragraphNumber || '?'}</Typography>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Line</Typography>
+                    <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.lineNumber || '?'}</Typography>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Component</Typography>
+                    <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.component || 'General'}</Typography>
+                  </Grid>
+
+                  {/* Comment */}
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">Comment</Typography>
+                    <Paper variant="outlined" sx={{ p: 1, mt: 0.5, bgcolor: 'grey.50' }}>
+                      <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.coordinatorComment || 'No comment provided'}</Typography>
+                    </Paper>
+                  </Grid>
+
+                  {/* Text Changes */}
+                  {selectedFeedback.changeFrom && (
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">Original Text</Typography>
+                      <Paper variant="outlined" sx={{ p: 1, mt: 0.5, bgcolor: 'error.50', borderColor: 'error.main' }}>
+                        <Typography variant="body2" fontSize="0.8rem" color="error.main">{selectedFeedback.changeFrom}</Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+
+                  {selectedFeedback.changeTo && (
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">Suggested Text</Typography>
+                      <Paper variant="outlined" sx={{ p: 1, mt: 0.5, bgcolor: 'success.50', borderColor: 'success.main' }}>
+                        <Typography variant="body2" fontSize="0.8rem" color="success.main">{selectedFeedback.changeTo}</Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+
+                  {/* Justification */}
+                  {selectedFeedback.coordinatorJustification && (
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">Justification</Typography>
+                      <Paper variant="outlined" sx={{ p: 1, mt: 0.5, bgcolor: 'grey.50' }}>
+                        <Typography variant="body2" fontSize="0.8rem">{selectedFeedback.coordinatorJustification}</Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+
+                  {/* Resolution */}
+                  {selectedFeedback.resolution && (
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">Resolution</Typography>
+                      <Paper variant="outlined" sx={{ p: 1, mt: 0.5, bgcolor: 'info.50', borderColor: 'info.main' }}>
+                        <Typography variant="body2" fontSize="0.8rem" color="info.main">{selectedFeedback.resolution}</Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+
+                  {/* Originator Justification */}
+                  {selectedFeedback.originatorJustification && (
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="text.secondary" fontWeight="bold">Originator Response</Typography>
+                      <Paper variant="outlined" sx={{ p: 1, mt: 0.5, bgcolor: 'warning.50', borderColor: 'warning.main' }}>
+                        <Typography variant="body2" fontSize="0.8rem" color="warning.main">{selectedFeedback.originatorJustification}</Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+
+                  {/* Action Buttons for Selected Feedback */}
+                  <Grid item xs={12}>
+                    <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={handleMergeFeedback}
+                        disabled={!selectedFeedback.changeTo}
+                        startIcon={<MergeIcon />}
+                        color={mergeMode === 'ai' ? 'secondary' : mergeMode === 'hybrid' ? 'warning' : 'primary'}
+                      >
+                        {mergeMode === 'manual' ? 'Apply' :
+                         mergeMode === 'ai' ? 'AI Merge' :
+                         'Hybrid'}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => setSelectedFeedback(null)}
+                        startIcon={<Cancel />}
+                      >
+                        Clear
+                      </Button>
+                      {selectedFeedback.changeFrom && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => {
+                            setHighlightedText(selectedFeedback.changeFrom || '');
+                          }}
+                          startIcon={<ViewIcon />}
+                        >
+                          Find
+                        </Button>
+                      )}
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
+            )}
+
+            {/* Feedback List */}
+            <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ListIcon />
+              Feedback Items ({feedback.length})
+            </Typography>
+            <Box sx={{ maxHeight: '400px', overflow: 'auto' }}>
+              <List dense>
+                {feedback.map((item, index) => (
+                  <ListItem
+                    key={item.id || index}
+                    selected={selectedFeedback?.id === item.id}
+                    sx={{
+                      mb: 0.5,
+                      border: 1,
+                      borderColor: selectedFeedback?.id === item.id ? 'primary.main' : 'divider',
+                      borderRadius: 1,
+                      bgcolor: selectedFeedback?.id === item.id ? 'primary.50' : 'background.paper',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        bgcolor: selectedFeedback?.id === item.id ? 'primary.100' : 'grey.100'
+                      }
+                    }}
+                  >
+                    <Checkbox
+                      checked={item.selected || false}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleToggleSelect(item.id || '');
+                      }}
+                      size="small"
+                      disabled={item.status === 'merged'}
+                      sx={{ mr: 1 }}
+                    />
+                    <ListItemText
+                      onClick={() => handleFeedbackClick(item)}
+                      primary={
+                        <Box sx={{ opacity: item.status === 'merged' ? 0.6 : 1 }}>
+                          <Typography
+                            variant="body2"
+                            noWrap
+                            sx={{
+                              textDecoration: item.status === 'merged' ? 'line-through' : 'none',
+                              color: item.status === 'merged' ? 'text.secondary' : 'text.primary'
+                            }}
+                          >
+                            {item.coordinatorComment || 'No comment'}
+                          </Typography>
+                          <Box sx={{ mt: 0.5 }}>
+                            <Chip
+                              label={getCommentTypeLabel(item.commentType)}
+                              size="small"
+                              color={getCommentTypeColor(item.commentType) as any}
+                              sx={{ mr: 0.5, fontSize: '0.65rem' }}
+                              disabled={item.status === 'merged'}
+                            />
+                            {item.status && (
+                              <Chip
+                                label={item.status}
+                                size="small"
+                                variant={item.status === 'merged' ? 'filled' : 'outlined'}
+                                color={getStatusColor(item.status) as any}
+                                sx={{ fontSize: '0.65rem' }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+                      }
+                      secondary={
+                        <Typography variant="caption" color="text.secondary">
+                          {item.pocName || 'Anonymous'} • Page {item.page || '?'} • Para {item.paragraphNumber || '?'} • Line {item.lineNumber || '?'} • {item.component || 'General'}
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                ))}
+                {feedback.length === 0 && (
+                  <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                    <Typography variant="body2">No feedback items available</Typography>
+                    <Typography variant="caption">Use "Generate AI Feedback" to create suggestions</Typography>
+                  </Box>
+                )}
+              </List>
+            </Box>
         </Box>
       </Box>
 
@@ -1734,6 +2676,275 @@ const OPRReviewPage = () => {
           >
             Confirm Downgrade
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Side-by-side Comparison View */}
+      {showComparisonView && (
+        <Dialog open={showComparisonView} onClose={() => setShowComparisonView(false)} maxWidth="xl" fullWidth>
+          <DialogTitle>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="h6">Document Comparison View</Typography>
+              <IconButton onClick={() => setShowComparisonView(false)}>
+                <Cancel />
+              </IconButton>
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <Paper sx={{ p: 2, height: '600px', overflow: 'auto' }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'error.main' }}>
+                    Original Document
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  <Box dangerouslySetInnerHTML={{ __html: documentContent }} />
+                </Paper>
+              </Grid>
+              <Grid item xs={6}>
+                <Paper sx={{ p: 2, height: '600px', overflow: 'auto' }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                    Current Document (with changes)
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  <Box>
+                    {(() => {
+                      let htmlWithHighlights = editableContent;
+
+                      // Apply highlighting for each tracked change
+                      for (const [id, change] of appliedChanges) {
+                        if (change.original && change.changed) {
+                          // Replace original with strikethrough and new with highlight
+                          const escapedOriginal = change.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                          htmlWithHighlights = htmlWithHighlights.replace(
+                            new RegExp(escapedOriginal, 'g'),
+                            `<span style="text-decoration: line-through; color: red;">${change.original}</span> <span style="background-color: #c8e6c9; color: green; font-weight: bold;">${change.changed}</span>`
+                          );
+                        }
+                      }
+
+                      return <div dangerouslySetInnerHTML={{ __html: htmlWithHighlights }} />;
+                    })()}
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>Change Summary:</Typography>
+              <Typography variant="body2">
+                • Total changes applied: {appliedChanges.size}<br />
+                • Pending feedback items: {feedback.filter(f => f.status === 'pending' || !f.status).length}<br />
+                • Merged changes: {feedback.filter(f => f.status === 'merged').length}<br />
+                • Accepted changes: {feedback.filter(f => f.status === 'accepted').length}<br />
+                • Rejected changes: {feedback.filter(f => f.status === 'rejected').length}
+              </Typography>
+
+              {appliedChanges.size > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>Applied Changes:</Typography>
+                  {Array.from(appliedChanges.entries()).map(([id, change]) => {
+                    const feedbackItem = feedback.find(f => f.id === change.feedbackId);
+                    return (
+                      <Box key={id} sx={{ mb: 1, p: 1, bgcolor: 'white', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {feedbackItem?.pocName || 'Unknown'} - {feedbackItem?.commentType ? getCommentTypeLabel(feedbackItem.commentType) : ''}
+                        </Typography>
+                        <Typography variant="body2">
+                          <span style={{ color: 'red', textDecoration: 'line-through' }}>{change.original}</span>
+                          {' → '}
+                          <span style={{ color: 'green', fontWeight: 'bold' }}>{change.changed}</span>
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
+            </Box>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Detailed Revision History Dialog */}
+      <Dialog open={showDetailedHistory} onClose={() => setShowDetailedHistory(false)} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TimelineIcon />
+            <Typography variant="h6">Detailed Revision History</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <List>
+            {changeHistory.map((entry, index) => (
+              <ListItem key={index} sx={{ flexDirection: 'column', alignItems: 'flex-start', mb: 2, bgcolor: index === historyIndex ? 'action.selected' : 'transparent' }}>
+                <Box sx={{ width: '100%', mb: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                    Version {index + 1} {index === historyIndex && '(Current)'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {entry.timestamp.toLocaleString()}
+                  </Typography>
+                </Box>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Content length: {entry.content.length} characters
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Feedback items: {entry.feedback.length}
+                    </Typography>
+                  </Grid>
+                </Grid>
+                {index !== historyIndex && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    sx={{ mt: 1 }}
+                    onClick={() => {
+                      if (confirm('Restore this version? Current changes will be saved to history.')) {
+                        saveToHistory();
+                        setEditableContent(entry.content);
+                        setFeedback(entry.feedback);
+                        setHistoryIndex(index);
+                        setShowDetailedHistory(false);
+                      }
+                    }}
+                  >
+                    Restore This Version
+                  </Button>
+                )}
+              </ListItem>
+            ))}
+            {changeHistory.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                No revision history available yet. Changes will be tracked as you edit.
+              </Typography>
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDetailedHistory(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Version History Dialog */}
+      <Dialog open={showVersionHistory} onClose={() => setShowVersionHistory(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Document Version History</DialogTitle>
+        <DialogContent>
+          <List>
+            <ListItem>
+              <ListItemText
+                primary="Version 1.0 - Initial Document"
+                secondary={`Created: ${documentData?.createdAt ? new Date(documentData.createdAt).toLocaleString() : 'Unknown'}`}
+              />
+            </ListItem>
+            {documentData?.lastDraftUpdate && (
+              <ListItem>
+                <ListItemText
+                  primary="Draft Feedback Added"
+                  secondary={`Updated: ${new Date(documentData.lastDraftUpdate).toLocaleString()}`}
+                />
+              </ListItem>
+            )}
+            {documentData?.lastAIFeedbackGenerated && (
+              <ListItem>
+                <ListItemText
+                  primary="AI Feedback Generated"
+                  secondary={`Generated: ${new Date(documentData.lastAIFeedbackGenerated).toLocaleString()}`}
+                />
+              </ListItem>
+            )}
+            {documentData?.updatedAt && (
+              <ListItem>
+                <ListItemText
+                  primary="Last Modified"
+                  secondary={`Updated: ${new Date(documentData.updatedAt).toLocaleString()}`}
+                />
+              </ListItem>
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowVersionHistory(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Comment Thread Dialog */}
+      <Dialog open={showCommentDialog} onClose={() => setShowCommentDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CommentIcon />
+            <Typography variant="h6">Comment Thread</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {currentThreadId && (
+            <>
+              <List sx={{ maxHeight: 300, overflow: 'auto', mb: 2 }}>
+                {commentThreads.find(t => t.id === currentThreadId)?.comments.map(comment => (
+                  <ListItem key={comment.id} sx={{ flexDirection: 'column', alignItems: 'flex-start', mb: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Typography variant="caption" color="primary" fontWeight="bold">
+                      {comment.author}
+                    </Typography>
+                    <Typography variant="body2">
+                      {comment.text}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {comment.timestamp.toLocaleString()}
+                    </Typography>
+                  </ListItem>
+                )) || (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                    No comments yet. Be the first to comment!
+                  </Typography>
+                )}
+              </List>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                variant="outlined"
+                label="Add a comment"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Type your comment here..."
+              />
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setShowCommentDialog(false);
+            setNewComment('');
+          }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={saveComment}
+            disabled={!newComment.trim()}
+            startIcon={<SendIcon />}
+          >
+            Post Comment
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={showPreview} onClose={() => setShowPreview(false)} maxWidth="lg" fullWidth>
+        <DialogTitle>Document Preview</DialogTitle>
+        <DialogContent>
+          <Paper sx={{ p: 3, minHeight: 400 }}>
+            <Typography variant="h5" gutterBottom>
+              {documentData?.title || 'Document Preview'}
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            <Box dangerouslySetInnerHTML={{ __html: documentContent || '<p>No content to preview</p>' }} />
+          </Paper>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowPreview(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </>

@@ -1047,7 +1047,7 @@ const DocumentViewPage: React.FC = () => {
               variant="contained"
               color="primary"
               onClick={() => handleWorkflowAdvancement('AFDPO Publication', 10)}
-              disabled={workflowStage !== '9' && workflowStage !== 'OPR Leadership Final Review'} // Only enable after Leadership review (stage 9)
+              disabled={(workflowStage as string) !== '9' && (workflowStage as string) !== 'OPR Leadership Final Review'} // Only enable after Leadership review (stage 9)
             >
               📤 Send to AFDPO
             </Button>

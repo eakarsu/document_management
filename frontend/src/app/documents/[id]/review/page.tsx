@@ -40,7 +40,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress
+  CircularProgress,
+  Checkbox
 } from '@mui/material';
 import {
   ArrowBack,
@@ -53,7 +54,10 @@ import {
   Close as CloseIcon,
   ExpandMore as ExpandIcon,
   ExpandLess as CollapseIcon,
-  FormatListNumbered
+  FormatListNumbered,
+  AutoAwesome as GenerateAIIcon,
+  CheckBox as CheckboxIcon,
+  Clear as ClearIcon
 } from '@mui/icons-material';
 
 interface CRMComment {
@@ -72,6 +76,8 @@ interface CRMComment {
   coordinatorJustification: string;
   resolution?: string;
   originatorJustification?: string;
+  selected?: boolean;
+  status?: string;
 }
 
 const DocumentReviewPage = () => {
@@ -88,6 +94,7 @@ const DocumentReviewPage = () => {
   const [showPageNumbers, setShowPageNumbers] = useState(true);
   const [mergeResult, setMergeResult] = useState<string>('');
   const [selectedComment, setSelectedComment] = useState<CRMComment | null>(null);
+  const [generatingAIFeedback, setGeneratingAIFeedback] = useState(false);
   const [currentComment, setCurrentComment] = useState<CRMComment>({
     component: '',
     pocName: '',
@@ -304,7 +311,7 @@ const DocumentReviewPage = () => {
   const handleDeleteComment = async (id: string) => {
     const updatedComments = comments.filter(c => c.id !== id);
     setComments(updatedComments);
-    
+
     // Update database only (no localStorage)
     try {
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
@@ -316,7 +323,7 @@ const DocumentReviewPage = () => {
           }
         })
       });
-      
+
       if (response.ok) {
         console.log('Comment deleted from database');
       } else {
@@ -327,6 +334,178 @@ const DocumentReviewPage = () => {
       console.error('Error updating database:', error);
       alert('Error deleting comment');
     }
+  };
+
+  // Toggle individual comment selection
+  const handleToggleSelect = (id: string) => {
+    setComments(items =>
+      items.map(item =>
+        item.id === id ? { ...item, selected: !item.selected } : item
+      )
+    );
+  };
+
+  // Generate AI feedback
+  const generateAIFeedback = async () => {
+    setGeneratingAIFeedback(true);
+    try {
+      const response = await authTokenService.authenticatedFetch('/api/generate-ai-feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          documentId,
+          documentContent: documentContent,
+          documentType: 'Review'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Convert AI feedback to CRM format
+        const aiFeedback = result.feedback.map((item: any, index: number) => ({
+          id: `ai_${Date.now()}_${index}`,
+          component: item.category || 'AI Generated',
+          pocName: 'AI Assistant',
+          pocPhone: '',
+          pocEmail: '',
+          commentType: item.severity === 'CRITICAL' ? 'C' :
+                      item.severity === 'MAJOR' ? 'M' :
+                      item.severity === 'SUBSTANTIVE' ? 'S' : 'A',
+          page: item.page?.toString() || '1',
+          paragraphNumber: item.paragraph?.toString() || '1',
+          lineNumber: item.line?.toString() || '1',
+          coordinatorComment: item.comment,
+          changeFrom: item.originalText || '',
+          changeTo: item.suggestedText || '',
+          coordinatorJustification: `AI Analysis: ${item.category}`,
+          selected: false
+        }));
+
+        setComments(prev => [...prev, ...aiFeedback]);
+
+        // Save the AI feedback to database
+        const allFeedback = [...comments, ...aiFeedback];
+        console.log('Saving AI feedback to database:', {
+          documentId,
+          feedbackCount: allFeedback.length,
+          newFeedbackCount: aiFeedback.length
+        });
+
+        const saveResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            customFields: {
+              draftFeedback: allFeedback,
+              lastAIFeedbackGenerated: new Date().toISOString()
+            }
+          })
+        });
+
+        if (!saveResponse.ok) {
+          const errorText = await saveResponse.text();
+          console.error('Failed to save feedback to database:', errorText);
+          window.alert(`Generated ${aiFeedback.length} AI feedback items but failed to save to database`);
+        } else {
+          console.log('AI feedback saved successfully to database');
+          window.alert(`Generated ${aiFeedback.length} AI feedback items and saved to database`);
+        }
+      }
+    } catch (error) {
+      console.error('Error generating AI feedback:', error);
+      window.alert('Failed to generate AI feedback');
+    } finally {
+      setGeneratingAIFeedback(false);
+    }
+  };
+
+  const handleClearSelectedFeedback = async () => {
+    const selectedItems = comments.filter(item => item.selected);
+    const selectedCount = selectedItems.length;
+
+    if (selectedCount === 0) {
+      window.alert('No feedback items selected.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedCount} selected feedback items? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      console.log('Delete Selected: Starting deletion for', selectedCount, 'items');
+
+      // Remove selected items from local state immediately
+      const remainingFeedback = comments.filter(item => !item.selected);
+      setComments(remainingFeedback);
+
+      // Clear selected feedback if it was selected
+      if (selectedComment?.selected) {
+        setSelectedComment(null);
+      }
+
+      // Save to database
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            draftFeedback: remainingFeedback,
+            lastModified: new Date().toISOString()
+          }
+        })
+      });
+
+      if (response.ok) {
+        window.alert(`${selectedCount} feedback items deleted successfully.`);
+      } else {
+        window.alert('Failed to update database.');
+      }
+    } catch (error) {
+      console.error('Error deleting selected feedback:', error);
+      window.alert('Error deleting feedback. Please try again.');
+    }
+  };
+
+  const handleClearAllFeedback = async () => {
+    if (!confirm(`Are you sure you want to clear all ${comments.length} feedback items? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      console.log('Clear All: Starting clear operation');
+
+      // Clear feedback from local state
+      setComments([]);
+      setSelectedComment(null);
+
+      // Clear from database
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            draftFeedback: [],
+            lastClearedAt: new Date().toISOString()
+          }
+        })
+      });
+
+      if (response.ok) {
+        window.alert('All feedback has been cleared successfully.');
+      } else {
+        window.alert('Failed to clear feedback from database.');
+      }
+    } catch (error) {
+      console.error('Error clearing feedback:', error);
+      window.alert('Error clearing feedback. Please try again.');
+    }
+  };
+
+  // Handle selecting a comment to populate the form
+  const handleSelectComment = (comment: CRMComment) => {
+    setSelectedComment(comment);
+    setCurrentComment({
+      ...comment,
+      id: undefined // Don't copy the ID for new comments
+    });
+    setShowAddForm(true); // Expand the form
   };
 
   // Removed handleSubmit - using handleSubmitFeedbackToOPR instead
@@ -692,6 +871,40 @@ const DocumentReviewPage = () => {
                     Add to Comment Matrix
                   </Button>
                 </Grid>
+
+                {/* AI Feedback Management Buttons */}
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      startIcon={generatingAIFeedback ? <CircularProgress size={16} /> : <GenerateAIIcon />}
+                      onClick={generateAIFeedback}
+                      disabled={generatingAIFeedback}
+                      fullWidth
+                    >
+                      {generatingAIFeedback ? 'Generating...' : 'Generate AI Feedback'}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={handleClearSelectedFeedback}
+                      disabled={!comments.some(c => c.selected)}
+                    >
+                      Delete Selected
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<ClearIcon />}
+                      onClick={handleClearAllFeedback}
+                      disabled={comments.length === 0}
+                    >
+                      Clear All
+                    </Button>
+                  </Box>
+                </Grid>
               </Grid>
             )}
           </Paper>
@@ -726,18 +939,26 @@ const DocumentReviewPage = () => {
                       }}
                     >
                       {/* Header - Always Visible */}
-                      <Box 
-                        sx={{ 
-                          p: 2, 
+                      <Box
+                        sx={{
+                          p: 2,
                           cursor: 'pointer',
                           '&:hover': {
                             bgcolor: 'grey.50'
                           }
                         }}
-                        onClick={() => handleEditComment(comment)}
+                        onClick={() => handleSelectComment(comment)}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold', ml: 2 }}>
+                          <Checkbox
+                            checked={comment.selected || false}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleSelect(comment.id!);
+                            }}
+                            sx={{ mr: 1 }}
+                          />
+                          <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>
                             #{index + 1} - {comment.component}
                           </Typography>
                           <Chip 
@@ -760,7 +981,7 @@ const DocumentReviewPage = () => {
                         </Box>
                         
                         {/* Summary Line - Always Visible */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, ml: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, ml: 5 }}>
                           <Typography variant="body2" color="text.secondary" sx={{ mr: 2 }}>
                             📍 Page {comment.page || '-'}, Para {comment.paragraphNumber || '-'}, Line {comment.lineNumber || '-'}
                           </Typography>

@@ -10,6 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'richmond-dms-secret-key';
 
 // Generate unique IDs for test isolation
 const generateTestId = () => `test_${crypto.randomBytes(8).toString('hex')}`;
+const testOrgId = `test_org_${crypto.randomBytes(8).toString('hex')}`;
 
 // Test data factory
 class TestDataFactory {
@@ -43,9 +44,16 @@ class TestDataFactory {
   static createMockDocument(overrides: any = {}) {
     return {
       title: 'Test Document',
-      content: '<h1>Document Title</h1><p>Paragraph 1 with original text that needs review.</p><p>Paragraph 2 with more content to test.</p><p>Paragraph 3 with final section text.</p>',
+      description: '<h1>Document Title</h1><p>Paragraph 1 with original text that needs review.</p><p>Paragraph 2 with more content to test.</p><p>Paragraph 3 with final section text.</p>',
       category: 'TEST',
       status: 'IN_REVIEW',
+      fileName: 'test-document.pdf',
+      originalName: 'test-document.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 1024,
+      checksum: Math.random().toString(36).substring(7),
+      storagePath: '/test/documents',
+      organizationId: testOrgId,
       ...overrides
     };
   }
@@ -74,35 +82,41 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: {
           id: testUserIds.opr,
           email: `opr_${Date.now()}@test.com`,
-          name: 'Test OPR User',
-          password: 'hashed-password',
-          role: 'OPR'
+          firstName: 'Test',
+          lastName: 'OPR',
+          passwordHash: 'hashed-password',
+          organizationId: 'cmfmkdk9m000081e6fegn6zjk', // Test org
+          roleId: 'cmfmkersn0008136c23r791aw' // OPR role ID
         }
       }),
       prisma.user.create({
         data: {
           id: testUserIds.reviewer,
           email: `reviewer_${Date.now()}@test.com`,
-          name: 'Test Reviewer',
-          password: 'hashed-password',
-          role: 'REVIEWER'
+          firstName: 'Test',
+          lastName: 'Reviewer',
+          passwordHash: 'hashed-password',
+          organizationId: 'cmfmkdk9m000081e6fegn6zjk', // Test org
+          roleId: 'cmfmkersi0006136cpvy2ybww' // Reviewer role ID
         }
       }),
       prisma.user.create({
         data: {
           id: testUserIds.coordinator,
           email: `coordinator_${Date.now()}@test.com`,
-          name: 'Test Coordinator',
-          password: 'hashed-password',
-          role: 'COORDINATOR'
+          firstName: 'Test',
+          lastName: 'Coordinator',
+          passwordHash: 'hashed-password',
+          organizationId: 'cmfmkdk9m000081e6fegn6zjk', // Test org
+          roleId: 'cmfmkersi0006136cpvy2ybww' // Using reviewer role as coordinator
         }
       })
     ]);
 
     // Generate auth tokens
-    authTokenOPR = TestDataFactory.generateToken(users[0].id, users[0].email, users[0].role);
-    authTokenReviewer = TestDataFactory.generateToken(users[1].id, users[1].email, users[1].role);
-    authTokenCoordinator = TestDataFactory.generateToken(users[2].id, users[2].email, users[2].role);
+    authTokenOPR = TestDataFactory.generateToken(users[0].id, users[0].email, 'OPR');
+    authTokenReviewer = TestDataFactory.generateToken(users[1].id, users[1].email, 'REVIEWER');
+    authTokenCoordinator = TestDataFactory.generateToken(users[2].id, users[2].email, 'COORDINATOR');
 
     console.log('✅ Test users created and authenticated');
   });
@@ -132,7 +146,7 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: {
           ...TestDataFactory.createMockDocument({
             id: generateTestId(),
-            authorId: testUserIds.opr,
+            createdById: testUserIds.opr,
             customFields: {
               versions: [],
               draftFeedback: []
@@ -283,10 +297,17 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: {
           id: generateTestId(),
           title: 'Position Tracking Test',
-          content: 'Line 1: First line of text.\nLine 2: Second line here.\nLine 3: Third line content.\nLine 4: Fourth line text.\nLine 5: Final line.',
+          description: 'Line 1: First line of text.\nLine 2: Second line here.\nLine 3: Third line content.\nLine 4: Fourth line text.\nLine 5: Final line.',
           category: 'TEST',
           status: 'IN_REVIEW',
-          authorId: testUserIds.opr,
+          createdById: testUserIds.opr,
+          organizationId: testOrgId,
+          fileName: 'test-doc.pdf',
+          originalName: 'test-doc.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 1024,
+          checksum: Math.random().toString(36),
+          storagePath: '/test/path',
           customFields: {
             versions: [],
             positionMap: {}
@@ -394,10 +415,17 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: {
           id: generateTestId(),
           title: 'Workflow Test Document',
-          content: '<h1>Workflow Document</h1><p>Content for workflow testing.</p>',
+          description: '<h1>Workflow Document</h1><p>Content for workflow testing.</p>',
           category: 'WORKFLOW',
-          status: 'IN_WORKFLOW',
-          authorId: testUserIds.opr,
+          status: 'DRAFT' as any, // Using DRAFT status
+          createdById: testUserIds.opr,
+          organizationId: testOrgId,
+          fileName: 'workflow-test.pdf',
+          originalName: 'workflow-test.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 2048,
+          checksum: Math.random().toString(36),
+          storagePath: '/test/workflow',
           customFields: {
             workflowInstanceId: generateTestId(),
             currentStage: 3,
@@ -533,10 +561,17 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: {
           id: generateTestId(),
           title: 'Conflict Resolution Test',
-          content: '<p>This is the original paragraph with text that multiple reviewers want to change.</p>',
+          description: '<p>This is the original paragraph with text that multiple reviewers want to change.</p>',
           category: 'TEST',
           status: 'IN_REVIEW',
-          authorId: testUserIds.opr,
+          createdById: testUserIds.opr,
+          organizationId: testOrgId,
+          fileName: 'conflict-test.pdf',
+          originalName: 'conflict-test.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 3072,
+          checksum: Math.random().toString(36),
+          storagePath: '/test/conflicts',
           customFields: {
             draftFeedback: [
               TestDataFactory.createMockFeedback({
@@ -669,10 +704,17 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: {
           id: generateTestId(),
           title: 'Version History Test',
-          content: 'Version 1 content',
+          description: 'Version 1 content',
           category: 'TEST',
           status: 'IN_REVIEW',
-          authorId: testUserIds.opr
+          createdById: testUserIds.opr,
+          organizationId: testOrgId,
+          fileName: 'version-test.pdf',
+          originalName: 'version-test.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 4096,
+          checksum: Math.random().toString(36),
+          storagePath: '/test/versions'
         }
       });
       versionedDocumentId = doc.id;
@@ -756,7 +798,7 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
           where: { id: versionedDocumentId }
         });
 
-        expect(doc?.content).toBe(targetVersion.content);
+        expect(doc?.description).toBe(targetVersion.content);
 
         console.log('✅ Successfully reverted to previous version');
       }
@@ -774,10 +816,17 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: {
           id: generateTestId(),
           title: 'Large Document Test',
-          content: largeContent,
+          description: largeContent,
           category: 'TEST',
           status: 'IN_REVIEW',
-          authorId: testUserIds.opr
+          createdById: testUserIds.opr,
+          organizationId: testOrgId,
+          fileName: 'large-test.pdf',
+          originalName: 'large-test.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 10240,
+          checksum: Math.random().toString(36),
+          storagePath: '/test/large'
         }
       });
 
@@ -818,7 +867,7 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
       const doc = await prisma.document.create({
         data: TestDataFactory.createMockDocument({
           id: generateTestId(),
-          authorId: testUserIds.opr
+          createdById: testUserIds.opr
         })
       });
 
@@ -852,7 +901,7 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
       const doc = await prisma.document.create({
         data: TestDataFactory.createMockDocument({
           id: generateTestId(),
-          authorId: testUserIds.opr
+          createdById: testUserIds.opr
         })
       });
 
@@ -878,7 +927,7 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
       const doc = await prisma.document.create({
         data: TestDataFactory.createMockDocument({
           id: generateTestId(),
-          authorId: testUserIds.opr,
+          createdById: testUserIds.opr,
           customFields: {
             auditLog: []
           }
@@ -936,7 +985,7 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: TestDataFactory.createMockDocument({
           id: generateTestId(),
           title: 'E2E Lifecycle Document',
-          authorId: testUserIds.opr
+          createdById: testUserIds.opr
         })
       });
 
@@ -973,7 +1022,7 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
             feedbackId: fb.id,
             status: 'applied'
           })),
-          content: 'Updated content after feedback'
+          description: 'Updated content after feedback'
         });
 
       expect(versionResponse.status).toBe(200);
@@ -992,7 +1041,7 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         where: { id: doc.id }
       });
 
-      expect(finalDoc?.content).toBe('Updated content after feedback');
+      expect(finalDoc?.description).toBe('Updated content after feedback');
       console.log('5️⃣ Final document state verified');
 
       console.log('\n✅ Full Feedback Lifecycle Complete!\n');
@@ -1006,10 +1055,17 @@ describe('Comprehensive Feedback Version Control Integration Tests', () => {
         data: {
           id: generateTestId(),
           title: 'Complex Workflow Document',
-          content: '<h1>Initial Content</h1>',
+          description: '<h1>Initial Content</h1>',
           category: 'WORKFLOW',
-          status: 'IN_WORKFLOW',
-          authorId: testUserIds.opr,
+          status: 'DRAFT' as any, // Using DRAFT status
+          createdById: testUserIds.opr,
+          organizationId: testOrgId,
+          fileName: 'complex-workflow.pdf',
+          originalName: 'complex-workflow.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 5120,
+          checksum: Math.random().toString(36),
+          storagePath: '/test/complex',
           customFields: {
             currentStage: 1,
             workflowHistory: []

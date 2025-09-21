@@ -85,27 +85,25 @@ import {
   Timeline as TimelineIcon,
   Speed as SpeedIcon,
   DataUsage as DataUsageIcon,
-  BugReport as BugIcon
+  BugReport as BugIcon,
+  AutoAwesome as GenerateAIIcon,
+  Build as ManualIcon,
+  Psychology as HybridIcon
 } from '@mui/icons-material';
+import { ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { api } from '../../lib/api';
 import FeedbackVersionControl, {
   DocumentPosition,
   FeedbackChange,
-  DocumentVersion
+  DocumentVersion,
+  FeedbackItem as ServiceFeedbackItem,
+  ApplyResult,
+  FeedbackConflict
 } from '../../services/FeedbackVersionControl';
 
-interface FeedbackItem {
-  id: string;
+// Extend the service FeedbackItem to include UI-specific properties
+interface FeedbackItem extends ServiceFeedbackItem {
   content: string;
-  severity: 'CRITICAL' | 'MAJOR' | 'SUBSTANTIVE' | 'ADMINISTRATIVE';
-  reviewer: string;
-  reviewerId: string;
-  location: DocumentPosition;
-  originalText: string;
-  suggestedText: string;
-  createdAt: string;
-  status: 'pending' | 'applied' | 'rejected' | 'conflicted';
-  selected?: boolean;
   metadata?: any;
 }
 
@@ -126,6 +124,7 @@ interface OPRFeedbackProcessorV2EnhancedProps {
   documentId: string;
   documentTitle: string;
   documentContent: string;
+  initialFeedback?: any[];
   onUpdate?: () => void;
   onContentChange?: (newContent: string) => void;
 }
@@ -134,6 +133,7 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
   documentId,
   documentTitle,
   documentContent,
+  initialFeedback,
   onUpdate,
   onContentChange
 }) => {
@@ -160,6 +160,8 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
   const [autoSave, setAutoSave] = useState(false);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [errorDetails, setErrorDetails] = useState<any[]>([]);
+  const [feedbackMode, setFeedbackMode] = useState<'manual' | 'ai' | 'hybrid'>('ai'); // Default to AI mode
+  const [generatingAIFeedback, setGeneratingAIFeedback] = useState(false);
   const [performanceMetrics, setPerformanceMetrics] = useState({
     loadTime: 0,
     processTime: 0,
@@ -169,10 +171,21 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
   // Refs for auto-save
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSyncTimeRef = useRef<Date>(new Date());
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
+  const [mounted, setMounted] = useState(false);
 
   // Initialize version control
   useEffect(() => {
+    setMounted(true);
     initializeVersionControl();
+    setLastSyncTime(new Date().toLocaleTimeString());
+
+    // Auto-generate AI feedback when component mounts in AI mode
+    if (feedbackMode === 'ai' || feedbackMode === 'hybrid') {
+      setTimeout(() => {
+        generateAIFeedback();
+      }, 1500); // Delay to ensure component is ready
+    }
   }, [documentId]);
 
   // Auto-save effect
@@ -221,37 +234,65 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
     }
   };
 
-  // Load feedback from API
+  // Load feedback from API or use initialFeedback
   const loadFeedback = async () => {
     try {
       setSyncing(true);
-      const response = await api.get(`/api/documents/${documentId}/feedback`);
-      if (response.ok) {
-        const data = await response.json();
-        const feedback = data.crmFeedback || data.draftFeedback || [];
 
-        // Convert to FeedbackItem format with location data
-        const items: FeedbackItem[] = feedback.map((item: any) => ({
-          id: item.id || Math.random().toString(),
-          content: item.coordinatorComment || item.content,
-          severity: mapCommentTypeToSeverity(item.commentType),
-          reviewer: item.pocName || item.reviewer || 'Unknown',
-          reviewerId: item.pocEmail || item.reviewerId || 'unknown',
-          location: {
-            page: parseInt(item.page) || 1,
-            paragraph: parseInt(item.paragraphNumber) || 1,
-            line: parseInt(item.lineNumber) || 1
-          },
-          originalText: item.changeFrom || item.originalText || '',
-          suggestedText: item.changeTo || item.suggestedText || '',
-          createdAt: item.createdAt || new Date().toISOString(),
-          status: item.status || 'pending',
-          selected: false
-        }));
+      // Debug log to see what we received
+      console.log('🔍 OPRFeedbackProcessorV2Enhanced - loadFeedback called with:', {
+        hasInitialFeedback: !!initialFeedback,
+        initialFeedbackLength: initialFeedback?.length || 0,
+        initialFeedbackData: initialFeedback
+      });
 
-        setFeedbackItems(items.filter(item => item.status === 'pending'));
-        lastSyncTimeRef.current = new Date();
+      // Use initialFeedback if provided, otherwise fetch from API
+      let feedback = [];
+      if (initialFeedback && initialFeedback.length > 0) {
+        console.log('✅ Using initialFeedback - not making API call');
+        feedback = initialFeedback;
+      } else if (!initialFeedback) {
+        console.log('⚠️ No initialFeedback provided, fetching from API');
+        const response = await api.get(`/api/documents/${documentId}/feedback`);
+        if (response.ok) {
+          const data = await response.json();
+          feedback = data.crmFeedback || data.draftFeedback || [];
+        }
       }
+
+      // Convert to FeedbackItem format with location data
+      const items: FeedbackItem[] = feedback.map((item: any) => {
+        console.log('🔍 Processing feedback item:', item);
+        return {
+        id: item.id || Math.random().toString(),
+        content: item.coordinatorComment || item.comment || item.content || item.text || '',
+        severity: mapCommentTypeToSeverity(item.commentType || item.severity || 'S'),
+        reviewer: item.pocName || item.reviewer || 'Unknown',
+        reviewerId: item.pocEmail || item.reviewerId || 'unknown',
+        location: {
+          page: parseInt(item.page) || 1,
+          paragraph: parseInt(item.paragraphNumber) || 1,
+          line: parseInt(item.lineNumber) || 1
+        },
+        originalText: item.changeFrom || item.originalText || '',
+        suggestedText: item.changeTo || item.suggestedText || '',
+        createdAt: item.createdAt || new Date().toISOString(),
+        status: item.status || 'pending',
+        selected: false
+      };
+    });
+
+      console.log('📋 Converted feedback items:', {
+        totalItems: items.length,
+        itemsWithPendingStatus: items.filter(item => item.status === 'pending').length,
+        allStatuses: Array.from(new Set(items.map(item => item.status))),
+        firstItem: items[0]
+      });
+
+      // Show all feedback items, not just pending ones
+      setFeedbackItems(items);
+      lastSyncTimeRef.current = new Date();
+      setLastSyncTime(new Date().toLocaleTimeString());
     } catch (error) {
       console.error('Error loading feedback:', error);
       setErrorDetails(prev => [...prev, {
@@ -337,6 +378,7 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
       if (result.conflicts.length > 0) {
         const newConflicts = result.conflicts.map(c => ({
           ...c,
+          originalText: '', // Add empty originalText
           items: items.filter(f =>
             c.items.some(ci => ci.feedbackId === f.id)
           )
@@ -531,6 +573,53 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
     }
   };
 
+  // Generate AI feedback
+  const generateAIFeedback = async () => {
+    setGeneratingAIFeedback(true);
+    try {
+      const response = await api.post('/api/generate-ai-feedback', {
+        documentId,
+        documentContent,
+        documentType: 'OPR' // Officer Performance Report
+      });
+
+      if (response.ok) {
+        const aiGeneratedFeedback = await response.json();
+
+        // Convert AI feedback to our FeedbackItem format
+        const aiFeedbackItems: FeedbackItem[] = aiGeneratedFeedback.feedback.map((item: any, index: number) => ({
+          id: `ai_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+          content: item.comment || item.content,
+          severity: item.severity || 'SUBSTANTIVE',
+          reviewer: 'AI Assistant',
+          reviewerId: 'ai-system',
+          location: {
+            page: item.page || 1,
+            paragraph: item.paragraph || index + 1,
+            line: item.line || 1,
+            characterOffset: 0
+          },
+          originalText: item.originalText || '',
+          suggestedText: item.suggestedText || item.suggestion || '',
+          createdAt: new Date().toISOString(),
+          status: 'pending',
+          selected: false,
+          metadata: { source: 'ai-generated' }
+        }));
+
+        setFeedbackItems(prev => [...prev, ...aiFeedbackItems]);
+        setSuccessMessage(`Generated ${aiFeedbackItems.length} AI feedback items`);
+      } else {
+        setErrorMessage('Failed to generate AI feedback');
+      }
+    } catch (error) {
+      console.error('Error generating AI feedback:', error);
+      setErrorMessage('Failed to generate AI feedback');
+    } finally {
+      setGeneratingAIFeedback(false);
+    }
+  };
+
   // Render Version History
   const renderVersionHistory = () => (
     <Dialog
@@ -629,7 +718,7 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
         {errorDetails.slice(-5).map((error, index) => (
           <Box key={index} sx={{ mb: 1 }}>
             <Typography variant="caption">
-              {error.timestamp.toLocaleTimeString()}: {error.error}
+              {mounted && error.timestamp ? error.timestamp.toLocaleTimeString() : 'Error'}: {error.error}
             </Typography>
           </Box>
         ))}
@@ -666,9 +755,11 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
           variant="outlined"
         />
       )}
-      <Typography variant="caption" color="text.secondary">
-        Last sync: {lastSyncTimeRef.current.toLocaleTimeString()}
-      </Typography>
+      {mounted && (
+        <Typography variant="caption" color="text.secondary">
+          Last sync: {lastSyncTime || 'Not synced'}
+        </Typography>
+      )}
     </Box>
   );
 
@@ -686,10 +777,18 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
   // Render feedback by severity with enhancements
   const renderFeedbackBySeverity = (severity: string) => {
     const items = feedbackItems.filter(
-      item => item.severity === severity && item.status === 'pending'
+      item => item.severity === severity
     );
 
-    if (items.length === 0) return null;
+    console.log(`🔍 Rendering ${severity} feedback:`, {
+      severity,
+      itemsFound: items.length,
+      allSeverities: feedbackItems.map(i => i.severity),
+      items: items
+    });
+
+    // Always show the accordion even if empty for debugging
+    // if (items.length === 0) return null;
 
     const severityColors = {
       CRITICAL: 'error',
@@ -743,18 +842,7 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
                       </Typography>
                     </Box>
                   }
-                  secondary={
-                    <Box sx={{ mt: 1 }}>
-                      <Chip
-                        label={item.reviewer}
-                        size="small"
-                        sx={{ mr: 1 }}
-                      />
-                      <Typography variant="caption" color="text.secondary">
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </Typography>
-                    </Box>
-                  }
+                  secondary={`${item.reviewer} • ${new Date(item.createdAt).toLocaleDateString()}`}
                 />
               </ListItem>
             ))}
@@ -763,6 +851,13 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
       </Accordion>
     );
   };
+
+  console.log('🎨 COMPONENT RENDER:', {
+    feedbackItemsLength: feedbackItems.length,
+    feedbackItems: feedbackItems,
+    loading,
+    tabValue
+  });
 
   return (
     <Paper sx={{ p: 3 }}>
@@ -794,6 +889,43 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
             value={processingProgress}
             sx={{ mt: 2 }}
           />
+        )}
+      </Box>
+
+      {/* Mode Toggle */}
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Typography variant="subtitle1">Feedback Mode:</Typography>
+        <ToggleButtonGroup
+          value={feedbackMode}
+          exclusive
+          onChange={(_, newMode) => newMode && setFeedbackMode(newMode)}
+          size="small"
+        >
+          <ToggleButton value="manual">
+            <ManualIcon sx={{ mr: 1 }} />
+            Manual
+          </ToggleButton>
+          <ToggleButton value="ai">
+            <GenerateAIIcon sx={{ mr: 1 }} />
+            AI
+          </ToggleButton>
+          <ToggleButton value="hybrid">
+            <HybridIcon sx={{ mr: 1 }} />
+            Hybrid
+          </ToggleButton>
+        </ToggleButtonGroup>
+
+        {/* Generate AI Feedback Button */}
+        {(feedbackMode === 'ai' || feedbackMode === 'hybrid') && (
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={generatingAIFeedback ? <CircularProgress size={16} /> : <GenerateAIIcon />}
+            onClick={generateAIFeedback}
+            disabled={generatingAIFeedback || loading}
+          >
+            {generatingAIFeedback ? 'Generating...' : 'Generate AI Feedback'}
+          </Button>
         )}
       </Box>
 
@@ -933,8 +1065,8 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                   <CircularProgress />
                 </Box>
-              ) : feedbackItems.filter(i => i.status === 'pending').length === 0 ? (
-                <Alert severity="info">No pending feedback items</Alert>
+              ) : feedbackItems.length === 0 ? (
+                <Alert severity="info">No feedback items available</Alert>
               ) : (
                 <>
                   {renderFeedbackBySeverity('CRITICAL')}
@@ -977,15 +1109,16 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
                         <List dense>
                           {conflict.items.map(item => (
                             <ListItem key={item.id}>
-                              <ListItemText
-                                primary={item.suggestedText}
-                                secondary={
-                                  <Box>
-                                    <Chip label={item.reviewer} size="small" sx={{ mr: 1 }} />
-                                    <Chip label={item.severity} size="small" />
-                                  </Box>
-                                }
-                              />
+                              <Box>
+                                <ListItemText
+                                  primary={item.suggestedText}
+                                  secondary={`${item.reviewer} • ${item.severity}`}
+                                />
+                                <Box sx={{ mt: 1 }}>
+                                  <Chip label={item.reviewer} size="small" sx={{ mr: 1 }} />
+                                  <Chip label={item.severity} size="small" />
+                                </Box>
+                              </Box>
                               <ListItemSecondaryAction>
                                 <Button
                                   size="small"

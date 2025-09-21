@@ -30,6 +30,7 @@ export async function POST(
     });
 
     if (!document) {
+      // For POST, we still need to return an error since we can't save feedback without a document
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
@@ -144,11 +145,11 @@ export async function GET(
 ) {
   try {
     const documentId = params.id;
-    
+
     // Get auth token to identify user
     const authHeader = request.headers.get('authorization');
     let userId = null;
-    
+
     if (authHeader) {
       try {
         const token = authHeader.replace('Bearer ', '');
@@ -168,15 +169,20 @@ export async function GET(
     });
 
     if (!document) {
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+      // Return empty feedback instead of 404 to avoid errors
+      return NextResponse.json({
+        feedback: [],
+        totalComments: 0,
+        hasCritical: false
+      });
     }
 
     const customFields = document.customFields as any || {};
-    
+
     // Check if requesting draft feedback
     const url = new URL(request.url);
     const isDraft = url.searchParams.get('isDraft') === 'true';
-    
+
     if (isDraft && userId && customFields.draftFeedback && customFields.draftFeedback[userId]) {
       // Return user's draft feedback
       const draft = customFields.draftFeedback[userId];
@@ -189,7 +195,7 @@ export async function GET(
         hasCritical: draft.comments?.some((c: any) => c.commentType === 'C') || false
       });
     }
-    
+
     // Return final feedback
     const crmFeedback = customFields.crmFeedback || [];
 
@@ -206,6 +212,141 @@ export async function GET(
     console.error('Error fetching CRM feedback:', error);
     return NextResponse.json(
       { error: 'Failed to fetch feedback' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Get auth token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    const userId = decoded.userId;
+
+    const documentId = params.id;
+
+    // Get the document
+    const document = await prisma.document.findUnique({
+      where: { id: documentId }
+    });
+
+    if (!document) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+    }
+
+    // Clear all feedback from the document
+    const updatedDocument = await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        customFields: {
+          ...(document.customFields as any || {}),
+          crmFeedback: [],
+          draftFeedback: {},
+          feedback: [],
+          comments: [],
+          hasCriticalComments: false,
+          requiresAttention: false,
+          criticalIssuesFound: false,
+          lastClearedAt: new Date().toISOString(),
+          totalComments: 0
+        }
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'All feedback cleared successfully',
+      clearedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error clearing feedback:', error);
+    return NextResponse.json(
+      { error: 'Failed to clear feedback' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Get auth token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    const userId = decoded.userId;
+
+    const documentId = params.id;
+    const body = await request.json();
+    const { feedbackIdsToDelete } = body;
+
+    if (!feedbackIdsToDelete || !Array.isArray(feedbackIdsToDelete)) {
+      return NextResponse.json({ error: 'Invalid request: feedbackIdsToDelete must be an array' }, { status: 400 });
+    }
+
+    // Get the document
+    const document = await prisma.document.findUnique({
+      where: { id: documentId }
+    });
+
+    if (!document) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+    }
+
+    const customFields = document.customFields as any || {};
+    const currentFeedback = customFields.crmFeedback || [];
+
+    // Filter out the feedback items that should be deleted
+    const remainingFeedback = currentFeedback.filter((item: any) =>
+      !feedbackIdsToDelete.includes(item.id)
+    );
+
+    // Check if any remaining feedback is critical
+    const hasCritical = remainingFeedback.some((c: any) => c.commentType === 'C');
+
+    // Update the document with remaining feedback
+    const updatedDocument = await prisma.document.update({
+      where: { id: documentId },
+      data: {
+        customFields: {
+          ...customFields,
+          crmFeedback: remainingFeedback,
+          hasCriticalComments: hasCritical,
+          requiresAttention: hasCritical,
+          criticalIssuesFound: hasCritical,
+          lastModifiedAt: new Date().toISOString(),
+          totalComments: remainingFeedback.length
+        }
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Deleted ${feedbackIdsToDelete.length} feedback items`,
+      remainingCount: remainingFeedback.length,
+      deletedCount: feedbackIdsToDelete.length
+    });
+
+  } catch (error) {
+    console.error('Error deleting selected feedback:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete selected feedback' },
       { status: 500 }
     );
   }

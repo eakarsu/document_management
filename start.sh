@@ -132,12 +132,12 @@ stop_existing_services() {
     fi
     
     # Kill any processes using our target ports - more aggressive cleanup
-    for port in 3000 4000 5432 9000 9200 6379; do
+    for port in 3000 3001 3002 3003 3004 4000 4001 4002 4003 5432 9000 9200 6379; do
         if port_in_use $port; then
             local pids=$(lsof -ti:$port 2>/dev/null || echo "")
             if [ -n "$pids" ]; then
-                # Only kill processes on 3000 and 4000 (our app ports)
-                if [ $port -eq 3000 ] || [ $port -eq 4000 ]; then
+                # Kill processes on our app ports (3000-3004 and 4000-4003)
+                if [ $port -ge 3000 -a $port -le 3004 ] || [ $port -ge 4000 -a $port -le 4003 ]; then
                     print_info "Freeing application port $port..."
                     echo "$pids" | while read -r pid; do
                         if [ -n "$pid" ]; then
@@ -421,7 +421,7 @@ main() {
     fi
 
     # Double-check ports are free
-    for port in 3000 4000; do
+    for port in 3000 3001 3002 3003 3004 4000 4001 4002 4003; do
         if port_in_use $port; then
             print_warning "Port $port is still in use after cleanup, attempting final cleanup..."
             local pids=$(lsof -ti:$port 2>/dev/null || echo "")
@@ -755,7 +755,7 @@ case "${1:-}" in
         pkill -f "nodemon" 2>/dev/null || true
         
         # Kill processes on our ports
-        for port in 3000 4000; do
+        for port in 3000 3001 3002 3003 3004 4000 4001 4002 4003; do
             if port_in_use $port; then
                 pids=$(lsof -ti:$port 2>/dev/null || echo "")
                 if [ -n "$pids" ]; then
@@ -812,12 +812,19 @@ case "${1:-}" in
         # Check ports
         echo ""
         print_info "Port Status:"
-        for port in 3000 4000 5432 9000 9200 6379; do
+        for port in 3000 3001 3002 3003 3004 4000 4001 4002 4003 5432 9000 9200 6379; do
             if port_in_use $port; then
                 service_name=""
                 case $port in
-                    3000) service_name=" (Frontend)" ;;
-                    4000) service_name=" (Backend API)" ;;
+                    3000) service_name=" (Frontend - Primary)" ;;
+                    3001) service_name=" (Frontend - Alt 1)" ;;
+                    3002) service_name=" (Frontend - Alt 2)" ;;
+                    3003) service_name=" (Frontend - Alt 3)" ;;
+                    3004) service_name=" (Frontend - Alt 4)" ;;
+                    4000) service_name=" (Backend API - Primary)" ;;
+                    4001) service_name=" (Backend API - Alt 1)" ;;
+                    4002) service_name=" (Backend API - Alt 2)" ;;
+                    4003) service_name=" (Backend API - Alt 3)" ;;
                     5432) service_name=" (PostgreSQL)" ;;
                     9000) service_name=" (MinIO)" ;;
                     9200) service_name=" (Elasticsearch)" ;;

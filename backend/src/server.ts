@@ -36,7 +36,7 @@ import workflowRouter from './routes/workflow';
 import workflowsRouter from './routes/workflows';
 import usersRouter from './routes/users';
 import attachmentsRouter from './routes/attachments';
-// import versionsRouter from './routes/versions';
+import versionsRouter from './routes/versions';
 import { DocumentService } from './services/DocumentService';
 import { AuthService } from './services/AuthService';
 import { SearchService } from './services/SearchService';
@@ -267,7 +267,7 @@ async function startServer() {
     app.use('/api', attachmentsRouter);
 
     // Version control routes
-    // app.use('/api', versionsRouter);
+    app.use('/api', versionsRouter);
 
     // ===== AUTHENTICATION ENDPOINTS =====
     

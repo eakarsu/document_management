@@ -10,6 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'richmond-dms-secret-key';
 // Test data
 const testDocumentId = 'test-doc-version-control';
 const testUserId = 'test-user-opr';
+const testOrgId = 'test-org-version-control';
 
 // Generate test token
 const generateToken = (userId: string, email: string, role: string) => {
@@ -32,24 +33,33 @@ describe('Feedback Version Control API Tests', () => {
       create: {
         id: testUserId,
         email: 'test-opr@test.com',
-        name: 'Test OPR User',
-        password: 'hashed-password',
-        role: 'OPR'
+        firstName: 'Test',
+        lastName: 'OPR',
+        passwordHash: 'hashed-password',
+        organizationId: 'cmfmkdk9m000081e6fegn6zjk', // Test org
+        roleId: 'cmfmkersn0008136c23r791aw' // OPR role ID
       }
     });
 
     // Generate auth token
-    authToken = generateToken(testUser.id, testUser.email, testUser.role);
+    authToken = generateToken(testUser.id, testUser.email, 'OPR');
 
     // Create test document with feedback
     const testDocument = await prisma.document.create({
       data: {
         id: testDocumentId,
         title: 'Test Document for Version Control',
-        content: '<h1>Test Document</h1><p>This is paragraph 1 with some original text.</p><p>This is paragraph 2 with more content.</p>',
+        description: '<h1>Test Document</h1><p>This is paragraph 1 with some original text.</p><p>This is paragraph 2 with more content.</p>',
         category: 'TEST',
         status: 'IN_REVIEW',
-        authorId: testUserId,
+        createdById: testUserId,
+        organizationId: testOrgId,
+        fileName: 'test-version-control.pdf',
+        originalName: 'test-version-control.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 2048,
+        checksum: Math.random().toString(36),
+        storagePath: '/test/version-control',
         customFields: {
           draftFeedback: [
             {

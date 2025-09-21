@@ -131,6 +131,70 @@ export async function PATCH(
   try {
     const body = await request.json();
 
+    // If updating customFields with draftFeedback, handle it locally using direct database connection
+    if (body.customFields && body.customFields.draftFeedback !== undefined) {
+      const { Pool } = await import('pg');
+
+      const pool = new Pool({
+        user: 'postgres',
+        host: 'localhost',
+        database: 'dms_dev',
+        password: 'postgres',
+        port: 5432,
+      });
+
+      try {
+        // Get existing document - column name is "customFields" not "custom_fields"
+        const result = await pool.query(
+          'SELECT "customFields" FROM documents WHERE id = $1',
+          [params.id]
+        );
+
+        if (result.rows.length === 0) {
+          await pool.end();
+          return NextResponse.json({
+            success: false,
+            error: 'Document not found'
+          }, { status: 404 });
+        }
+
+        // Merge customFields
+        const existingCustomFields = result.rows[0].customFields || {};
+        const updatedCustomFields = {
+          ...existingCustomFields,
+          ...body.customFields
+        };
+
+        // Update document - column name is "customFields" not "custom_fields"
+        const updateResult = await pool.query(
+          'UPDATE documents SET "customFields" = $1 WHERE id = $2 RETURNING "customFields"',
+          [JSON.stringify(updatedCustomFields), params.id]
+        );
+
+        console.log('Updated customFields with draftFeedback:', {
+          documentId: params.id,
+          feedbackCount: updatedCustomFields.draftFeedback?.length || 0,
+          updated: updateResult.rowCount > 0
+        });
+
+        await pool.end();
+
+        return NextResponse.json({
+          success: true,
+          message: 'Feedback updated successfully',
+          customFields: updateResult.rows[0]?.customFields
+        });
+      } catch (dbError) {
+        await pool.end();
+        console.error('Database update error:', dbError);
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to update document'
+        }, { status: 500 });
+      }
+    }
+
+    // For other updates, forward to backend
     // Get token from cookies or headers
     let token = request.cookies.get('token')?.value || request.cookies.get('accessToken')?.value;
 

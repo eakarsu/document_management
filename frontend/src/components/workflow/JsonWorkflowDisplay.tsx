@@ -281,10 +281,9 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       if (onWorkflowChange) {
         onWorkflowChange({
           active: false,
-          isActive: false,
           workflowId: null,
           message: 'Workflow reset. Start a new workflow to continue.'
-        });
+        } as WorkflowInstance);
       }
 
       // Success message
@@ -356,7 +355,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       setError(null);
 
       const response = await api.post(`/api/workflows/documents/${documentId}/submit-review`, {
-        workflowInstanceId: workflowInstance?.id,
+        workflowInstanceId: (workflowInstance as any)?.id,
         feedback,
         approved
       });
@@ -385,8 +384,8 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     if (stage.roles) {
       return stage.roles.some(r => r?.toLowerCase() === userRole?.toLowerCase());
     }
-    if (stage.assignedRole) {
-      return stage.assignedRole.toLowerCase() === userRole?.toLowerCase();
+    if ((stage as any).assignedRole) {
+      return (stage as any).assignedRole.toLowerCase() === userRole?.toLowerCase();
     }
     return false;
   };
@@ -410,9 +409,9 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       userRole,
       normalizedRole,
       currentStageId: currentStage.id,
-      currentStageAssignedRole: currentStage.assignedRole,
+      currentStageAssignedRole: (currentStage as any).assignedRole,
       isStage10: currentStage.id === '10',
-      stageRequiresAFDPO: currentStage.assignedRole === 'AFDPO'
+      stageRequiresAFDPO: (currentStage as any).assignedRole === 'AFDPO'
     });
 
     const isAdmin = normalizedRole === 'ADMIN';
@@ -434,7 +433,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       isActionOfficer,
       currentStageId: workflowInstance?.currentStageId,
       currentStageName: currentStage?.name,
-      currentStageAssignedRole: currentStage?.assignedRole,
+      currentStageAssignedRole: (currentStage as any)?.assignedRole,
       canPublish
     });
 
@@ -442,19 +441,19 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     // OPR/Leadership should be able to act as ACTION_OFFICER for feedback incorporation stages
     const userCanAct = isAdmin ||
                        (currentStage.roles && currentStage.roles.some(r => r.toUpperCase() === normalizedRole)) ||
-                       (currentStage.assignedRole && currentStage.assignedRole.toUpperCase() === normalizedRole) ||
-                       (isActionOfficer && currentStage.assignedRole === 'ACTION_OFFICER') ||
-                       (isAFDPO && currentStage.assignedRole === 'AFDPO') || // AFDPO can act on AFDPO stages
+                       ((currentStage as any).assignedRole && (currentStage as any).assignedRole.toUpperCase() === normalizedRole) ||
+                       (isActionOfficer && (currentStage as any).assignedRole === 'ACTION_OFFICER') ||
+                       (isAFDPO && (currentStage as any).assignedRole === 'AFDPO') || // AFDPO can act on AFDPO stages
                        ((isOPR || isLeadership) && (currentStage.id === '4' || currentStage.id === '3.5' || currentStage.id === '6' ||
                                   currentStage.id === '8' || // Post-Legal OPR Update
-                                  currentStage.assignedRole === 'ACTION_OFFICER' || // OPR/Leadership can act as Action Officer
+                                  (currentStage as any).assignedRole === 'ACTION_OFFICER' || // OPR/Leadership can act as Action Officer
                                   currentStage.name?.toLowerCase().includes('review collection')));
 
     console.log('🎯 USER CAN ACT?', {
       userCanAct,
       isAFDPO,
       isAdmin,
-      currentStageAssignedRole: currentStage.assignedRole
+      currentStageAssignedRole: (currentStage as any).assignedRole
     });
 
     // Get all defined actions for this stage
@@ -470,7 +469,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
             label: label,
             target: currentStage.id, // Actions don't change stage, transitions do
             disabled: !userCanAct,
-            disabledReason: !userCanAct ? `This action requires ${currentStage.roles?.join(' or ') || currentStage.assignedRole || 'appropriate'} role` : undefined
+            disabledReason: !userCanAct ? `This action requires ${currentStage.roles?.join(' or ') || (currentStage as any).assignedRole || 'appropriate'} role` : undefined
           };
         } else {
           // Handle object actions with existing properties
@@ -480,7 +479,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
             label: (action as any).label || (action as any).name || 'Action',
             target: (action as any).nextStage || currentStage.id, // Use nextStage if it exists, otherwise stay on current stage
             disabled: !userCanAct,
-            disabledReason: !userCanAct ? `This action requires ${currentStage.roles?.join(' or ') || currentStage.assignedRole || 'appropriate'} role` : undefined
+            disabledReason: !userCanAct ? `This action requires ${currentStage.roles?.join(' or ') || (currentStage as any).assignedRole || 'appropriate'} role` : undefined
           };
         }
       });
@@ -532,7 +531,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         // Remove "Submit Review" action for coordinators - they only need management buttons
         actions = actions.filter(action => {
           const shouldRemove = action.label?.toLowerCase() === 'submit review' ||
-                               action.type === 'REVIEW_SUBMIT';
+                               (action as any).type === 'REVIEW_SUBMIT';
           if (shouldRemove) {
             console.log('   ❌ Removing action:', action.label);
           }
@@ -631,9 +630,9 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         // OPR/Leadership can act as ACTION_OFFICER for feedback incorporation stages
         const canPerformAction = userCanAct && (
           (currentStage.roles && currentStage.roles.some(r => r.toUpperCase() === normalizedRole)) ||
-          (currentStage.assignedRole && currentStage.assignedRole.toUpperCase() === normalizedRole) ||
+          ((currentStage as any).assignedRole && (currentStage as any).assignedRole.toUpperCase() === normalizedRole) ||
           ((isOPR || isLeadership) && (currentStage.id === '4' || currentStage.id === '6' || currentStage.id === '8' ||
-                     currentStage.assignedRole === 'ACTION_OFFICER' ||
+                     (currentStage as any).assignedRole === 'ACTION_OFFICER' ||
                      currentStage.name?.toLowerCase().includes('review collection')))
         );
         actions.push({
@@ -641,7 +640,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
           label: transition.label || `Submit to ${targetStage?.name || 'Next Stage'}`,
           target: transition.to,
           disabled: !canPerformAction,
-          disabledReason: !canPerformAction ? `This action requires ${currentStage.roles?.join(' or ') || currentStage.assignedRole || 'OPR'} role` : undefined
+          disabledReason: !canPerformAction ? `This action requires ${currentStage.roles?.join(' or ') || (currentStage as any).assignedRole || 'OPR'} role` : undefined
         });
       }
     });
@@ -888,7 +887,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   const isFinalStage = (workflowDef?.id === 'hierarchical-distributed-workflow' && currentStage?.id === '10') ||
                        (workflowDef?.id === 'opr-review-workflow' && currentStage?.order === 8) ||
                        currentStage?.type === 'AFDPO_FINAL' ||
-                       currentStage?.assignedRole === 'AFDPO';
+                       (currentStage as any)?.assignedRole === 'AFDPO';
   // Only mark as complete if workflow instance is actually completed, not just at final stage
   const isWorkflowComplete = !isActive && isFinalStage;
   
@@ -1203,7 +1202,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
                           // Special handling for DISTRIBUTE action type
                           if (action.label.toLowerCase().includes('distribute') ||
-                              action.type === 'DISTRIBUTE' ||
+                              (action as any).type === 'DISTRIBUTE' ||
                               (workflowInstance?.currentStageId === '3' &&
                                (userRole === 'Coordinator' || userRole === 'COORDINATOR'))) {
                             setDistributionModalOpen(true);
@@ -1212,7 +1211,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
                           // Special handling for Stage 3.5 review submission
                           if (workflowInstance?.currentStageId === '3.5' &&
-                              action.type === 'REVIEW_SUBMIT') {
+                              (action as any).type === 'REVIEW_SUBMIT') {
                             // Navigate to Review & CRM page instead of showing popup
                             window.location.href = `/documents/${documentId}/review`;
                             return;
@@ -1220,16 +1219,16 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
                           // Special handling for AFDPO actions in Stage 10
                           if (workflowInstance?.currentStageId === '10' &&
-                              (action.type === 'PUBLISH' || action.type === 'ARCHIVE' || action.id === 'final_check')) {
-                            console.log('🚀 Processing AFDPO action:', action.name, action.type);
+                              ((action as any).type === 'PUBLISH' || (action as any).type === 'ARCHIVE' || action.id === 'final_check')) {
+                            console.log('🚀 Processing AFDPO action:', (action as any).name, (action as any).type);
 
-                            if (action.type === 'PUBLISH') {
+                            if ((action as any).type === 'PUBLISH') {
                               // Complete the workflow when publishing
                               advanceWorkflow(null, action.label, { completeWorkflow: true });
-                            } else if (action.type === 'REVIEW' || action.id === 'final_check') {
+                            } else if ((action as any).type === 'REVIEW' || action.id === 'final_check') {
                               // Final Publication Check - just show a confirmation
                               alert('Final publication check completed. Document is ready for publication.');
-                            } else if (action.type === 'ARCHIVE') {
+                            } else if ((action as any).type === 'ARCHIVE') {
                               // Archive the document and complete workflow
                               advanceWorkflow(null, action.label, { completeWorkflow: true, archive: true });
                             }

@@ -60,7 +60,7 @@ import {
   History as HistoryIcon,
   Compare as CompareIcon,
   MergeType as MergeIcon,
-  Track as TrackChangesIcon,
+  TrackChanges as TrackChangesIcon,
   Undo as UndoIcon,
   Redo as RedoIcon,
   LocationOn as LocationIcon
@@ -216,14 +216,15 @@ const OPRFeedbackProcessorV2: React.FC<OPRFeedbackProcessorV2Props> = ({
       setAppliedChanges(result.applied);
       setConflicts(result.conflicts.map(c => ({
         ...c,
+        originalText: '', // Add empty originalText for now
         items: feedbackItems.filter(f =>
           c.items.some(ci => ci.feedbackId === f.id)
         )
       })));
 
       // Update document content if changes were applied
-      if (result.applied.length > 0 && result.newContent) {
-        setPreviewContent(result.newContent);
+      if (result.applied.length > 0 && (result as any).newContent) {
+        setPreviewContent((result as any).newContent);
         setShowPreview(true);
       }
 
@@ -420,7 +421,7 @@ const OPRFeedbackProcessorV2: React.FC<OPRFeedbackProcessorV2Props> = ({
                     label="Applied"
                     color="success"
                     size="small"
-                    icon={<CheckCircle />}
+                    icon={<ApproveIcon />}
                   />
                 )}
               </ListItem>
@@ -618,7 +619,7 @@ const OPRFeedbackProcessorV2: React.FC<OPRFeedbackProcessorV2Props> = ({
             {appliedChanges.map(change => (
               <ListItem key={change.id}>
                 <ListItemIcon>
-                  <CheckCircle color="success" />
+                  <ApproveIcon color="success" />
                 </ListItemIcon>
                 <ListItemText
                   primary={`Changed: "${change.originalText}" → "${change.actualAppliedText}"`}

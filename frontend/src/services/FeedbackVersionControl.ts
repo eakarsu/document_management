@@ -6,6 +6,8 @@
  * and version control, handling multiple overlapping feedback items.
  */
 
+import { api } from '../lib/api';
+
 export interface DocumentPosition {
   page: number;
   paragraph: number;
@@ -42,6 +44,8 @@ export interface DocumentVersion {
   positionMap: Map<string, PositionAdjustment>;
   content?: string;
   parentVersionId?: string;
+  description?: string;
+  metadata?: any;
 }
 
 export interface PositionAdjustment {
@@ -55,17 +59,33 @@ export class FeedbackVersionControl {
   private currentVersion: DocumentVersion | null = null;
   private positionTracker: Map<string, PositionAdjustment> = new Map();
   private changeHistory: FeedbackChange[] = [];
+  private versions: DocumentVersion[] = [];
 
   /**
    * Initialize with current document version
    */
   async initialize(documentId: string, currentContent: string): Promise<void> {
-    // Load current version from backend
-    const response = await fetch(`/api/documents/${documentId}/versions/latest`);
-    if (response.ok) {
-      this.currentVersion = await response.json();
-      this.rebuildPositionMap();
-    } else {
+    try {
+      // Load current version from backend
+      const response = await api.get(`/api/documents/${documentId}/versions/latest`);
+      if (response.ok) {
+        this.currentVersion = await response.json();
+        this.rebuildPositionMap();
+      } else {
+        // Create initial version
+        this.currentVersion = {
+          id: `v1_${Date.now()}`,
+          documentId,
+          versionNumber: 1,
+          createdAt: new Date().toISOString(),
+          createdBy: 'system',
+          changes: [],
+          positionMap: new Map(),
+          content: currentContent
+        };
+      }
+    } catch (error) {
+      console.log('No existing version found, creating initial version');
       // Create initial version
       this.currentVersion = {
         id: `v1_${Date.now()}`,
@@ -96,7 +116,8 @@ export class FeedbackVersionControl {
     const results: ApplyResult = {
       applied: [],
       conflicts: [],
-      adjustments: []
+      adjustments: [],
+      newContent: undefined
     };
 
     let workingContent = documentContent;
@@ -109,7 +130,7 @@ export class FeedbackVersionControl {
           workingContent
         );
 
-        if (result.success) {
+        if (result.success && result.change && result.newContent) {
           results.applied.push(result.change);
           workingContent = result.newContent;
 
@@ -126,6 +147,7 @@ export class FeedbackVersionControl {
     // Create new version with all changes
     if (results.applied.length > 0) {
       await this.createNewVersion(results.applied, workingContent);
+      results.newContent = workingContent;
     }
 
     return results;
@@ -202,7 +224,7 @@ export class FeedbackVersionControl {
     const delta = this.calculateDelta(change.originalText, change.suggestedText || '');
 
     // Update all positions that come after this change
-    for (const [key, adjustment] of this.positionTracker.entries()) {
+    for (const [key, adjustment] of Array.from(this.positionTracker.entries())) {
       const pos = adjustment.currentPosition;
 
       // If position is after the change, adjust it
@@ -371,11 +393,11 @@ export class FeedbackVersionControl {
     };
 
     // Save to backend
-    await fetch(`/api/documents/${newVersion.documentId}/versions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newVersion)
-    });
+    try {
+      await api.post(`/api/documents/${newVersion.documentId}/versions`, newVersion);
+    } catch (error) {
+      console.log('Version save endpoint not available yet');
+    }
 
     this.currentVersion = newVersion;
     this.changeHistory.push(...changes);
@@ -451,10 +473,66 @@ export class FeedbackVersionControl {
       modified: []
     };
   }
+
+  /**
+   * Get the latest version
+   */
+  async getLatestVersion(): Promise<DocumentVersion | null> {
+    return this.currentVersion;
+  }
+
+  /**
+   * Get version history
+   */
+  async getVersionHistory(): Promise<DocumentVersion[]> {
+    return this.versions;
+  }
+
+  /**
+   * Create a new version
+   */
+  async createVersion(
+    content: string,
+    changes: FeedbackChange[],
+    metadata?: any
+  ): Promise<DocumentVersion> {
+    const version: DocumentVersion = {
+      id: `v${Date.now()}`,
+      documentId: this.currentVersion?.documentId || '',
+      versionNumber: this.versions.length + 1,
+      content,
+      changes,
+      createdAt: new Date().toISOString(),
+      createdBy: metadata?.userId || 'system',
+      description: metadata?.description || `Version ${this.versions.length + 1}`,
+      metadata,
+      positionMap: new Map(this.positionTracker)
+    };
+
+    this.versions.push(version);
+    this.currentVersion = version;
+
+    return version;
+  }
+
+  /**
+   * Revert to a specific version
+   */
+  async revertToVersion(versionId: string): Promise<string> {
+    const version = this.versions.find(v => v.id === versionId);
+    if (!version) {
+      throw new Error(`Version ${versionId} not found`);
+    }
+
+    this.currentVersion = version;
+    this.rebuildPositionMap();
+
+    return version.content;
+  }
 }
 
 // Type definitions
-interface FeedbackItem {
+export interface FeedbackItem {
   id: string;
   location: DocumentPosition;
   originalText: string;
@@ -463,9 +541,12 @@ interface FeedbackItem {
   reviewer: string;
   reviewerId: string;
   createdAt: string;
+  content?: string;
+  status?: 'pending' | 'applied' | 'conflicted' | 'rejected';
+  selected?: boolean;
 }
 
-interface FeedbackGroup {
+export interface FeedbackGroup {
   location: DocumentPosition;
   items: FeedbackItem[];
   span: {
@@ -474,7 +555,7 @@ interface FeedbackGroup {
   };
 }
 
-interface SingleChangeResult {
+export interface SingleChangeResult {
   success: boolean;
   change?: FeedbackChange;
   newContent?: string;
@@ -482,13 +563,14 @@ interface SingleChangeResult {
   error?: string;
 }
 
-interface ApplyResult {
+export interface ApplyResult {
   applied: FeedbackChange[];
   conflicts: FeedbackConflict[];
   adjustments: PositionAdjustment[];
+  newContent?: string;
 }
 
-interface FeedbackConflict {
+export interface FeedbackConflict {
   id: string;
   location: DocumentPosition;
   items: Array<{
@@ -499,9 +581,10 @@ interface FeedbackConflict {
   }>;
   needsResolution: boolean;
   createdAt: string;
+  originalText?: string;
 }
 
-interface VersionDiff {
+export interface VersionDiff {
   added: FeedbackChange[];
   removed: FeedbackChange[];
   modified: FeedbackChange[];
