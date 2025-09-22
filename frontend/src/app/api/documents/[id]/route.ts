@@ -112,15 +112,24 @@ export async function DELETE(
       const responseData = await backendResponse.json();
       return NextResponse.json(responseData);
     } else {
-      const errorData = await backendResponse.json();
+      // Try to parse error response, but handle case where it's not JSON
+      let errorData;
+      try {
+        errorData = await backendResponse.json();
+      } catch {
+        errorData = {
+          success: false,
+          error: `Backend error: ${backendResponse.statusText}`
+        };
+      }
       return NextResponse.json(errorData, { status: backendResponse.status });
     }
 
   } catch (error) {
     console.error('Delete API error:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Internal server error' 
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error'
     }, { status: 500 });
   }
 }

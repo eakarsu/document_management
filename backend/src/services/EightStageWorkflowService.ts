@@ -517,15 +517,77 @@ export class EightStageWorkflowService {
         }
       }
 
-      // Use existing transition logic with enhanced tracking
-      return await this.transitionStage({
-        ...params,
-        transitionData: {
-          ...params.transitionData,
-          roleValidated: true,
-          requiredRole: params.requiredRole
+      // First find the workflow instance by documentId
+      const workflowInstance = await prisma.jsonWorkflowInstance.findFirst({
+        where: {
+          documentId: documentId,
+          isActive: true
         }
       });
+
+      if (!workflowInstance) {
+        throw new Error('Active workflow instance not found');
+      }
+
+      // Update the workflow instance in the database
+      const updatedInstance = await prisma.jsonWorkflowInstance.update({
+        where: {
+          id: workflowInstance.id
+        },
+        data: {
+          currentStageId: params.toStage,
+          metadata: {
+            ...params.transitionData,
+            roleValidated: true,
+            requiredRole: params.requiredRole,
+            lastTransition: {
+              from: params.fromStage,
+              to: params.toStage,
+              userId: params.userId,
+              timestamp: new Date().toISOString()
+            }
+          },
+          updatedAt: new Date()
+        }
+      });
+
+      // Get stage name for history
+      const stageNames: Record<string, string> = {
+        '1': 'Initial Draft Creation',
+        '2': 'PCM Review',
+        '3': 'Initial Coordination - Distribution Phase',
+        '3.5': 'Review Collection Phase',
+        '4': 'OPR Feedback Incorporation & Draft Creation',
+        '5': 'Second Coordination - Distribution Phase',
+        '5.5': 'Second Review Collection Phase',
+        '6': 'OPR Second Feedback Incorporation',
+        '7': 'Legal Review',
+        '8': 'Post-Legal OPR Update',
+        '9': 'Leadership Review & Decision',
+        '10': 'AFDPO Processing',
+        '11': 'Records Management',
+        '12': 'Workflow Completion'
+      };
+
+      // Add to workflow history
+      await prisma.jsonWorkflowHistory.create({
+        data: {
+          workflowInstanceId: updatedInstance.id,
+          stageId: params.toStage,
+          stageName: stageNames[params.toStage] || `Stage ${params.toStage}`,
+          action: `Transitioned from ${params.fromStage} to ${params.toStage}`,
+          performedBy: params.userId,
+          metadata: {
+            transitionData: params.transitionData || {}
+          }
+        }
+      });
+
+      return {
+        success: true,
+        message: `Advanced to ${params.toStage} stage`,
+        workflowInstance: updatedInstance
+      };
     } catch (error) {
       logger.error('Error in role-validated stage transition:', error);
       throw error;

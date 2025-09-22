@@ -84,7 +84,13 @@ const DocumentViewPage: React.FC = () => {
   const router = useRouter();
   const params = useParams();
   const documentId = params?.id as string;
-  
+
+  // Debug log to confirm page is loading
+  useEffect(() => {
+    console.log('🔴🔴🔴 DOCUMENT PAGE MOUNTED - Document ID:', documentId);
+    console.log('🔴🔴🔴 Current User:', localStorage.getItem('userEmail'));
+  }, [documentId]);
+
   const [documentData, setDocumentData] = useState<DocumentDetails | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
@@ -635,9 +641,12 @@ const DocumentViewPage: React.FC = () => {
 
   // Document info fetching
   const fetchDocumentData = async () => {
+    console.log('🚀 Starting document fetch for ID:', documentId);
+    console.log('🚀 Current user:', localStorage.getItem('userEmail'));
     try {
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`);
-      
+      console.log('🚀 Document fetch response received, status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
         console.log('🔍 DEBUG: Document data:', {
@@ -648,11 +657,15 @@ const DocumentViewPage: React.FC = () => {
         });
         console.log('🔍 DEBUG: Is document status PUBLISHED?', data.document.status === 'PUBLISHED');
         setDocumentData(data.document);
+        console.log('✅ Document loaded successfully for user:', currentUserEmail || localStorage.getItem('userEmail'));
         // Only consider document published if workflow is not active or completed
         // If workflow is active and not at final stage, show workflow UI instead
         const hasActiveWorkflow = data.document.workflowInstanceId && data.document.status !== 'COMPLETED';
         setIsDocumentPublished(data.document.status === 'PUBLISHED' && !hasActiveWorkflow);
       } else {
+        console.error('❌ Failed to fetch document. Status:', response.status);
+        const errorText = await response.text();
+        console.error('❌ Error response:', errorText);
         throw new Error('Failed to fetch document data');
       }
     } catch (error) {
@@ -668,12 +681,14 @@ const DocumentViewPage: React.FC = () => {
   // Initial data loading
   useEffect(() => {
     const loadData = async () => {
+      console.log('📄 DOCUMENT PAGE: Starting to load data for document:', documentId);
       setLoading(true);
       try {
         // Check if we have valid authentication
         const tokenInfo = authTokenService.getTokenInfo();
+        console.log('📄 DOCUMENT PAGE: Token info:', { hasToken: !!tokenInfo.accessToken, isValid: tokenInfo.isValid });
         if (!tokenInfo.accessToken || !tokenInfo.isValid) {
-          // console.log('🔐 AUTH: No valid token found, redirecting to login');
+          console.log('🔐 AUTH: No valid token found, redirecting to login');
           router.push('/login');
           return;
         }
@@ -1405,14 +1420,15 @@ const DocumentViewPage: React.FC = () => {
               <Divider sx={{ my: 3 }} />
 
               {/* JSON-Based Workflow System */}
-              <JsonWorkflowDisplay
-                documentId={documentId}
-                userRole={(() => {
-                  const role = userRole?.roleType || userRole?.role || 'USER';
-                  console.log('📊 Passing userRole to JsonWorkflowDisplay:', role, 'from userRole object:', userRole);
-                  return role;
-                })()}
-                onWorkflowChange={(instance) => {
+              {(
+                  <JsonWorkflowDisplay
+                    documentId={documentId}
+                    userRole={(() => {
+                      const role = userRole?.roleType || userRole?.role || 'USER';
+                      console.log('📊 Passing userRole to JsonWorkflowDisplay:', role, 'from userRole object:', userRole);
+                      return role;
+                    })()}
+                    onWorkflowChange={(instance) => {
                   // Update old workflow state to maintain compatibility
                   console.log('🔍 DEBUG onWorkflowChange: Instance received:', instance);
                   if ((instance as any).isActive || (instance as any).active) {
@@ -1448,11 +1464,12 @@ const DocumentViewPage: React.FC = () => {
                     setWorkflowStage('');
                   }
                 }}
-                onResetRef={(resetFn) => {
-                  jsonWorkflowResetRef.current = resetFn;
-                }}
-              />
-              
+                    onResetRef={(resetFn) => {
+                      jsonWorkflowResetRef.current = resetFn;
+                    }}
+                  />
+              )}
+
               {/* OLD 8-Stage Workflow (Disabled - using JSON workflows now) */}
               {/* {renderWorkflowProgress()} */}
 
@@ -1550,12 +1567,29 @@ const DocumentViewPage: React.FC = () => {
               </Box>
             </Paper>
 
-            {/* Streamlined Workflow Controls */}
+            {/* Streamlined Workflow Controls - Hide for basic reviewers only */}
+            {(() => {
+              const role = userRole?.roleType || userRole?.role || '';
+              const normalizedRole = role.toUpperCase();
+              // Only hide for basic reviewers, not specialized reviewers like LEGAL or TECHNICAL
+              const isBasicReviewer = (normalizedRole === 'REVIEWER' ||
+                                       normalizedRole === 'SUB_REVIEWER') &&
+                                      !normalizedRole.includes('LEGAL') &&
+                                      !normalizedRole.includes('TECHNICAL') &&
+                                      !normalizedRole.includes('ICU');
+
+              if (isBasicReviewer) {
+                console.log('🚫 Hiding Workflow Controls section for basic reviewer:', role);
+                return null;
+              }
+
+              return (
             <Paper sx={{ p: 3, mb: 3, border: '2px solid', borderColor: 'primary.light' }}>
               <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
                 🎯 Workflow Controls
               </Typography>
-              
+
+
               {/* Role & Stage Status Display */}
               <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
@@ -1573,6 +1607,21 @@ const DocumentViewPage: React.FC = () => {
                     />
                   )}
                 </Box>
+              </Box>
+
+              {/* Submit Review Button - Always show */}
+              <Box sx={{ mb: 2 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  fullWidth
+                  startIcon={<SubmitIcon />}
+                  onClick={() => router.push(`/documents/${documentId}/review`)}
+                  sx={{ py: 1.5 }}
+                >
+                  Submit Review
+                </Button>
               </Box>
 
               {/* OPR ROLE ACTIONS - Disabled (Using JSON workflows) */}
@@ -1680,6 +1729,8 @@ const DocumentViewPage: React.FC = () => {
               )}
 
             </Paper>
+              );
+            })()}
 
             {/* Workflow Tasks Component */}
             <Paper sx={{ p: 3, mb: 3 }}>

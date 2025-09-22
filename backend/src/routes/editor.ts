@@ -238,15 +238,33 @@ router.get('/documents/:id/content', async (req: AuthenticatedRequest, res: Resp
     // Get content from customFields if available (for documents created from templates)
     // or provide default content
     let content = '<p>Start editing your document...</p>';
-    
+
     if (document.customFields && typeof document.customFields === 'object') {
       const customFields = document.customFields as any;
-      if (customFields.content) {
+
+      // For AI-generated documents, use editableContent which includes intro and summary
+      // but excludes the header/TOC
+      if (customFields.editableContent) {
+        content = customFields.editableContent;
+        logger.info('Loading editableContent from customFields (includes intro/summary)', {
+          documentId: document.id,
+          contentLength: content.length,
+          hasIntro: content.includes('INTRODUCTION') || content.includes('data-paragraph="0.1"'),
+          hasSummary: content.includes('SUMMARY OF CHANGES')
+        });
+      } else if (customFields.htmlContent) {
+        // Fallback to htmlContent if no editableContent
+        content = customFields.htmlContent;
+        logger.info('Loading htmlContent from customFields', {
+          documentId: document.id,
+          contentLength: content.length
+        });
+      } else if (customFields.content) {
+        // Legacy fallback
         content = customFields.content;
         logger.info('Loading content from customFields', {
           documentId: document.id,
-          contentLength: content.length,
-          contentPreview: content.substring(0, 100)
+          contentLength: content.length
         });
       }
     }

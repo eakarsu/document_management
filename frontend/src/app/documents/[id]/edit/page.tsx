@@ -96,6 +96,7 @@ export default function EditDocumentPage() {
     if (!documentId) return;
 
     const fetchDocument = async () => {
+      console.log('🔴🔴🔴 EDIT PAGE LOADING - Document ID:', documentId);
       try {
         const response = await api.get(`/api/documents/${documentId}`);
         
@@ -105,13 +106,22 @@ export default function EditDocumentPage() {
           setTitle(data.title);
           setCategory(data.category);
           
-          // Load document content - use editableContent to avoid header
-          if (data.customFields?.editableContent) {
-            // Use editable content (has styles but no header)
-            setDocumentContent(data.customFields.editableContent);
-          } else if (data.customFields?.htmlContent) {
-            // Fallback to full HTML if no editableContent
+          // Load document content - use htmlContent first to include intro and summary
+          console.log('🔴🔴🔴 EDIT PAGE - Loading document content:', {
+            hasHtmlContent: !!data.customFields?.htmlContent,
+            hasEditableContent: !!data.customFields?.editableContent,
+            htmlContentLength: data.customFields?.htmlContent?.length,
+            editableContentLength: data.customFields?.editableContent?.length,
+            htmlContentHasIntro: data.customFields?.htmlContent?.includes('INTRODUCTION') || data.customFields?.htmlContent?.includes('data-paragraph="0.1"'),
+            editableContentHasIntro: data.customFields?.editableContent?.includes('INTRODUCTION') || data.customFields?.editableContent?.includes('data-paragraph="0.1"')
+          });
+
+          if (data.customFields?.htmlContent) {
+            // Use full HTML content (includes intro, summary, and main content)
             setDocumentContent(data.customFields.htmlContent);
+          } else if (data.customFields?.editableContent) {
+            // Fallback to editable content if no htmlContent
+            setDocumentContent(data.customFields.editableContent);
           } else if (data.customFields?.content) {
             // Fallback to plain text content (no styles)
             setDocumentContent(data.customFields.content);

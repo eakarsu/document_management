@@ -38,6 +38,145 @@ const upload = multer({
 // Middleware to apply to all document routes
 router.use(authMiddleware);
 
+// List documents (with special handling for legal reviewers)
+router.get('/',
+  async (req: any, res) => {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        category,
+        status,
+        search,
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = req.query;
+
+      const offset = (page - 1) * limit;
+
+      // Get user's role
+      const userRole = req.user.role?.name?.toUpperCase() || '';
+
+      let whereConditions: any = {
+        status: { not: 'DELETED' }
+      };
+
+      // Define which stages each role can access
+      const roleStageMap: { [key: string]: string[] } = {
+        'ACTION_OFFICER': ['1', '4', '6', '8'],
+        'OPR': ['1', '3.5', '4', '5.5', '6', '8'],
+        'PCM': ['2'],
+        'PCM_REVIEWER': ['2'],
+        'COORDINATOR': ['3', '5'],
+        'SUB_REVIEWER': ['3.5', '5.5'],
+        'REVIEWER': ['3.5', '5.5'],
+        // Legal users can see documents in stage 7 and later stages (after their review)
+        'LEGAL': ['7', '8', '9', '10', 'Legal Review & Approval'],
+        'LEGAL_REVIEWER': ['7', '8', '9', '10', 'Legal Review & Approval'],
+        'LEADERSHIP': ['9'],
+        'LEADER': ['9'],
+        'AFDPO': ['10', 'AFDPO Publication & Distribution'],
+        'PUBLISHER': ['10', 'AFDPO Publication & Distribution'],
+        'AFDPO_PUBLISHER': ['10', 'AFDPO Publication & Distribution'],
+        'ADMIN': ['1', '2', '3', '3.5', '4', '5', '5.5', '6', '7', '8', '9', '10']
+      };
+
+      if (userRole === 'ADMIN') {
+        // Admin users see all documents (no additional conditions)
+      } else {
+        // Get documents in stages this user can access
+        const accessibleStages = roleStageMap[userRole] || [];
+
+        if (accessibleStages.length > 0) {
+          // Get documents in workflow stages the user can access
+          const workflowDocs = await prisma.jsonWorkflowInstance.findMany({
+            where: {
+              currentStageId: { in: accessibleStages }
+            },
+            select: { documentId: true }
+          });
+
+          const workflowDocIds = workflowDocs.map(w => w.documentId);
+
+          // Include documents in their organization OR documents in their workflow stages
+          whereConditions = {
+            ...whereConditions,
+            OR: [
+              { organizationId: req.user.organizationId },
+              ...(workflowDocIds.length > 0 ? [{ id: { in: workflowDocIds } }] : [])
+            ]
+          };
+        } else {
+          // Regular users only see documents in their organization
+          whereConditions.organizationId = req.user.organizationId;
+        }
+      }
+
+      // Add additional filters
+      if (category) whereConditions.category = category;
+      if (status) whereConditions.status = status;
+      if (search) {
+        whereConditions.OR = [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } }
+        ];
+      }
+
+      // Get documents
+      const [documents, totalCount] = await Promise.all([
+        prisma.document.findMany({
+          where: whereConditions,
+          skip: offset,
+          take: Number(limit),
+          orderBy: { [sortBy]: sortOrder },
+          include: {
+            createdBy: {
+              select: { firstName: true, lastName: true, email: true }
+            },
+            folder: {
+              select: { name: true }
+            }
+          }
+        }),
+        prisma.document.count({ where: whereConditions })
+      ]);
+
+      // Debug: Log what stages we're looking for
+      logger.info('Documents list query', {
+        userId: req.user.id,
+        userRole,
+        accessibleStages: roleStageMap[userRole] || [],
+        whereConditions: JSON.stringify(whereConditions)
+      });
+
+      logger.info('Documents list retrieved', {
+        userId: req.user.id,
+        userRole,
+        documentsCount: documents.length,
+        totalCount
+      });
+
+      res.json({
+        success: true,
+        documents,
+        pagination: {
+          currentPage: Number(page),
+          totalPages: Math.ceil(totalCount / limit),
+          totalItems: totalCount,
+          itemsPerPage: Number(limit)
+        }
+      });
+
+    } catch (error) {
+      logger.error('Failed to list documents:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to retrieve documents'
+      });
+    }
+  }
+);
+
 // Create document with template
 router.post('/create-with-template',
   async (req: any, res) => {
@@ -541,9 +680,30 @@ router.get('/search',
 
       let where: any = {};
 
-      // PERMANENT FIX: Admin users can see ALL documents from ALL organizations
-      // Regular users see documents from their organization OR documents they have explicit permission for
-      if (req.user.role?.name !== 'Admin') {
+      // Get user's role for workflow access
+      const userRole = req.user.role?.name?.toUpperCase() || '';
+
+      // Define which stages each role can access
+      const roleStageMap: { [key: string]: string[] } = {
+        'ACTION_OFFICER': ['1', '4', '6', '8'],
+        'OPR': ['1', '3.5', '4', '5.5', '6', '8'],
+        'PCM': ['2'],
+        'PCM_REVIEWER': ['2'],
+        'COORDINATOR': ['3', '5'],
+        'SUB_REVIEWER': ['3.5', '5.5'],
+        'REVIEWER': ['3.5', '5.5'],
+        // Legal users can see documents in stage 7 and later stages (after their review)
+        'LEGAL': ['7', '8', '9', '10', 'Legal Review & Approval'],
+        'LEGAL_REVIEWER': ['7', '8', '9', '10', 'Legal Review & Approval'],
+        'LEADERSHIP': ['9'],
+        'LEADER': ['9'],
+        'AFDPO': ['10', 'AFDPO Publication & Distribution'],
+        'PUBLISHER': ['10', 'AFDPO Publication & Distribution'],
+        'AFDPO_PUBLISHER': ['10', 'AFDPO Publication & Distribution'],
+        'ADMIN': ['1', '2', '3', '3.5', '4', '5', '5.5', '6', '7', '8', '9', '10']
+      };
+
+      if (userRole !== 'ADMIN') {
         // Get documents user has explicit permission for
         const permittedDocIds = await prisma.documentPermission.findMany({
           where: { userId: req.user.id },
@@ -557,6 +717,22 @@ router.get('/search',
 
         if (permittedDocIds.length > 0) {
           accessConditions.push({ id: { in: permittedDocIds } });
+        }
+
+        // Get documents in stages this user can access
+        const accessibleStages = roleStageMap[userRole] || [];
+        if (accessibleStages.length > 0) {
+          const workflowDocs = await prisma.jsonWorkflowInstance.findMany({
+            where: {
+              currentStageId: { in: accessibleStages }
+            },
+            select: { documentId: true }
+          });
+
+          const workflowDocIds = workflowDocs.map(w => w.documentId);
+          if (workflowDocIds.length > 0) {
+            accessConditions.push({ id: { in: workflowDocIds } });
+          }
         }
 
         where.OR = accessConditions;
@@ -638,6 +814,73 @@ router.get('/:id',
     try {
       const documentId = req.params.id;
 
+      // Add debug logging
+      logger.info('📄 DOCUMENT ACCESS REQUEST', {
+        documentId,
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userRole: req.user.role?.name,
+        organizationId: req.user.organizationId
+      });
+
+      // Check if document is in workflow stage that allows access
+      const workflowInstance = await prisma.jsonWorkflowInstance.findFirst({
+        where: { documentId },
+        select: { currentStageId: true }
+      });
+
+      // Define stage role mappings for the hierarchical workflow
+      const stageRoleMap: { [key: string]: string[] } = {
+        '1': ['ACTION_OFFICER', 'OPR', 'ADMIN'],
+        '2': ['PCM', 'PCM_REVIEWER', 'ADMIN'],
+        '3': ['COORDINATOR', 'ADMIN'],
+        '3.5': ['SUB_REVIEWER', 'REVIEWER', 'OPR', 'ADMIN'],
+        '4': ['ACTION_OFFICER', 'OPR', 'ADMIN'],
+        '5': ['COORDINATOR', 'ADMIN'],
+        '5.5': ['SUB_REVIEWER', 'REVIEWER', 'OPR', 'ADMIN'],
+        '6': ['ACTION_OFFICER', 'OPR', 'ADMIN'],
+        '7': ['LEGAL', 'LEGAL_REVIEWER', 'ADMIN'],
+        '8': ['ACTION_OFFICER', 'OPR', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // Allow legal users to see documents even after their stage
+        '9': ['LEADERSHIP', 'LEADER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // Legal can view in later stages
+        '10': ['AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // Legal can view published docs
+        // Also map stage names
+        'Legal Review & Approval': ['LEGAL', 'LEGAL_REVIEWER', 'ADMIN'],
+        'AFDPO Publication & Distribution': ['AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER']
+      };
+
+      // Check if user's role allows access for the current stage
+      let hasStageAccess = false;
+      if (workflowInstance?.currentStageId) {
+        const allowedRoles = stageRoleMap[workflowInstance.currentStageId] || [];
+        const userRole = req.user.role?.name?.toUpperCase();
+        const userEmail = req.user.email?.toLowerCase() || '';
+
+        // Check if user has access based on role or email
+        hasStageAccess = allowedRoles.some(role => {
+          const roleToCheck = role.toLowerCase().replace('_', '.');
+          return userRole === role ||
+                 userRole?.includes(role) ||
+                 userEmail.includes(roleToCheck) ||
+                 userEmail.includes('legal') && (role === 'LEGAL' || role === 'LEGAL_REVIEWER');
+        });
+
+        logger.info('Stage Access Check Details', {
+          stage: workflowInstance.currentStageId,
+          allowedRoles,
+          userRole,
+          userEmail,
+          hasStageAccess
+        });
+      }
+
+
+      logger.info('📄 ACCESS CHECK', {
+        currentStage: workflowInstance?.currentStageId,
+        userRole: req.user.role?.name,
+        hasStageAccess,
+        userEmail: req.user.email
+      });
+
       // First check if user has explicit permission for this document
       const hasPermission = await prisma.documentPermission.findFirst({
         where: {
@@ -647,8 +890,8 @@ router.get('/:id',
       });
 
       let document;
-      if (hasPermission || req.user.role?.name === 'Admin') {
-        // User has permission or is admin - get document directly from DB
+      if (hasPermission || req.user.role?.name === 'Admin' || hasStageAccess) {
+        // User has permission or is admin or is legal reviewer in legal stage - get document directly from DB
         document = await prisma.document.findFirst({
           where: {
             id: documentId,
@@ -677,6 +920,12 @@ router.get('/:id',
       }
 
       if (!document) {
+        logger.error('📄 DOCUMENT NOT FOUND', {
+          documentId,
+          userId: req.user.id,
+          hasPermission: !!hasPermission,
+          isAdmin: req.user.role?.name === 'Admin'
+        });
         return res.status(404).json({
           success: false,
           error: 'Document not found'

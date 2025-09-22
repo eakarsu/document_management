@@ -607,6 +607,15 @@ const DocumentEditor: React.FC = () => {
               const documentStyles = contentData.document.documentStyles || customFields.documentStyles;
               const editableContent = contentData.document.content || customFields.editableContent || content;
 
+              // Debug logging to check content
+              console.log('🔴🔴🔴 EDITOR PAGE - Content check:', {
+                hasEditableContent: !!editableContent,
+                editableContentLength: editableContent?.length,
+                hasIntroduction: editableContent?.includes('INTRODUCTION') || editableContent?.includes('data-paragraph="0.1"'),
+                hasSummaryOfChanges: editableContent?.includes('SUMMARY OF CHANGES'),
+                firstChars: editableContent?.substring(0, 200)
+              });
+
 
               if (hasCustomHeader && headerHtml) {
 
@@ -684,8 +693,11 @@ const DocumentEditor: React.FC = () => {
                 content = `<p>${content.replace(/\n/g, '</p><p>')}</p>`;
               }
               
-              editor.commands.setContent(content);
-              
+              // Remove all color styles from the content
+              const cleanedContent = removeAllColors(content);
+
+              editor.commands.setContent(cleanedContent);
+
               // Trigger page calculation after content is set
               setTimeout(() => {
                 const chars = editor.storage.characterCount.characters();
@@ -734,8 +746,11 @@ const DocumentEditor: React.FC = () => {
                 content = `<p>${content.replace(/\n/g, '</p><p>')}</p>`;
               }
               
-              editor.commands.setContent(content);
-              
+              // Remove all color styles from the content
+              const cleanedContent = removeAllColors(content);
+
+              editor.commands.setContent(cleanedContent);
+
               // Trigger page calculation after content is set
               setTimeout(() => {
                 const chars = editor.storage.characterCount.characters();
@@ -870,6 +885,35 @@ const DocumentEditor: React.FC = () => {
 
     return () => clearTimeout(autoSave);
   }, [hasUnsavedChanges, editor, documentData]);
+
+  // Helper function to remove all color styling from content
+  const removeAllColors = (htmlContent: string): string => {
+    // Remove color property from any style attribute
+    let cleaned = htmlContent.replace(/style="([^"]*)"/gi, (match, styles) => {
+      // Remove color property
+      const newStyles = styles
+        .split(';')
+        .filter((s: string) => !s.trim().toLowerCase().startsWith('color:'))
+        .join(';')
+        .trim();
+
+      return newStyles ? `style="${newStyles}"` : '';
+    });
+
+    // Remove any standalone color attributes
+    cleaned = cleaned.replace(/\scolor="[^"]*"/gi, '');
+
+    // Clean up empty style attributes
+    cleaned = cleaned.replace(/\sstyle="[\s;]*"/gi, '');
+
+    // Remove spans that now have no attributes
+    cleaned = cleaned.replace(/<span>([^<]*)<\/span>/gi, '$1');
+
+    // Remove data-color attributes if any
+    cleaned = cleaned.replace(/\s*data-color="[^"]*"/gi, '');
+
+    return cleaned;
+  };
 
   const handleSave = async (showNotification = true) => {
     if (!editor || !documentData) return;
@@ -1611,6 +1655,88 @@ const DocumentEditor: React.FC = () => {
               title="Highlight"
             >
               🖍️
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                if (editor) {
+                  console.log('Clear Colors clicked');
+
+                  // Get current HTML before
+                  const htmlBefore = editor.getHTML();
+                  console.log('HTML before:', htmlBefore.substring(0, 200));
+
+                  // Try multiple methods to remove colors
+
+                  // Method 1: Select all and unset color
+                  editor.chain()
+                    .focus()
+                    .selectAll()
+                    .unsetColor()
+                    .run();
+
+                  // Method 2: Remove marks directly from document
+                  setTimeout(() => {
+                    const { tr } = editor.state;
+                    const { doc } = editor.state;
+
+                    // Remove all textStyle marks that contain color
+                    doc.descendants((node, pos) => {
+                      if (node.isText && node.marks.length > 0) {
+                        node.marks.forEach(mark => {
+                          if (mark.type.name === 'textStyle' && mark.attrs && mark.attrs.color) {
+                            console.log('Found color mark:', mark.attrs.color, 'at position', pos);
+                            tr.removeMark(pos, pos + node.nodeSize, mark.type);
+                          }
+                        });
+                      }
+                    });
+
+                    editor.view.dispatch(tr);
+
+                    // Method 3: Clean the HTML directly as fallback
+                    setTimeout(() => {
+                      const html = editor.getHTML();
+                      console.log('HTML after mark removal:', html.substring(0, 200));
+
+                      // Remove all color styles from HTML (including those in divs, h3, spans, etc.)
+                      const cleanedHtml = html
+                        // Remove color property from any style attribute
+                        .replace(/style="([^"]*)"/gi, (match, styles) => {
+                          // Remove color property
+                          const newStyles = styles
+                            .split(';')
+                            .filter(s => !s.trim().toLowerCase().startsWith('color:'))
+                            .join(';')
+                            .trim();
+
+                          return newStyles ? `style="${newStyles}"` : '';
+                        })
+                        // Remove any standalone color attributes
+                        .replace(/\scolor="[^"]*"/gi, '')
+                        // Clean up empty style attributes
+                        .replace(/\sstyle="[\s;]*"/gi, '')
+                        // Remove spans that now have no attributes
+                        .replace(/<span>([^<]*)<\/span>/gi, '$1');
+
+                      console.log('Cleaned HTML:', cleanedHtml.substring(0, 200));
+
+                      if (html !== cleanedHtml) {
+                        editor.commands.setContent(cleanedHtml);
+                        console.log('Content updated with cleaned HTML');
+                      }
+                    }, 50);
+                  }, 50);
+
+                  // Mark document as modified
+                  setHasUnsavedChanges(true);
+                }
+              }}
+              title="Remove All Text Colors - Click to remove green and all other text colors"
+              sx={{ backgroundColor: '#ffebee' }}
+            >
+              Clear Colors
             </Button>
 
             <Divider orientation="vertical" flexItem />

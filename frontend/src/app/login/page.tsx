@@ -173,6 +173,10 @@ const LoginPage: React.FC = () => {
         };
         localStorage.setItem('user', JSON.stringify(userData));
 
+        // Also store email and username separately for easy access
+        localStorage.setItem('userEmail', data.user.email || formData.email);
+        localStorage.setItem('username', data.user.username || data.user.email || formData.email);
+
         // Redirect to dashboard
         const redirect = new URLSearchParams(window.location.search).get('redirect') || '/dashboard';
         router.push(redirect);

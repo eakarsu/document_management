@@ -2,10 +2,26 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { authMiddleware } from '../middleware/auth';
 const fetch = require('node-fetch');
 
 const router = Router();
 const prisma = new PrismaClient();
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: {
+      id: string;
+      name: string;
+      permissions: string[];
+    };
+    organizationId: string;
+  };
+}
 
 // Helper function to get template defaults
 function getTemplateDefaults(template: string) {
@@ -804,7 +820,35 @@ async function generateAIDocument(template: string, pages: number, feedbackCount
 
   const deepStructurePrompt = `
 IMPORTANT: DO NOT include any document headers, table of contents, or title pages - these will be added automatically by the system.
-Start your response directly with the first section (e.g., <h2>1. First Section</h2>).
+
+CRITICAL MILITARY DOCUMENT STRUCTURE REQUIREMENTS:
+Your document MUST begin with these TWO MANDATORY sections BEFORE any numbered content:
+
+1. INTRODUCTION PARAGRAPH (Required for ALL military documents):
+   - Start with: <div style="margin-bottom: 20px; padding: 15px; background-color: #fafafa;">
+   - Include: <p data-paragraph="0.1" data-line="1" style="text-indent: 20px; line-height: 1.6;">
+   - Content: Write a COMPREHENSIVE 150-200 word introduction paragraph that includes:
+     * "This [document type] provides [detailed purpose and scope]..."
+     * Explain the document's primary objectives and intended outcomes
+     * Detail the responsibilities and procedures it establishes
+     * Specify all applicable organizations and personnel
+     * Describe the implementation framework and compliance requirements
+     * Reference any superseded documents or related directives
+     * State "Compliance with this publication is mandatory" at the end
+   - Make it substantive and informative, providing readers with a complete overview
+   - End with: </p></div>
+
+2. SUMMARY OF CHANGES (Required for ALL military documents):
+   - Start with: <div style="margin-bottom: 30px; padding: 15px; background-color: #f0f0f0; border-left: 4px solid #333;">
+   - Include heading: <h3 style="margin-top: 0; color: #333; font-size: 14px; font-weight: bold;">SUMMARY OF CHANGES</h3>
+   - Include: <p data-paragraph="0.2" data-line="1" style="margin-bottom: 10px; text-align: justify; line-height: 1.6;">
+   - Content: Write a DETAILED 100-150 word paragraph (NOT a bulleted list) that flows naturally:
+     * "This document has been substantially revised and requires complete review. Major changes include..."
+     * Continue with flowing prose describing updates to policy requirements, organizational structure revisions, enhanced reporting procedures, clarified compliance measures, new definitions and terminology, updated references to current regulations, modifications to operational procedures, additions to safety protocols, refinements in accountability frameworks, and improvements to implementation guidance.
+     * Write as a cohesive paragraph with proper transitions between topics
+   - End with: </p></div>
+
+THEN start your main content with the first numbered section (e.g., <h2>1. First Section</h2>).
 
 CRITICAL: Create a document with DEEP HIERARCHICAL STRUCTURE using the following numbering system WITH PROPER INDENTATION:
 - Level 1: <h2>1. Main Section</h2> (no indent)
@@ -895,14 +939,15 @@ PARAGRAPH CONTENT REQUIREMENTS:
 - Each paragraph starts with its number (e.g., "1.1.1.1. ")`;
 
   const templatePrompts: Record<string, string> = {
-    'af-manual': `Generate exactly ${pages} pages of Air Force technical manual with DEEP HIERARCHICAL STRUCTURE. 
+    'af-manual': `Generate exactly ${pages} pages of Air Force technical manual with DEEP HIERARCHICAL STRUCTURE.
 
 ${deepStructurePrompt}
 
 SPECIFIC REQUIREMENTS FOR AIR FORCE MANUAL:
 - DO NOT include the Air Force header - it will be added automatically
 - DO NOT include a TABLE OF CONTENTS section - it will be generated automatically
-- Start directly with the main content sections (1. Section Title, etc.)
+- MANDATORY: Start with the Introduction Paragraph and SUMMARY OF CHANGES sections as specified above
+- After those two sections, continue with the main numbered sections (1. Section Title, etc.)
 - The header and TOC will be added by the system and counted in page numbering
 - Use hierarchical numbering with appropriate depth (1, 1.1, 1.1.1, 1.1.1.1, etc.)
 - Maximum depth should be 5 levels (e.g., 1.1.1.1.1) for standard Air Force documents
@@ -1070,6 +1115,7 @@ SPECIFIC REQUIREMENTS:
     dafpd: `Generate exactly ${pages} pages of Department of the Air Force Policy Directive (DAFPD) with DEEP HIERARCHICAL STRUCTURE.
 ${deepStructurePrompt}
 SPECIFIC REQUIREMENTS:
+- MANDATORY: Start with the Introduction Paragraph and SUMMARY OF CHANGES sections as specified above
 - Department-level policy
 - Strategic direction
 - Organizational priorities
@@ -1148,6 +1194,13 @@ SPECIFIC REQUIREMENTS:
       {
         role: 'system',
         content: `You are an expert technical writer for the US Air Force. Generate well-structured technical documentation with deep hierarchical numbering following military standards.
+
+MANDATORY MILITARY DOCUMENT STRUCTURE:
+1. ALWAYS start with an Introduction Paragraph (data-paragraph="0.1")
+2. ALWAYS include a SUMMARY OF CHANGES section immediately after the introduction
+3. ONLY THEN proceed with numbered sections (1., 2., 3., etc.)
+
+These two sections are REQUIRED for ALL military documents per Air Force standards.
 
 CRITICAL LENGTH REQUIREMENT: You MUST generate exactly ${pages} pages of content. Each page needs 600-700 words. Total minimum: ${pages * 650} words (not characters). DO NOT include any header or table of contents - these will be added automatically by the system. 
 
@@ -1682,7 +1735,7 @@ CRITICAL PARAGRAPH NUMBERING RULE:
 }
 
 // POST /api/ai-document-generator
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { 
       template = 'technical', 
@@ -1719,11 +1772,11 @@ router.post('/', async (req: Request, res: Response) => {
     // Generate the document
     const { content, feedback, title } = await generateAIDocument(template, pages, feedbackCount, sealImage, headerData);
     
-    // Find any existing user
-    let user = await prisma.user.findFirst();
-    
+    // Get the authenticated user from the request
+    const user = req.user;
+
     if (!user) {
-      return res.status(400).json({ error: 'No users found in database. Please create a user first.' });
+      return res.status(401).json({ error: 'User not authenticated' });
     }
     
     // Create the document in the database
@@ -1749,45 +1802,51 @@ router.post('/', async (req: Request, res: Response) => {
           content: content,
           htmlContent: content,
           editableContent: (() => {
-            // Extract only the content after header and TOC for editing
+            // Extract content after header and TOC but KEEP introduction and summary sections
             // Look for multiple indicators of Air Force header/TOC
             if (content.includes('UNCLASSIFIED') || content.includes('TABLE OF CONTENTS') || content.includes('air-force-document-header')) {
               // Find the end of the TOC - look for page break after TOC
               const tocEndMatch = content.match(/<div style="page-break-after: always;"><\/div>/);
               if (tocEndMatch && tocEndMatch.index !== undefined) {
-                // Return content after the TOC page break
+                // Return content after the TOC page break (includes intro and summary)
                 const afterToc = content.substring(tocEndMatch.index + tocEndMatch[0].length);
-                console.log('Extracted content after TOC, length:', afterToc.length);
+                console.log('Extracted content after TOC (with intro/summary), length:', afterToc.length);
                 return afterToc;
               }
 
-              // Alternative: Look for where actual content sections start (after any TOC listing)
-              // Find the last occurrence of TOC-related content
-              const tocPatterns = [
-                /Department of the Navy<\/.*?>\s*<\/.*?>\s*<\/.*?>/,  // End of typical TOC
-                /<\/ul>\s*<\/div>\s*<h2/,  // End of TOC list before first section
-                /TABLE OF CONTENTS.*?(?=<h2)/s  // Everything from TOC title to first h2
-              ];
+              // Alternative: Look for where actual content starts (after TOC but including intro)
+              // Find the introduction section (paragraph 0.1)
+              const introPattern = /<div[^>]*>\s*<p[^>]*data-paragraph="0\.1"[^>]*>/;
+              const introMatch = content.match(introPattern);
+              if (introMatch && introMatch.index !== undefined) {
+                // Start from the introduction paragraph
+                const extracted = content.substring(introMatch.index);
+                console.log('Extracted content from introduction, length:', extracted.length);
+                return extracted;
+              }
 
-              for (const pattern of tocPatterns) {
-                const match = content.match(pattern);
-                if (match && match.index !== undefined) {
-                  const endIndex = match.index + match[0].length;
-                  // Find the next h2 tag after this point
-                  const nextH2 = content.indexOf('<h2', endIndex);
-                  if (nextH2 !== -1) {
-                    const extracted = content.substring(nextH2);
-                    console.log('Extracted content from first h2, length:', extracted.length);
+              // Fallback: Look for SUMMARY OF CHANGES
+              const summaryPattern = /SUMMARY OF CHANGES/;
+              const summaryMatch = content.match(summaryPattern);
+              if (summaryMatch && summaryMatch.index !== undefined) {
+                // Find the start of the containing div (go back to find it)
+                let searchIndex = summaryMatch.index;
+                while (searchIndex > 0) {
+                  searchIndex--;
+                  if (content.substring(searchIndex, searchIndex + 4) === '<div') {
+                    const extracted = content.substring(searchIndex);
+                    console.log('Extracted content from summary section, length:', extracted.length);
                     return extracted;
                   }
                 }
               }
 
-              // Final fallback: extract from first h2 (main content section)
-              const firstH2 = content.indexOf('<h2');
-              if (firstH2 !== -1) {
-                const extracted = content.substring(firstH2);
-                console.log('Fallback: extracted from first h2, length:', extracted.length);
+              // Final fallback: extract from first div after TOC
+              const divPattern = /<div[^>]*style="margin-bottom: 20px/;
+              const divMatch = content.match(divPattern);
+              if (divMatch && divMatch.index !== undefined) {
+                const extracted = content.substring(divMatch.index);
+                console.log('Fallback: extracted from first content div, length:', extracted.length);
                 return extracted;
               }
             }

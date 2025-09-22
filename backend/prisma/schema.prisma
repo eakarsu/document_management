@@ -664,7 +664,7 @@ model comment_resolution_matrix {
   documentId             String?
   workflow_instances     workflow_instances?   @relation(fields: [workflow_instance_id], references: [id], onDelete: Cascade)
   document               Document?             @relation(fields: [documentId], references: [id], map: "crm_document_fkey")
-  document               sequential_workflows? @relation(fields: [documentId], references: [documentId], map: "crm_document_fkey")
+  sequential_workflow    sequential_workflows? @relation(fields: [documentId], references: [documentId], map: "crm_seq_workflow_fkey")
   crm_entries            crm_entries[]
 
   @@index([documentId])

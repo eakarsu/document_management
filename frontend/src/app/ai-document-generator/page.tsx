@@ -290,10 +290,12 @@ const AIDocumentGenerator: React.FC = () => {
       };
 
       // Call our backend API
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/ai-document-generator`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           template: documentTemplate,

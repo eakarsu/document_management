@@ -419,6 +419,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     const isLeadership = normalizedRole === 'LEADERSHIP' || normalizedRole === 'OPR LEADERSHIP';
     const isActionOfficer = normalizedRole === 'ACTION_OFFICER' || normalizedRole === 'ACTION OFFICER';
     const isAFDPO = normalizedRole === 'AFDPO' || normalizedRole === 'AFDPO_ANALYST' || normalizedRole === 'PUBLISHER';
+    const isLegal = normalizedRole === 'LEGAL' || normalizedRole === 'LEGAL_REVIEWER' || normalizedRole?.includes('LEGAL');
 
     // CRITICAL FIX: Block any publish actions unless at stage 10 (AFDPO Publication)
     const canPublish = currentStage.id === '10' && (isAFDPO || isAdmin);
@@ -444,6 +445,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                        ((currentStage as any).assignedRole && (currentStage as any).assignedRole.toUpperCase() === normalizedRole) ||
                        (isActionOfficer && (currentStage as any).assignedRole === 'ACTION_OFFICER') ||
                        (isAFDPO && (currentStage as any).assignedRole === 'AFDPO') || // AFDPO can act on AFDPO stages
+                       (isLegal && ((currentStage as any).assignedRole === 'LEGAL' || currentStage.id === '7')) || // Legal can act on Legal stages
                        ((isOPR || isLeadership) && (currentStage.id === '4' || currentStage.id === '3.5' || currentStage.id === '6' ||
                                   currentStage.id === '8' || // Post-Legal OPR Update
                                   (currentStage as any).assignedRole === 'ACTION_OFFICER' || // OPR/Leadership can act as Action Officer
@@ -528,9 +530,11 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       } else {
         console.log('👮 User is coordinator - removing Submit Review button');
         console.log('   Actions before filtering:', actions.map(a => a.label));
-        // Remove "Submit Review" action for coordinators - they only need management buttons
+        // Remove "Submit Review" and "Submit Draft Review" actions for coordinators - they only need management buttons
         actions = actions.filter(action => {
-          const shouldRemove = action.label?.toLowerCase() === 'submit review' ||
+          const shouldRemove = action.label?.toLowerCase().includes('submit') && action.label?.toLowerCase().includes('review') ||
+                               action.label?.toLowerCase() === 'submit review' ||
+                               action.label?.toLowerCase() === 'submit draft review' ||
                                (action as any).type === 'REVIEW_SUBMIT';
           if (shouldRemove) {
             console.log('   ❌ Removing action:', action.label);
@@ -1104,16 +1108,40 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
           </Box>
         )}
 
-        {/* Actions Section - Hide only when workflow is complete */}
-        {!isWorkflowComplete && (
-          <Box sx={{ 
-            background: 'white',
-            p: 3,
-            mb: 2
-          }}>
-            <Typography variant="h6" fontWeight="bold" gutterBottom>
-              Available Actions
-            </Typography>
+        {/* Actions Section - Hide for reviewers (but NOT legal/technical reviewers) and when workflow is complete */}
+        {(() => {
+          // Check if user is a basic reviewer (not legal or technical reviewer who need action buttons)
+          const roleToCheck = userRole?.toLowerCase() || '';
+          const username = localStorage?.getItem('username')?.toLowerCase() || '';
+          const normalizedRole = userRole?.toUpperCase() || '';
+
+          // Only hide for basic reviewers, not specialized reviewers like LEGAL or TECHNICAL
+          const isBasicReviewer = (normalizedRole === 'SUB_REVIEWER' ||
+                                   normalizedRole === 'REVIEWER' ||
+                                   roleToCheck === 'sub_reviewer' ||
+                                   roleToCheck === 'reviewer') &&
+                                  !roleToCheck.includes('legal') &&
+                                  !roleToCheck.includes('technical') &&
+                                  !roleToCheck.includes('icu');
+
+          if (isBasicReviewer) {
+            console.log('🚫 Hiding workflow controls for basic reviewer role:', roleToCheck);
+            return null;
+          }
+
+          if (isWorkflowComplete) {
+            return null;
+          }
+
+          return (
+            <Box sx={{
+              background: 'white',
+              p: 3,
+              mb: 2
+            }}>
+              <Typography variant="h6" fontWeight="bold" gutterBottom>
+                Available Actions
+              </Typography>
             
             {workflowDef.settings?.requireComments && (
               <TextField
@@ -1180,23 +1208,18 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                         onClick={() => {
                           // Special handling for "All Reviews Complete" in Review Collection Phase
                           if (action.label?.toLowerCase().includes('all reviews complete') ||
-                              action.label?.toLowerCase().includes('reviews complete')) {
-                            console.log('🚀 Processing All Reviews Complete action');
-                            // Navigate to OPR review page for feedback processing
-                            window.location.href = `/documents/${documentId}/opr-review`;
-                            return;
-                          }
-
-                          // PERMANENT FIX: Special handling for OPR actions in stage 4
-                          if (action.id === 'opr-complete-reviews') {
-                            // Navigate to OPR review page for feedback processing
-                            window.location.href = `/documents/${documentId}/opr-review`;
-                            return;
-                          }
-
-                          if (action.id === 'opr-process-feedback') {
-                            // Navigate to OPR review page for feedback processing
-                            window.location.href = `/documents/${documentId}/opr-review`;
+                              action.label?.toLowerCase().includes('reviews complete') ||
+                              action.id === 'opr-complete-reviews') {
+                            console.log('🚀 Processing All Reviews Complete action - ADVANCING WORKFLOW');
+                            // Determine next stage based on current stage
+                            let nextStage = action.target;
+                            if (workflowInstance?.currentStageId === '3.5') {
+                              nextStage = '4'; // From Review Collection to OPR Feedback
+                            } else if (workflowInstance?.currentStageId === '5.5') {
+                              nextStage = '6'; // From Second Review Collection to Second OPR Feedback
+                            }
+                            // Advance the workflow directly
+                            advanceWorkflow(nextStage, action.label);
                             return;
                           }
 
@@ -1214,6 +1237,17 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                               (action as any).type === 'REVIEW_SUBMIT') {
                             // Navigate to Review & CRM page instead of showing popup
                             window.location.href = `/documents/${documentId}/review`;
+                            return;
+                          }
+
+                          // Special handling for Stage 4 - Action Officer/OPR processes feedback
+                          if (workflowInstance?.currentStageId === '4' &&
+                              (action.label?.toLowerCase().includes('review all feedback') ||
+                               action.label?.toLowerCase().includes('incorporate changes') ||
+                               action.id === 'review_feedback' ||
+                               action.id === 'incorporate_changes')) {
+                            // Navigate to OPR review page for feedback processing
+                            window.location.href = `/documents/${documentId}/opr-review`;
                             return;
                           }
 
@@ -1277,8 +1311,42 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
               })}
             </Box>
           </Box>
-        )}
+          );
+        })()}
 
+      {/* Submit Review Button for Reviewers */}
+      {(() => {
+        const username = typeof window !== 'undefined' ? localStorage?.getItem('username')?.toLowerCase() || '' : '';
+        const userEmail = typeof window !== 'undefined' ? localStorage?.getItem('userEmail')?.toLowerCase() || '' : '';
+        const isReviewer = username.includes('reviewer') || userEmail.includes('reviewer');
+
+        if (isReviewer && (workflowInstance?.currentStageId === '3' || workflowInstance?.currentStageId === '3.5' || workflowInstance?.currentStageId === '5.5')) {
+          return (
+            <Box sx={{ p: 3, pt: 0 }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                fullWidth
+                startIcon={<NavigateNext />}
+                onClick={() => window.location.href = `/documents/${documentId}/review`}
+                sx={{
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+                  '&:hover': {
+                    background: 'linear-gradient(45deg, #1976D2 30%, #2196F3 90%)',
+                  }
+                }}
+              >
+                📝 Submit Review
+              </Button>
+            </Box>
+          );
+        }
+        return null;
+      })()}
 
       </CardContent>
 

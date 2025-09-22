@@ -599,11 +599,24 @@ export class DocumentService {
         throw new Error('Access denied');
       }
 
-      const document = await this.prisma.document.findFirst({
-        where: {
-          id: documentId,
-          organizationId
+      // Get user's role to check if they're an admin
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          role: {
+            select: { name: true }
+          }
         }
+      });
+
+      // For Admin users, don't filter by organizationId
+      const whereClause: any = { id: documentId };
+      if (user?.role?.name !== 'Admin') {
+        whereClause.organizationId = organizationId;
+      }
+
+      const document = await this.prisma.document.findFirst({
+        where: whereClause
       });
 
       if (!document) {

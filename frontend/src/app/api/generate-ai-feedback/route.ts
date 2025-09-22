@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { documentId, documentContent, documentType } = body;
+    const { documentId, documentContent, documentType, feedbackCount = 10 } = body;
 
     // If documentContent is not provided, fetch it from the document
     let content = documentContent;
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const textContent = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
     // Generate AI feedback using OpenRouter
-    const feedback = await generateAIFeedbackWithOpenRouter(textContent, documentType);
+    const feedback = await generateAIFeedbackWithOpenRouter(textContent, documentType, feedbackCount);
 
     return NextResponse.json({
       success: true,
@@ -41,10 +41,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function generateAIFeedbackWithOpenRouter(content: string, documentType: string): Promise<any[]> {
+async function generateAIFeedbackWithOpenRouter(content: string, documentType: string, feedbackCount: number = 10): Promise<any[]> {
   const prompt = `You are an expert document reviewer analyzing an ${documentType || 'official'} document.
 
-  Please analyze the following document content and provide detailed feedback in JSON format.
+  Please analyze the following document content and generate EXACTLY ${feedbackCount} feedback items in JSON format.
 
   Document Content:
   ${content.substring(0, 8000)} ${content.length > 8000 ? '... [truncated]' : ''}
@@ -75,7 +75,10 @@ async function generateAIFeedbackWithOpenRouter(content: string, documentType: s
   - Innovation and improvements
   - Proper formatting and grammar
 
-  Return ONLY a JSON array of feedback objects. No other text.`;
+  IMPORTANT: You MUST return EXACTLY ${feedbackCount} feedback items. No more, no less.
+  Distribute the feedback across all severity levels (CRITICAL, MAJOR, SUBSTANTIVE, ADMINISTRATIVE).
+
+  Return ONLY a JSON array of exactly ${feedbackCount} feedback objects. No other text.`;
 
   try {
     const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {

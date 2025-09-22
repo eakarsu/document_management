@@ -67,6 +67,7 @@ import {
   CheckBoxOutlineBlank as DeselectAllIcon,
   BatchPrediction as BatchIcon,
   History as HistoryIcon,
+  NavigateNext,
   TrackChanges as TrackChangesIcon,
   AutoAwesome as GenerateAIIcon,
   Build,
@@ -136,6 +137,7 @@ const OPRReviewPage = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeResult, setMergeResult] = useState<string>('');
+  const [processingWorkflow, setProcessingWorkflow] = useState(false);
   const [mergeResultContent, setMergeResultContent] = useState<string>('');
   const [highlightedText, setHighlightedText] = useState<string>(''); // Store text to highlight // Store actual content separately
   const [loading, setLoading] = useState(false);
@@ -541,15 +543,119 @@ const OPRReviewPage = () => {
 
   // Apply all feedback items
   const applyAllFeedback = async () => {
-    if (feedback.length === 0) {
-      window.alert('No feedback items to apply');
+    // Filter for pending, non-critical feedback that has changes to apply
+    const applicableFeedback = feedback.filter(f =>
+      (!f.status || f.status === 'pending') &&
+      f.commentType !== 'C' &&  // Skip critical feedback
+      f.changeTo  // Only items with actual changes
+    );
+
+    if (applicableFeedback.length === 0) {
+      // Check if there are critical items
+      const criticalCount = feedback.filter(f =>
+        (!f.status || f.status === 'pending') && f.commentType === 'C'
+      ).length;
+
+      if (criticalCount > 0) {
+        window.alert(`Cannot apply all: ${criticalCount} critical feedback item(s) require manual review. Non-critical items: ${applicableFeedback.length}`);
+      } else {
+        window.alert('No applicable feedback items to apply');
+      }
       return;
     }
 
-    // Apply each feedback item
-    for (const item of feedback) {
-      setSelectedFeedback(item);
-      await handleMergeFeedback();
+    if (!confirm(`Apply all ${applicableFeedback.length} non-critical feedback items? (Critical items will be skipped)`)) {
+      return;
+    }
+
+    let successCount = 0;
+    setLoading(true);
+    let updatedContent = editableContent;
+    let updatedFeedbackList = [...feedback];
+    const newAppliedChanges = new Map(appliedChanges);
+
+    try {
+      // Apply each non-critical pending feedback item
+      for (const item of applicableFeedback) {
+        console.log(`Applying feedback ${successCount + 1}/${applicableFeedback.length}: ${item.id}`);
+
+        // Apply the change to content
+        if (item.changeFrom && item.changeTo) {
+          updatedContent = updatedContent.replace(item.changeFrom, item.changeTo);
+
+          // Track this change in appliedChanges map for comparison view
+          const changeId = `bulk_${Date.now()}_${successCount}`;
+          newAppliedChanges.set(changeId, {
+            original: item.changeFrom,
+            changed: item.changeTo,
+            feedbackId: item.id || ''
+          });
+        }
+
+        // Mark this specific feedback as merged in our list
+        updatedFeedbackList = updatedFeedbackList.map(f =>
+          f.id === item.id ? { ...f, status: 'merged' as const } : f
+        );
+
+        successCount++;
+
+        // Small delay to allow UI to update
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      // Update all states at once
+      setEditableContent(updatedContent);
+      setFeedback(updatedFeedbackList);
+      setAppliedChanges(newAppliedChanges);
+
+      if (documentData) {
+        setDocumentData(prevData => ({
+          ...prevData,
+          customFields: {
+            ...prevData.customFields,
+            crmFeedback: updatedFeedbackList,
+            draftFeedback: updatedFeedbackList,
+            content: updatedContent,
+            editableContent: updatedContent
+          }
+        }));
+      }
+
+      // Final save to ensure all changes are persisted
+      try {
+        console.log('Saving final state after applying all feedback');
+        const finalResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            customFields: {
+              crmFeedback: updatedFeedbackList,
+              draftFeedback: updatedFeedbackList,
+              content: updatedContent,
+              editableContent: updatedContent,
+              lastBulkApply: new Date().toISOString()
+            }
+          })
+        });
+
+        if (!finalResponse.ok) {
+          console.error('Final save failed:', finalResponse.status);
+        } else {
+          console.log('Final state saved successfully');
+        }
+      } catch (saveError) {
+        console.error('Error saving final state:', saveError);
+      }
+
+      window.alert(`✅ Successfully applied ${successCount} feedback items. All applied items are now disabled and saved to database.`);
+    } catch (error) {
+      console.error('Error applying feedback:', error);
+      window.alert(`Applied ${successCount} of ${applicableFeedback.length} items before error occurred.`);
+    } finally {
+      setLoading(false);
+      setSelectedFeedback(null);
     }
   };
 
@@ -894,16 +1000,30 @@ const OPRReviewPage = () => {
           console.log('  - Remaining feedback count:', remainingFeedback.length);
           console.log('  - Saving to database with updated feedback list');
           
-          await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              customFields: {
-                content: result.mergedContent,
-                draftFeedback: remainingFeedback,
-                lastAIMerge: new Date().toISOString()
-              }
-            })
-          });
+          try {
+            const saveResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                customFields: {
+                  content: result.mergedContent,
+                  draftFeedback: remainingFeedback,
+                  crmFeedback: remainingFeedback,
+                  lastAIMerge: new Date().toISOString()
+                }
+              })
+            });
+
+            if (!saveResponse.ok) {
+              console.error('Failed to save AI merge to database:', saveResponse.status);
+            } else {
+              console.log('  - AI merge saved to database successfully');
+            }
+          } catch (error) {
+            console.error('Error saving AI merge to database:', error);
+          }
           
           console.log('  - AI merge completed successfully');
           setMergeResult('✅ AI merge completed successfully. The document has been updated with the improved content.');
@@ -975,16 +1095,32 @@ const OPRReviewPage = () => {
           
           // Also save to database immediately to persist the change AND update feedback list
           console.log('  - Saving to database with updated feedback list');
-          await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              customFields: {
-                content: newContent,
-                crmFeedback: updatedFeedback,  // Save the updated feedback list as crmFeedback
-                lastManualMerge: new Date().toISOString()
-              }
-            })
-          });
+          try {
+            const saveResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                customFields: {
+                  content: newContent,
+                  crmFeedback: updatedFeedback,  // Save the updated feedback list as crmFeedback
+                  draftFeedback: updatedFeedback, // Also save as draftFeedback for compatibility
+                  lastManualMerge: new Date().toISOString()
+                }
+              })
+            });
+
+            if (!saveResponse.ok) {
+              console.error('Failed to save to database:', saveResponse.status);
+              // Don't throw error, just log it - the merge still worked locally
+            } else {
+              console.log('  - Successfully saved to database');
+            }
+          } catch (error) {
+            console.error('Error saving to database:', error);
+            // Don't throw - continue with local changes
+          }
           
           console.log('  - Manual merge completed successfully');
           setMergeResult('✅ Manual merge completed successfully.');
@@ -998,24 +1134,63 @@ const OPRReviewPage = () => {
         // Mark the feedback as 'merged' instead of removing it
         console.log('📝 MARKING FEEDBACK AS MERGED');
         console.log('  - Feedback ID:', selectedFeedback.id);
-        const updatedFeedback = feedback.map(f =>
-          f.id === selectedFeedback.id
-            ? { ...f, status: 'merged' as const }
-            : f
-        );
-        console.log('  - Updated feedback status to merged');
+        console.log('  - Current feedback count:', feedback.length);
+
+        const updatedFeedback = feedback.map(f => {
+          if (f.id === selectedFeedback.id) {
+            console.log('  - Found matching feedback, updating status to merged');
+            return { ...f, status: 'merged' as const };
+          }
+          return f;
+        });
+
+        console.log('  - Updated feedback:', updatedFeedback.find(f => f.id === selectedFeedback.id));
         setFeedback(updatedFeedback);
-        
-        // Also update documentData to remove the feedback
+
+        // Clear selected feedback after marking as merged
+        setSelectedFeedback(null);
+
+        // Also update documentData locally
         if (documentData) {
-          console.log('  - Updating documentData.customFields.crmFeedback');
+          console.log('  - Updating documentData.customFields locally');
           setDocumentData(prevData => ({
             ...prevData,
             customFields: {
               ...prevData.customFields,
-              crmFeedback: updatedFeedback
+              crmFeedback: updatedFeedback,
+              draftFeedback: updatedFeedback,
+              content: editableContent,
+              editableContent: editableContent
             }
           }));
+        }
+
+        // Save the entire state to database
+        try {
+          console.log('  - Saving merged feedback and content to database');
+          const saveResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              customFields: {
+                crmFeedback: updatedFeedback,
+                draftFeedback: updatedFeedback,
+                content: editableContent,
+                editableContent: editableContent,
+                lastMergeUpdate: new Date().toISOString()
+              }
+            })
+          });
+
+          if (!saveResponse.ok) {
+            console.error('Failed to save merged state to database:', saveResponse.status);
+          } else {
+            console.log('  - Successfully saved to database');
+          }
+        } catch (error) {
+          console.error('Error saving merged state:', error);
         }
       } else {
         console.log('📝 HYBRID MODE - Not removing feedback yet, waiting for user decision');
@@ -1147,7 +1322,7 @@ const OPRReviewPage = () => {
       // If including track changes, add markup to show changes
       if (includeTrackChanges) {
         // Apply track changes markup
-        for (const [id, change] of appliedChanges) {
+        for (const [id, change] of Array.from(appliedChanges.entries())) {
           const originalMarkup = `<del style="color: red; text-decoration: line-through;">${change.original}</del>`;
           const changedMarkup = `<ins style="color: green; text-decoration: underline;">${change.changed}</ins>`;
           contentToExport = contentToExport.replace(
@@ -1318,9 +1493,81 @@ const OPRReviewPage = () => {
     }
   };
 
+  const handleProcessFeedbackAndContinue = async () => {
+    setProcessingWorkflow(true);
+
+    try {
+      // Save any pending changes first
+      if (isEditingDocument && editableContent !== documentContent) {
+        const saveResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            customFields: {
+              content: editableContent,
+              lastOPRUpdate: new Date().toISOString()
+            }
+          })
+        });
+
+        if (!saveResponse.ok) {
+          setAlert({
+            type: 'error',
+            message: 'Failed to save document changes before continuing workflow'
+          });
+          setProcessingWorkflow(false);
+          return;
+        }
+      }
+
+      // Transition to the next workflow stage (from Stage 3.5 to Stage 4)
+      // This completes the review collection phase and moves to OPR Feedback Incorporation
+      const transitionResponse = await fetch('/api/workflow-action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authTokenService.getAccessToken()}`
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'advance',
+          workflowId: documentId,
+          fromStage: '3.5',
+          toStage: '4',
+          requiredRole: 'Coordinator'
+        })
+      });
+
+      if (transitionResponse.ok) {
+        setAlert({
+          type: 'success',
+          message: 'Review collection phase complete! Workflow has advanced to Stage 4: OPR Feedback Incorporation. The Action Officer can now process the feedback.'
+        });
+
+        // Redirect back to the main document page after a short delay
+        setTimeout(() => {
+          router.push(`/documents/${documentId}`);
+        }, 3000);
+      } else {
+        const error = await transitionResponse.text();
+        setAlert({
+          type: 'error',
+          message: `Failed to advance workflow: ${error}`
+        });
+      }
+    } catch (error) {
+      console.error('Error processing workflow:', error);
+      setAlert({
+        type: 'error',
+        message: 'Error processing workflow. Please try again.'
+      });
+    } finally {
+      setProcessingWorkflow(false);
+    }
+  };
+
   const handleSaveDocument = async () => {
     setSavingDocument(true);
-    
+
     try {
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
         method: 'PATCH',
@@ -1331,7 +1578,7 @@ const OPRReviewPage = () => {
           }
         })
       });
-      
+
       if (response.ok) {
         setDocumentContent(editableContent);
         setIsEditingDocument(false);
@@ -1814,9 +2061,10 @@ const OPRReviewPage = () => {
                     size="small"
                     startIcon={<TrackChangesIcon />}
                     onClick={applyAllFeedback}
-                    disabled={feedback.length === 0}
+                    disabled={feedback.filter(f => (!f.status || f.status === 'pending') && f.commentType !== 'C' && f.changeTo).length === 0}
+                    title="Apply all non-critical feedback items"
                   >
-                    Apply All ({feedback.length})
+                    Apply All ({feedback.filter(f => (!f.status || f.status === 'pending') && f.commentType !== 'C').length})
                   </Button>
                 </Grid>
                 <Grid item xs={6}>
@@ -2077,13 +2325,38 @@ const OPRReviewPage = () => {
                     sx={{
                       mb: 0.5,
                       border: 1,
-                      borderColor: selectedFeedback?.id === item.id ? 'primary.main' : 'divider',
+                      borderColor: item.status === 'merged'
+                        ? 'grey.300'
+                        : selectedFeedback?.id === item.id
+                          ? 'primary.main'
+                          : 'divider',
                       borderRadius: 1,
-                      bgcolor: selectedFeedback?.id === item.id ? 'primary.50' : 'background.paper',
-                      cursor: 'pointer',
+                      bgcolor: item.status === 'merged'
+                        ? 'grey.100'
+                        : selectedFeedback?.id === item.id
+                          ? 'primary.50'
+                          : 'background.paper',
+                      cursor: item.status === 'merged' ? 'not-allowed' : 'pointer',
+                      opacity: item.status === 'merged' ? 0.7 : 1,
+                      position: 'relative',
                       '&:hover': {
-                        bgcolor: selectedFeedback?.id === item.id ? 'primary.100' : 'grey.100'
-                      }
+                        bgcolor: item.status === 'merged'
+                          ? 'grey.100'
+                          : selectedFeedback?.id === item.id
+                            ? 'primary.100'
+                            : 'grey.100'
+                      },
+                      '&::after': item.status === 'merged' ? {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0,0,0,0.05)',
+                        pointerEvents: 'none',
+                        borderRadius: 1
+                      } : {}
                     }}
                   >
                     <Checkbox
@@ -2711,14 +2984,36 @@ const OPRReviewPage = () => {
                     {(() => {
                       let htmlWithHighlights = editableContent;
 
-                      // Apply highlighting for each tracked change
-                      for (const [id, change] of appliedChanges) {
+                      // First, use appliedChanges map for tracked changes
+                      for (const [id, change] of Array.from(appliedChanges.entries())) {
                         if (change.original && change.changed) {
-                          // Replace original with strikethrough and new with highlight
-                          const escapedOriginal = change.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                          // First, check if the original text still exists (not yet replaced)
+                          if (htmlWithHighlights.includes(change.original)) {
+                            // Replace original with strikethrough and new with highlight
+                            const escapedOriginal = change.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            htmlWithHighlights = htmlWithHighlights.replace(
+                              new RegExp(escapedOriginal, 'g'),
+                              `<span style="text-decoration: line-through; color: red; background-color: #ffcccc;">${change.original}</span> <span style="background-color: #c8e6c9; color: green; font-weight: bold;">${change.changed}</span>`
+                            );
+                          } else if (htmlWithHighlights.includes(change.changed)) {
+                            // If original is already replaced, still show both old (strikethrough) and new
+                            const escapedChanged = change.changed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            htmlWithHighlights = htmlWithHighlights.replace(
+                              new RegExp(escapedChanged, 'g'),
+                              `<span style="text-decoration: line-through; color: red; background-color: #ffcccc;">${change.original}</span> <span style="background-color: #c8e6c9; color: green; font-weight: bold;">${change.changed}</span>`
+                            );
+                          }
+                        }
+                      }
+
+                      // Also highlight all merged feedback items (for Apply All changes)
+                      const mergedFeedback = feedback.filter(f => f.status === 'merged');
+                      for (const item of mergedFeedback) {
+                        if (item.changeTo && htmlWithHighlights.includes(item.changeTo)) {
+                          const escapedChangeTo = item.changeTo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                           htmlWithHighlights = htmlWithHighlights.replace(
-                            new RegExp(escapedOriginal, 'g'),
-                            `<span style="text-decoration: line-through; color: red;">${change.original}</span> <span style="background-color: #c8e6c9; color: green; font-weight: bold;">${change.changed}</span>`
+                            new RegExp(escapedChangeTo, 'g'),
+                            `<span style="background-color: #c8e6c9; color: green; font-weight: bold; padding: 2px 4px; border-radius: 3px; border: 1px solid #4caf50;">${item.changeTo}</span>`
                           );
                         }
                       }
