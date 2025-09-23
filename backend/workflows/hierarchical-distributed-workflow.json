@@ -365,8 +365,18 @@
     },
     {
       "from": "3",
+      "to": "2",
+      "condition": "return_to_previous"
+    },
+    {
+      "from": "3",
       "to": "3.5",
       "condition": "distributed_to_reviewers"
+    },
+    {
+      "from": "3.5",
+      "to": "3",
+      "condition": "return_to_previous"
     },
     {
       "from": "3.5",
@@ -375,8 +385,18 @@
     },
     {
       "from": "4",
+      "to": "3.5",
+      "condition": "return_to_previous"
+    },
+    {
+      "from": "4",
       "to": "5",
       "condition": "feedback_incorporated"
+    },
+    {
+      "from": "5",
+      "to": "4",
+      "condition": "return_to_previous"
     },
     {
       "from": "5",
@@ -385,8 +405,18 @@
     },
     {
       "from": "5.5",
+      "to": "5",
+      "condition": "return_to_previous"
+    },
+    {
+      "from": "5.5",
       "to": "6",
       "condition": "all_draft_reviews_complete"
+    },
+    {
+      "from": "6",
+      "to": "5.5",
+      "condition": "return_to_previous"
     },
     {
       "from": "6",
@@ -405,6 +435,11 @@
     },
     {
       "from": "8",
+      "to": "7",
+      "condition": "return_to_previous"
+    },
+    {
+      "from": "8",
       "to": "9",
       "condition": "ready_for_leadership"
     },
@@ -417,6 +452,11 @@
       "from": "9",
       "to": "8",
       "condition": "leadership_rejected"
+    },
+    {
+      "from": "10",
+      "to": "9",
+      "condition": "return_to_previous"
     }
   ],
   "notifications": {

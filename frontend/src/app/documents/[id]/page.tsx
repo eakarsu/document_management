@@ -88,8 +88,7 @@ const DocumentViewPage: React.FC = () => {
 
   // Debug log to confirm page is loading
   useEffect(() => {
-    console.log('🔴🔴🔴 DOCUMENT PAGE MOUNTED - Document ID:', documentId);
-    console.log('🔴🔴🔴 Current User:', localStorage.getItem('userEmail'));
+    // Component mounted
   }, [documentId]);
 
   const [documentData, setDocumentData] = useState<DocumentDetails | null>(null);
@@ -524,19 +523,12 @@ const DocumentViewPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔍 WORKFLOW: Status response:', data);
 
         if (data.success && data.workflow) {
           setWorkflowActive(data.workflow.is_active);
           setWorkflowStage(data.workflow.current_stage);
           setWorkflowId(data.workflow.id);
-          console.log('🔍 WORKFLOW: State updated:', {
-            active: data.workflow.is_active,
-            stage: data.workflow.current_stage,
-            id: data.workflow.id
-          });
         } else {
-          console.log('❌ WORKFLOW: No workflow data in response or success=false');
         }
       } else {
         // console.log('🔍 WORKFLOW: Status response not OK:', response.status);
@@ -642,23 +634,12 @@ const DocumentViewPage: React.FC = () => {
 
   // Document info fetching
   const fetchDocumentData = async () => {
-    console.log('🚀 Starting document fetch for ID:', documentId);
-    console.log('🚀 Current user:', localStorage.getItem('userEmail'));
     try {
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`);
-      console.log('🚀 Document fetch response received, status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔍 DEBUG: Document data:', {
-          id: data.document.id,
-          status: data.document.status,
-          title: data.document.title,
-          workflowInstanceId: data.document.workflowInstanceId
-        });
-        console.log('🔍 DEBUG: Is document status PUBLISHED?', data.document.status === 'PUBLISHED');
         setDocumentData(data.document);
-        console.log('✅ Document loaded successfully for user:', currentUserEmail || localStorage.getItem('userEmail'));
         // Only consider document published if workflow is not active or completed
         // If workflow is active and not at final stage, show workflow UI instead
         const hasActiveWorkflow = data.document.workflowInstanceId && data.document.status !== 'COMPLETED';
@@ -682,12 +663,10 @@ const DocumentViewPage: React.FC = () => {
   // Initial data loading
   useEffect(() => {
     const loadData = async () => {
-      console.log('📄 DOCUMENT PAGE: Starting to load data for document:', documentId);
       setLoading(true);
       try {
         // Check if we have valid authentication
         const tokenInfo = authTokenService.getTokenInfo();
-        console.log('📄 DOCUMENT PAGE: Token info:', { hasToken: !!tokenInfo.accessToken, isValid: tokenInfo.isValid });
         if (!tokenInfo.accessToken || !tokenInfo.isValid) {
           console.log('🔐 AUTH: No valid token found, redirecting to login');
           router.push('/login');
@@ -1424,19 +1403,13 @@ const DocumentViewPage: React.FC = () => {
               {(
                   <JsonWorkflowDisplay
                     documentId={documentId}
-                    userRole={(() => {
-                      const role = userRole?.roleType || userRole?.role || 'USER';
-                      console.log('📊 Passing userRole to JsonWorkflowDisplay:', role, 'from userRole object:', userRole);
-                      return role;
-                    })()}
+                    userRole={userRole?.roleType || userRole?.role || 'USER'}
                     onWorkflowChange={(instance) => {
                   // Update old workflow state to maintain compatibility
-                  console.log('🔍 DEBUG onWorkflowChange: Instance received:', instance);
                   if ((instance as any).isActive || (instance as any).active) {
                     setWorkflowActive(true);
                     // Don't use document status as workflow stage - use actual workflow stage
                     const stageName = instance.currentStageName || '';
-                    console.log('🔍 DEBUG onWorkflowChange: Setting stage to:', stageName, 'from instance:', instance);
 
                     // If the stage name is "PUBLISHED" but workflow is active,
                     // this is likely the document status, not the workflow stage

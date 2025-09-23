@@ -907,7 +907,7 @@ const DocumentReviewPage = () => {
           </Paper>
 
           {/* Always show Stage 4 buttons if in Stage 4, regardless of user */}
-          {(workflowStage === '4' || workflowStage === 4 || workflowStage?.toString() === '4') ? (
+          {workflowStage === '4' ? (
             <Paper sx={{ p: 2, mb: 2, bgcolor: 'info.50', border: 2, borderColor: 'info.main' }}>
               <Typography variant="h6" gutterBottom color="info.main">
                 Stage 4: OPR Feedback Incorporation

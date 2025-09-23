@@ -1658,7 +1658,7 @@ const OPRReviewPage = () => {
 
         if (!saveResponse.ok) {
           setAlert({
-            type: 'error',
+            severity: 'error',
             message: 'Failed to save document changes before continuing workflow'
           });
           setProcessingWorkflow(false);
@@ -1686,7 +1686,7 @@ const OPRReviewPage = () => {
 
       if (transitionResponse.ok) {
         setAlert({
-          type: 'success',
+          severity: 'success',
           message: 'Review collection phase complete! Workflow has advanced to Stage 4: OPR Feedback Incorporation. The Action Officer can now process the feedback.'
         });
 
@@ -1697,14 +1697,14 @@ const OPRReviewPage = () => {
       } else {
         const error = await transitionResponse.text();
         setAlert({
-          type: 'error',
+          severity: 'error',
           message: `Failed to advance workflow: ${error}`
         });
       }
     } catch (error) {
       console.error('Error processing workflow:', error);
       setAlert({
-        type: 'error',
+        severity: 'error',
         message: 'Error processing workflow. Please try again.'
       });
     } finally {

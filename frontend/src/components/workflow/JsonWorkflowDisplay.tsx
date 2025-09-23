@@ -155,13 +155,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       }
 
       const instance = await instanceResponse.json();
-      console.log('📊 WORKFLOW INSTANCE FROM API:', {
-        active: instance.active,
-        isActive: instance.isActive,
-        workflowId: instance.workflowId,
-        currentStageId: instance.currentStageId,
-        user: userRole
-      });
+
       setWorkflowInstance(instance);
 
       if (instance.active && instance.workflowId) {
@@ -179,7 +173,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         onWorkflowChange(instance);
       }
     } catch (err) {
-      console.error('Error fetching workflow:', err);
+
       setError(err instanceof Error ? err.message : 'Failed to load workflow');
     } finally {
       setLoading(false);
@@ -212,14 +206,14 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       const response = await api.get('/api/workflows');
       if (response.ok) {
         const workflows = await response.json();
-        console.log('📋 WORKFLOWS FROM BACKEND:', workflows);
+
         setAvailableWorkflows(workflows);
 
         // PERMANENT FIX: Don't override with hardcoded options
         // Use the workflows from the backend
       }
     } catch (err) {
-      console.error('Error fetching available workflows:', err);
+
       // PERMANENT FIX: Don't use hardcoded options on error
       // Let the backend provide the workflows
     }
@@ -231,8 +225,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       setProcessing(true);
       setError(null);
 
-      console.log('🚀 STARTING WORKFLOW:', workflowId);
-      console.log('Selected workflow ID:', selectedWorkflowId);
 
       const response = await api.post(`/api/workflow-instances/${documentId}/start`, {
         workflowId
@@ -252,7 +244,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         onWorkflowChange(updatedInstance);
       }
     } catch (err) {
-      console.error('Error starting workflow:', err);
+
       setError(err instanceof Error ? err.message : 'Failed to start workflow');
     } finally {
       setProcessing(false);
@@ -287,9 +279,9 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       }
 
       // Success message
-      console.log('Workflow reset successfully. Ready to start new workflow.');
+
     } catch (err) {
-      console.error('Error resetting workflow:', err);
+
       setError(err instanceof Error ? err.message : 'Failed to reset workflow');
       throw err; // Re-throw to let parent handle it
     } finally {
@@ -300,7 +292,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
   // Advance workflow to next stage
   const advanceWorkflow = async (targetStageId: string | null, action: string, additionalData?: any) => {
     const buttonId = `${targetStageId || 'complete'}-${action}`;
-    console.log('🚀🚀🚀 advanceWorkflow called:', { targetStageId, action, currentStage: workflowInstance?.currentStageId });
+
     try {
       setProcessing(true);
       setError(null);
@@ -330,16 +322,13 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         }
       });
 
-      console.log('🚀🚀🚀 API Response:', response.ok, response.status);
-
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌❌❌ API Error:', errorData);
+
         throw new Error(errorData.error || 'Failed to advance workflow');
       }
 
       const responseData = await response.json();
-      console.log('✅✅✅ API Success:', responseData);
 
       setComment('');
       await fetchWorkflow();
@@ -347,7 +336,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       // Clear clicked buttons after successful workflow advancement
       setClickedButtons(new Set());
     } catch (err) {
-      console.error('Error advancing workflow:', err);
+
       setError(err instanceof Error ? err.message : 'Failed to advance workflow');
 
       // Remove the button from clicked state on error so user can retry
@@ -381,7 +370,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       // Refresh workflow after successful review submission
       await fetchWorkflow();
     } catch (err) {
-      console.error('Error submitting review:', err);
+
       setError(err instanceof Error ? err.message : 'Failed to submit review');
     } finally {
       setProcessing(false);
@@ -418,14 +407,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     const normalizedRole = userRole?.toUpperCase();
 
     // Debug logging - always log to understand role issues
-    console.log('🔍 ROLE CHECK:', {
-      userRole,
-      normalizedRole,
-      currentStageId: currentStage.id,
-      currentStageAssignedRole: (currentStage as any).assignedRole,
-      isStage10: currentStage.id === '10',
-      stageRequiresAFDPO: (currentStage as any).assignedRole === 'AFDPO'
-    });
 
     const isAdmin = normalizedRole === 'ADMIN';
     const isOPR = normalizedRole === 'OPR' || normalizedRole === 'OPR LEADERSHIP' || normalizedRole?.includes('OPR');
@@ -438,18 +419,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
     const canPublish = currentStage.id === '10' && (isAFDPO || isAdmin);
 
     // Debug logging to see what userRole we're getting
-    console.log('🔍 WORKFLOW PERMISSION DEBUG:', {
-      userRole,
-      normalizedRole,
-      isAdmin,
-      isOPR,
-      isLeadership,
-      isActionOfficer,
-      currentStageId: workflowInstance?.currentStageId,
-      currentStageName: currentStage?.name,
-      currentStageAssignedRole: (currentStage as any)?.assignedRole,
-      canPublish
-    });
 
     // Support both 'roles' array and 'assignedRole' string
     // OPR/Leadership should be able to act as ACTION_OFFICER for feedback incorporation stages
@@ -463,13 +432,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                                   currentStage.id === '8' || // Post-Legal OPR Update
                                   (currentStage as any).assignedRole === 'ACTION_OFFICER' || // OPR/Leadership can act as Action Officer
                                   currentStage.name?.toLowerCase().includes('review collection')));
-
-    console.log('🎯 USER CAN ACT?', {
-      userCanAct,
-      isAFDPO,
-      isAdmin,
-      currentStageAssignedRole: (currentStage as any).assignedRole
-    });
 
     // Get all defined actions for this stage
     let actions: Array<{ id: string; label: string; target: string; disabled: boolean; disabledReason?: string }> =
@@ -512,11 +474,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                                    currentStage.name?.toLowerCase().includes('review collection');
 
     if (isReviewCollectionPhase) {
-      console.log('🔍 Review Collection Phase detected:', {
-        stageId: currentStage.id,
-        stageName: currentStage.name,
-        existingActions: actions.map(a => ({ id: a.id, label: a.label, disabled: a.disabled }))
-      });
 
       // Check user role for coordinator (Admin users are also treated as coordinators)
       const roleToCheck = userRole?.toLowerCase() || '';
@@ -526,25 +483,23 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                            roleToCheck === 'admin' ||
                            roleToCheck === 'workflow_admin';
 
-      console.log('🔍 Role check in Review Phase - roleToCheck:', roleToCheck, 'isCoordinator:', isCoordinator);
-
       // Filter actions based on role
       if (!isCoordinator) {
-        console.log('👤 User is NOT coordinator (reviewer) - keeping only Submit Review button');
-        console.log('   Actions before filtering:', actions.map(a => a.label));
+
+
         // Remove "All Reviews Complete" and "Process Feedback" actions for non-coordinators
         actions = actions.filter(action => {
           const shouldRemove = action.label?.toLowerCase().includes('all reviews complete') ||
                                action.label?.toLowerCase().includes('process feedback');
           if (shouldRemove) {
-            console.log('   ❌ Removing action:', action.label);
+
           }
           return !shouldRemove;
         });
-        console.log('   Actions after filtering:', actions.map(a => a.label));
+
       } else {
-        console.log('👮 User is coordinator - removing Submit Review button');
-        console.log('   Actions before filtering:', actions.map(a => a.label));
+
+
         // Remove "Submit Review" and "Submit Draft Review" actions for coordinators - they only need management buttons
         actions = actions.filter(action => {
           const shouldRemove = action.label?.toLowerCase().includes('submit') && action.label?.toLowerCase().includes('review') ||
@@ -552,15 +507,15 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                                action.label?.toLowerCase() === 'submit draft review' ||
                                (action as any).type === 'REVIEW_SUBMIT';
           if (shouldRemove) {
-            console.log('   ❌ Removing action:', action.label);
+
           }
           return !shouldRemove;
         });
-        console.log('   Actions after filtering (coordinator sees):', actions.map(a => a.label));
+
       }
 
       // Enable remaining actions
-      console.log('🚀 Enabling actions for Review Collection Phase');
+
       actions.forEach(action => {
         action.disabled = false;
         action.disabledReason = undefined;
@@ -573,10 +528,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         a.label?.toLowerCase().includes('review')
       );
 
-      console.log('🔍 Has existing review actions:', hasReviewActions);
-
       if (!hasReviewActions) {
-        console.log('🚀 Adding Review Collection Phase actions for stage:', currentStage.id, 'User role:', userRole);
 
         // Only add "All Reviews Complete" action for coordinators (Admin users are also treated as coordinators)
         const roleToCheck = userRole?.toLowerCase() || '';
@@ -586,10 +538,8 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                              roleToCheck === 'admin' ||
                              roleToCheck === 'workflow_admin';
 
-        console.log('🔍 Role check - roleToCheck:', roleToCheck, 'isCoordinator:', isCoordinator);
-
         if (isCoordinator) {
-          console.log('👮 User is coordinator - adding All Reviews Complete button');
+
           // Add "All Reviews Complete" action - ONLY for coordinators
           actions.push({
             id: 'opr-complete-reviews',
@@ -608,11 +558,11 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
             disabledReason: undefined
           });
         } else {
-          console.log('👤 User is NOT coordinator (role:', userRole, ') - NOT adding All Reviews Complete button');
-          console.log('   Reviewers should only see Submit Review button');
+
+
         }
       } else {
-        console.log('🔍 Existing review actions found and enabled');
+
       }
     }
 
@@ -624,16 +574,8 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                          roleToCheck === 'workflow_admin';
     const shouldShowTransitions = !isReviewCollectionPhase || isCoordinator;
 
-    console.log('🚦 Transition button check:', {
-      isReviewCollectionPhase,
-      isCoordinator,
-      shouldShowTransitions,
-      userRole,
-      availableTransitions: availableTransitions.length
-    });
-
     if (shouldShowTransitions) {
-      console.log('✅ Adding transition buttons for user');
+
       availableTransitions.forEach((transition: any) => {
         const targetStage = workflowDef.stages.find((s: any) => s.id === transition.to);
         const hasAction = actions.some(a => a.target === transition.to);
@@ -682,14 +624,62 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
       // Only allow publish actions at stage 10
       if (isPublishAction && currentStage.id !== '10') {
-        console.warn(`⚠️ Blocking publish action "${action.label}" at stage ${currentStage.id} (should only be at stage 10)`);
+
         return false;
       }
 
       return true;
     });
 
-    console.log('📊 FINAL ACTIONS for', userRole, ':', filteredActions.map(a => a.label));
+    // Add "Return to Previous Stage" button for non-initial stages
+    if (currentStage.id !== '1' && workflowDef && workflowInstance) {
+      // Find the previous stage
+      const sortedStages = workflowDef.stages.slice().sort((a, b) => a.order - b.order);
+      const currentIndex = sortedStages.findIndex(s => s.id === currentStage.id);
+
+      if (currentIndex > 0) {
+        const previousStage = sortedStages[currentIndex - 1];
+
+        // Determine appropriate return button label based on current stage
+        let returnLabel = `Return to ${previousStage.name}`;
+
+        // Custom labels for specific stages
+        if (currentStage.id === '2') {
+          returnLabel = 'Return to Action Officer';
+        } else if (currentStage.id === '3') {
+          returnLabel = 'Return to PCM for Review';
+        } else if (currentStage.id === '3.5') {
+          returnLabel = 'Return to Front Office';
+        } else if (currentStage.id === '4') {
+          returnLabel = 'Return to Review Collection';
+        } else if (currentStage.id === '5') {
+          returnLabel = 'Return for Feedback Incorporation';
+        } else if (currentStage.id === '5.5') {
+          returnLabel = 'Return to Second Draft Prep';
+        } else if (currentStage.id === '6') {
+          returnLabel = 'Return to Second Review';
+        } else if (currentStage.id === '7') {
+          returnLabel = 'Return for OPR Revision';
+        } else if (currentStage.id === '8') {
+          returnLabel = 'Return to Legal Review';
+        } else if (currentStage.id === '9') {
+          returnLabel = 'Return for Post-Legal Updates';
+        } else if (currentStage.id === '10') {
+          returnLabel = 'Return to Leadership Review';
+        }
+
+        // Add the return button (enabled for Admin and appropriate roles)
+        const canReturn = isAdmin || userCanAct;
+
+        filteredActions.push({
+          id: `return-to-${previousStage.id}`,
+          label: returnLabel,
+          target: previousStage.id,
+          disabled: !canReturn,
+          disabledReason: !canReturn ? 'You do not have permission to return this document to the previous stage' : undefined
+        });
+      }
+    }
 
     return filteredActions;
   };
@@ -726,17 +716,12 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
     // Debug logging in development
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Workflow Completion Check:', {
-        isActive: currentIsActive,
-        status: (workflowInstance as any).status,
-        completedAt: (workflowInstance as any).completedAt,
-        currentStageId: workflowInstance.currentStageId
-      });
+
     }
 
     // Check if status is explicitly marked as completed
     if ((workflowInstance as any).status === 'completed') {
-      console.log('✅ Marked complete due to status=completed');
+
       return true;
     }
 
@@ -747,18 +732,17 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         workflowDef.stages.find(s => s.id === workflowInstance.currentStageId)?.order;
 
       if (currentStageOrder === maxStageOrder) {
-        console.log('✅ Marked complete due to inactive + final stage');
+
         return true;
       }
     }
 
     // For workflows without definition, check if completedAt is set AND workflow is inactive
     if (!currentIsActive && (workflowInstance as any).completedAt) {
-      console.log('✅ Marked complete due to inactive + completedAt');
+
       return true;
     }
 
-    console.log('❌ Workflow NOT marked as complete');
     return false;
   })();
 
@@ -1151,7 +1135,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                                   !roleToCheck.includes('icu');
 
           if (isBasicReviewer) {
-            console.log('🚫 Hiding workflow controls for basic reviewer role:', roleToCheck);
+
             return null;
           }
 
@@ -1188,15 +1172,20 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                 // Determine button styling based on action type
                 const isAdminAction = action.id.startsWith('admin-');
                 const isUserAction = action.id.startsWith('user-');
+                const isReturnButton = action.id?.startsWith('return-to-');
                 const buttonId = `${action.target}-${action.label}`;
                 const isButtonClicked = clickedButtons.has(buttonId);
-                
+
                 // Different colors for different action types
                 let buttonGradient = 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)';
                 let hoverGradient = 'linear-gradient(45deg, #1976D2 30%, #2196F3 90%)';
                 let disabledGradient = 'linear-gradient(45deg, #BDBDBD 30%, #E0E0E0 90%)';
-                
-                if (isAdminAction) {
+
+                if (isReturnButton) {
+                  // Return actions - Purple gradient
+                  buttonGradient = 'linear-gradient(45deg, #9C27B0 30%, #BA68C8 90%)';
+                  hoverGradient = 'linear-gradient(45deg, #7B1FA2 30%, #9C27B0 90%)';
+                } else if (isAdminAction) {
                   // Admin actions - Red gradient
                   buttonGradient = 'linear-gradient(45deg, #FF6B6B 30%, #FF8787 90%)';
                   hoverGradient = 'linear-gradient(45deg, #FF5252 30%, #FF6B6B 90%)';
@@ -1214,15 +1203,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
                 // Debug log for All Reviews Complete button
                 if (action.label === 'All Reviews Complete') {
-                  console.log('🔍 All Reviews Complete button state:', {
-                    isButtonDisabled,
-                    processing,
-                    isButtonClicked,
-                    requireComments: workflowDef.settings?.requireComments,
-                    hasComment: !!comment,
-                    actionDisabled: action.disabled,
-                    action
-                  });
+
                 }
 
                 // Determine the disabled reason
@@ -1239,20 +1220,19 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
 
                 return (
                   <Tooltip key={action.id} title={disabledTooltip} arrow>
-                    <span onClick={() => console.log('🟢🟢🟢 SPAN CLICKED - action:', action.label)} style={{display: 'inline-block'}}>
+                    <span onClick={() => {}} style={{display: 'inline-block'}}>
                       <Button
                         variant="contained"
                         size="large"
-                        startIcon={<NavigateNext />}
+                        startIcon={isReturnButton ? <NavigateBefore /> : <NavigateNext />}
                         onClick={() => {
-                          console.log('🔴🔴🔴 BUTTON CLICKED - action:', action.label);
-                          console.log('🔴🔴🔴 Action target:', action.target, 'Current stage:', workflowInstance?.currentStageId);
+
 
                           // Special handling for "All Reviews Complete" in Review Collection Phase
                           if (action.label?.toLowerCase().includes('all reviews complete') ||
                               action.label?.toLowerCase().includes('reviews complete') ||
                               action.id === 'opr-complete-reviews') {
-                            console.log('🚀 Processing All Reviews Complete action - ADVANCING WORKFLOW');
+
                             // Determine next stage based on current stage
                             let nextStage = action.target;
                             if (workflowInstance?.currentStageId === '3.5') {
@@ -1296,7 +1276,6 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                           // Special handling for AFDPO actions in Stage 10
                           if (workflowInstance?.currentStageId === '10' &&
                               ((action as any).type === 'PUBLISH' || (action as any).type === 'ARCHIVE' || action.id === 'final_check')) {
-                            console.log('🚀 Processing AFDPO action:', (action as any).name, (action as any).type);
 
                             if ((action as any).type === 'PUBLISH') {
                               // Complete the workflow when publishing
@@ -1314,12 +1293,12 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                           // Special handling for Stage 9 Leadership "Sign and Approve" - MUST transition to Stage 10
                           if (workflowInstance?.currentStageId === '9' &&
                               (action.label === 'Sign and Approve' || action.id === 'sign_and_approve')) {
-                            console.log('🚀 Leadership Sign and Approve - transitioning to AFDPO (Stage 10)');
+
                             advanceWorkflow('10', action.label);
                           }
                           // Check if this action has a target stage different from current (i.e., it's a transition)
                           else if (action.target !== workflowInstance?.currentStageId) {
-                            console.log('🎯🎯🎯 Calling advanceWorkflow - target differs from current');
+
                             advanceWorkflow(action.target, action.label);
                           } else {
                             // Non-transitioning action (like "Review Document")
@@ -1328,7 +1307,7 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
                               // Navigate to editor page in same window
                               window.location.href = `/editor/${documentId}`;
                             }
-                            console.log('Non-transitioning action:', action.label);
+
                           }
                         }}
                         disabled={isButtonDisabled}

@@ -677,11 +677,6 @@ export default function EditDocumentPage() {
                     </Box>
                     
                     <Paper sx={{ p: 0, height: 'calc(100vh - 300px)' }}>
-                      {console.log('🔴🔴🔴 Rendering editor with content:', {
-                        hasContent: !!documentContent,
-                        contentLength: documentContent?.length,
-                        first100: documentContent?.substring(0, 100)
-                      })}
                       <DAFPublicationEditorWithPageNumbers
                         documentId={documentId}
                         initialContent={documentContent || `
