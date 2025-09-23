@@ -22,28 +22,8 @@ const DocumentNumbering: React.FC<DocumentNumberingProps> = ({
     const processDocument = () => {
       const container = containerRef.current!;
       
-      // Debug: Log the content to see if it has styles
-      console.log('📊 DOCUMENT NUMBERING - Received content:', {
-        contentLength: content.length,
-        hasStyles: content.includes('style='),
-        firstStyleFound: content.indexOf('style=') > -1 ? content.substring(content.indexOf('style='), content.indexOf('style=') + 100) : 'No styles found',
-        first500Chars: content.substring(0, 500)
-      });
-      
       // First, set the raw HTML content (preserves inline styles)
       container.innerHTML = content;
-      
-      // Debug: Check if styles are preserved after setting innerHTML
-      const firstH3 = container.querySelector('h3');
-      const firstP = container.querySelector('p');
-      console.log('📊 DOCUMENT NUMBERING - After setting innerHTML:', {
-        h3Found: !!firstH3,
-        h3Style: firstH3?.getAttribute('style'),
-        h3ComputedMarginLeft: firstH3 ? window.getComputedStyle(firstH3).marginLeft : 'N/A',
-        pFound: !!firstP,
-        pStyle: firstP?.getAttribute('style'),
-        pComputedMarginLeft: firstP ? window.getComputedStyle(firstP).marginLeft : 'N/A'
-      });
       
       // Mark all tables with a special class to prevent any numbering
       const tables = container.querySelectorAll('table');

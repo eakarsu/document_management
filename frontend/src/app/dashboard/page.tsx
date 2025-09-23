@@ -98,17 +98,25 @@ const DashboardPage: React.FC = () => {
   });
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
   const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
   const router = useRouter();
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
+        // Fetch current user to get role
+        const userResponse = await api.get('/api/auth/me');
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          setUserRole(userData.role || '');
+        }
+
         // Fetch dashboard stats (token will be read from HTTP-only cookies server-side)
         const statsResponse = await api.get('/api/dashboard/stats');
 
         if (statsResponse.ok) {
           const statsData = await statsResponse.json();
-          
+
           // Fetch recent documents (token will be read from HTTP-only cookies server-side)
           const docsResponse = await api.get('/api/documents/search?limit=5');
 
@@ -688,7 +696,7 @@ const DashboardPage: React.FC = () => {
                   startIcon={<PublishIcon />}
                   size="large"
                   onClick={handlePublishing}
-                  sx={{ 
+                  sx={{
                     color: 'success.main',
                     borderColor: 'success.main',
                     '&:hover': {
@@ -699,14 +707,86 @@ const DashboardPage: React.FC = () => {
                 >
                   Publishing Management
                 </Button>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<AIIcon />}
-                  size="large"
-                  onClick={handleAIWorkflow}
-                  sx={{ 
-                    color: 'primary.main',
+              </Stack>
+            </Paper>
+          </Grid>
+
+            {/* Admin Workflow Controls Section - Only visible to admin users */}
+            {(userRole === 'ADMIN' || userRole === 'Admin' || userRole === 'WORKFLOW_ADMIN') && (
+              <Grid item xs={12} md={6} lg={4}>
+                <Paper sx={{ p: 3, height: '100%', bgcolor: 'background.paper' }}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                    <AdminIcon sx={{ color: 'error.main' }} />
+                    Admin Workflow Controls (Review Collection Phase)
+                  </Typography>
+                  <Stack spacing={2}>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                        onClick={async () => {
+                          // Submit review functionality
+                          try {
+                            const response = await api.post('/api/workflow/submit-review');
+                            if (response.ok) {
+                              alert('Review submitted successfully');
+                            } else {
+                              alert('Failed to submit review');
+                            }
+                          } catch (error) {
+                            console.error('Error submitting review:', error);
+                            alert('Error submitting review');
+                          }
+                        }}
+                      >
+                        Submit Review
+                      </Button>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="success"
+                        size="large"
+                        onClick={async () => {
+                          // All reviews complete - advance workflow
+                          try {
+                            const response = await api.post('/api/workflow/all-reviews-complete');
+                            if (response.ok) {
+                              alert('Workflow advanced successfully - All reviews marked as complete');
+                            } else {
+                              alert('Failed to advance workflow');
+                            }
+                          } catch (error) {
+                            console.error('Error advancing workflow:', error);
+                            alert('Error advancing workflow');
+                          }
+                        }}
+                      >
+                        All Reviews Complete
+                      </Button>
+                    </Box>
+                    <Divider />
+                    <Typography variant="caption" color="text.secondary">
+                      Use "Submit Review" to submit your own review. Use "All Reviews Complete" when all reviewers have submitted their feedback to advance the workflow to the next stage.
+                    </Typography>
+                  </Stack>
+                </Paper>
+              </Grid>
+            )}
+
+            {/* AI Workflow Section */}
+            <Grid item xs={12} md={6} lg={4}>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<AIIcon />}
+                    size="large"
+                    onClick={handleAIWorkflow}
+                    sx={{
+                      color: 'primary.main',
                     borderColor: 'primary.main',
                     '&:hover': {
                       borderColor: 'primary.dark',
@@ -716,20 +796,20 @@ const DashboardPage: React.FC = () => {
                 >
                   🤖 AI Workflow Assistant
                 </Button>
-              </Stack>
-            </Paper>
-
-            {/* Workflow Tasks - Pending Approvals */}
-            <Box sx={{ mt: 3 }}>
-              <WorkflowTasks showHeader={true} maxTasks={5} />
-            </Box>
-            {/* Reviewer Tasks - For Sub-Reviewers */}
-            <Box sx={{ mt: 3 }}>
-              <ReviewerTasks />
-            </Box>
-          </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
         </Grid>
 
+          {/* Workflow Tasks - Pending Approvals */}
+          <Box sx={{ mt: 3 }}>
+            <WorkflowTasks showHeader={true} maxTasks={5} />
+          </Box>
+
+          {/* Reviewer Tasks - For Sub-Reviewers */}
+          <Box sx={{ mt: 3 }}>
+            <ReviewerTasks />
+          </Box>
 
         {/* API Status */}
         <Box sx={{ mt: 4 }}>

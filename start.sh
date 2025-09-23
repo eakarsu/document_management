@@ -496,16 +496,21 @@ main() {
     # Wait for backend to start
     wait_for_service "http://localhost:4000/health" "Backend API"
 
-    # Start frontend service  
+    # Start frontend service
     print_info "Starting frontend server..."
-    
+
     # Ensure frontend directory exists
     if [ ! -f "frontend/package.json" ]; then
         print_error "Frontend package.json not found!"
         exit 1
     fi
-    
+
     cd frontend
+
+    # Clear Next.js cache to prevent build errors
+    print_info "Clearing Next.js cache..."
+    rm -rf .next
+    print_status "Next.js cache cleared"
     
     # Ensure frontend environment is configured correctly  
     print_info "Updating frontend environment configuration..."
@@ -780,7 +785,11 @@ case "${1:-}" in
         # Remove node_modules
         print_info "Removing node_modules directories..."
         rm -rf node_modules backend/node_modules frontend/node_modules database/node_modules
-        
+
+        # Remove Next.js cache
+        print_info "Removing Next.js cache..."
+        rm -rf frontend/.next
+
         # Remove logs
         print_info "Removing log files..."
         rm -f backend.log frontend.log error.log *.log

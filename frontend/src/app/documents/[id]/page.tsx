@@ -22,7 +22,8 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
-  TextField
+  TextField,
+  Stack
 } from '@mui/material';
 import {
   Business,
@@ -49,7 +50,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter, useParams } from 'next/navigation';
 import DocumentViewer from '../../../components/DocumentViewer';
-import DocumentVersions from '../../../components/DocumentVersions';
+import DocumentVersionsWithComparison from '../../../components/DocumentVersionsWithComparison';
 import WorkflowTasks from '../../../components/WorkflowTasks';
 import OPRFeedbackProcessor from '../../../components/feedback/OPRFeedbackProcessor';
 import { api } from '../../../lib/api';
@@ -1567,186 +1568,134 @@ const DocumentViewPage: React.FC = () => {
               </Box>
             </Paper>
 
-            {/* Streamlined Workflow Controls - Hide for basic reviewers only */}
-            {(() => {
-              const role = userRole?.roleType || userRole?.role || '';
-              const normalizedRole = role.toUpperCase();
-              // Only hide for basic reviewers, not specialized reviewers like LEGAL or TECHNICAL
-              const isBasicReviewer = (normalizedRole === 'REVIEWER' ||
-                                       normalizedRole === 'SUB_REVIEWER') &&
-                                      !normalizedRole.includes('LEGAL') &&
-                                      !normalizedRole.includes('TECHNICAL') &&
-                                      !normalizedRole.includes('ICU');
-
-              if (isBasicReviewer) {
-                console.log('🚫 Hiding Workflow Controls section for basic reviewer:', role);
-                return null;
-              }
-
-              return (
-            <Paper sx={{ p: 3, mb: 3, border: '2px solid', borderColor: 'primary.light' }}>
-              <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                🎯 Workflow Controls
-              </Typography>
-
-
-              {/* Role & Stage Status Display */}
-              <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                  <Chip 
-                    label={userRole?.role || 'Unknown'} 
-                    color="primary" 
-                    size="small"
-                    icon={<PersonIcon />}
-                  />
-                  {workflowActive && (
-                    <Chip 
-                      label={workflowStage || 'Not Started'} 
-                      color="warning" 
-                      size="small"
-                    />
-                  )}
-                </Box>
-              </Box>
-
-              {/* Submit Review Button - Always show */}
-              <Box sx={{ mb: 2 }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  fullWidth
-                  startIcon={<SubmitIcon />}
-                  onClick={() => router.push(`/documents/${documentId}/review`)}
-                  sx={{ py: 1.5 }}
-                >
-                  Submit Review
-                </Button>
-              </Box>
-
-              {/* OPR ROLE ACTIONS - Disabled (Using JSON workflows) */}
-              {userRole?.role === 'OPR' && (
-                <Box>
-                  <Alert severity="info">
-                    OPR actions are managed through the JSON workflow system above.
-                  </Alert>
-                </Box>
-              )}
-
-              {/* ICU REVIEWER ACTIONS - Disabled (Using JSON workflows) */}
-              {userRole?.role === 'ICU_REVIEWER' && (workflowStage === 'INTERNAL_COORDINATION' || workflowStage === '1st Coordination') && (
-                <Box>
-                  <Alert severity="info">
-                    Review actions are managed through the JSON workflow system above.
-                  </Alert>
-                </Box>
-              )}
-
-              {/* TECHNICAL REVIEWER ACTIONS - Disabled (Using JSON workflows) */}
-              {userRole?.role === 'TECHNICAL_REVIEWER' && (workflowStage === 'INTERNAL_COORDINATION' || workflowStage === '1st Coordination' || workflowStage === 'EXTERNAL_COORDINATION' || workflowStage === '2nd Coordination') && (
-                <Box>
-                  <Alert severity="info">
-                    Technical review actions are managed through the JSON workflow system above.
-                  </Alert>
-                </Box>
-              )}
-
-              {/* LEGAL REVIEWER ACTIONS - Disabled (Using JSON workflows) */}
-              {userRole?.role === 'LEGAL_REVIEWER' && (workflowStage === 'LEGAL_REVIEW' || workflowStage === 'Legal Review') && (
-                <Box>
-                  <Alert severity="info">
-                    Legal review actions are managed through the JSON workflow system above.
-                  </Alert>
-                </Box>
-              )}
-
-              {/* PUBLISHER ACTIONS - Disabled (Using JSON workflows) */}
-              {userRole?.role === 'PUBLISHER' && workflowStage === 'FINAL_PUBLISHING' && (
-                <Box>
-                  <Alert severity="info">
-                    Publishing actions are managed through the JSON workflow system above.
-                  </Alert>
-                </Box>
-              )}
-
-              {/* ADMIN ACTIONS - Simplified for JSON Workflows */}
-              {(userRole?.role === 'WORKFLOW_ADMIN' || userRole?.role === 'ADMIN' || userRole?.role === 'Admin') && (
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom color="secondary">
-                    👑 Admin Controls
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, mb: 2, flexDirection: 'column' }}>
-                    {/* Admin controls are now handled by the JSON workflow system */}
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                      Workflow controls are managed through the JSON workflow system above.
-                      Use the workflow actions in the main workflow display.
-                    </Alert>
-                    
-                    {/* Reset Workflow - Now uses JSON workflow reset */}
+            {/* Admin Workflow Controls - Showing for all users */}
+              <Paper sx={{ p: 3, mb: 3, border: '2px solid', borderColor: 'primary.light' }}>
+                <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                  👑 Admin Workflow Controls
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Review Collection Phase Controls
+                </Typography>
+                <Stack spacing={2}>
+                  {/* Review Collection Phase Buttons */}
+                  <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
                       fullWidth
                       variant="contained"
-                      color="error"
+                      color="primary"
+                      size="large"
+                      onClick={() => {
+                        // Navigate to the review page to submit review
+                        router.push(`/documents/${documentId}/review`);
+                      }}
+                    >
+                      Submit Review
+                    </Button>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      color="success"
+                      size="large"
                       onClick={async () => {
-                        if (!confirm('Are you sure you want to reset this workflow? This will move the document back to the beginning.')) {
-                          return;
-                        }
-                        if (jsonWorkflowResetRef.current) {
-                          try {
-                            await jsonWorkflowResetRef.current();
-                            alert('Workflow has been reset to the beginning!');
-                            // Force page refresh to show updated workflow state
-                            window.location.reload();
-                          } catch (error) {
-                            console.error('Error resetting workflow:', error);
-                            alert('Failed to reset workflow. Please try again.');
+                        try {
+                          if (!confirm('Are you sure all reviews are complete? This will advance the workflow to "OPR Feedback Incorporation & Draft Creation" stage.')) {
+                            return;
                           }
-                        } else {
-                          alert('Reset function not available. Please refresh the page.');
+
+                          // Get the workflow instance ID from the current workflow state
+                          // We already have it from the page state
+                          const instanceId = workflowId; // This is set from fetchWorkflowStatus
+                          console.log('🔍 Current workflowId from state:', workflowId);
+                          console.log('🔍 Current workflowStage:', workflowStage);
+                          console.log('🔍 Current workflowActive:', workflowActive);
+
+                          if (!instanceId) {
+                            console.error('❌ No workflow ID found in state');
+                            alert('No active workflow found. Please start a workflow first.');
+                            return;
+                          }
+
+                          // Transition workflow to next stage (stage 4: OPR Feedback Incorporation)
+                          console.log('🚀 Advancing workflow for document:', documentId);
+                          const transitionResponse = await authTokenService.authenticatedFetch(`/api/workflow/documents/${documentId}/workflow/action`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              action: 'advance-to-stage-4',
+                              comment: 'All reviews completed - advancing to OPR Feedback Incorporation',
+                              metadata: {
+                                targetStage: '4',
+                                targetStageName: 'OPR Feedback Incorporation & Draft Creation',
+                                fromStage: '3.5',
+                                fromStageName: 'Review Collection Phase'
+                              }
+                            })
+                          });
+
+                          if (transitionResponse.ok) {
+                            alert('Workflow advanced successfully to "OPR Feedback Incorporation & Draft Creation" stage');
+                            window.location.reload();
+                          } else {
+                            const error = await transitionResponse.json();
+                            console.error('Failed to advance workflow:', error);
+                            alert(`Failed to advance workflow: ${error.error || 'Unknown error'}`);
+                          }
+                        } catch (error) {
+                          console.error('Error advancing workflow:', error);
+                          alert('Error advancing workflow. Please try again.');
                         }
                       }}
                     >
-                      🔄 Reset to Start
+                      All Reviews Complete
                     </Button>
                   </Box>
-                </Box>
-              )}
 
-              {/* No Actions Available */}
-              {!userRole?.role || (
-                userRole?.role !== 'OPR' && 
-                userRole?.role !== 'ICU_REVIEWER' && 
-                userRole?.role !== 'TECHNICAL_REVIEWER' && 
-                userRole?.role !== 'LEGAL_REVIEWER' && 
-                userRole?.role !== 'PUBLISHER' && 
-                userRole?.role !== 'WORKFLOW_ADMIN' &&
-                userRole?.role !== 'ADMIN' &&
-                userRole?.role !== 'Admin'
-              ) && (
-                <Alert severity="info">
-                  No workflow actions available for your current role.
-                </Alert>
-              )}
+                  <Divider />
 
-            </Paper>
-              );
-            })()}
+                  {/* Reset Button */}
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="error"
+                    size="large"
+                    onClick={async () => {
+                      if (!confirm('Are you sure you want to reset this workflow? This will move the document back to the beginning.')) {
+                        return;
+                      }
+                      if (jsonWorkflowResetRef.current) {
+                        try {
+                          await jsonWorkflowResetRef.current();
+                          alert('Workflow has been reset to the beginning!');
+                          window.location.reload();
+                        } catch (error) {
+                          console.error('Error resetting workflow:', error);
+                          alert('Failed to reset workflow. Please try again.');
+                        }
+                      } else {
+                        alert('Reset function not available. Please refresh the page.');
+                      }
+                    }}
+                  >
+                    🔄 Reset to Start
+                  </Button>
+                </Stack>
+              </Paper>
 
             {/* Workflow Tasks Component */}
             <Paper sx={{ p: 3, mb: 3 }}>
               <WorkflowTasks />
             </Paper>
 
-            {/* Document Versions */}
+            {/* Document Versions with Full History and Changes */}
             <Paper id="version-history" sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                📃 Version History
-              </Typography>
               {documentData && currentUserId ? (
-                <DocumentVersions 
-                  documentId={documentId} 
+                <DocumentVersionsWithComparison
+                  documentId={documentId}
                   document={documentData}
                   currentUserId={currentUserId}
+                  onVersionUpdate={fetchDocumentData}
                 />
               ) : (
                 <Box sx={{ textAlign: 'center', py: 3 }}>

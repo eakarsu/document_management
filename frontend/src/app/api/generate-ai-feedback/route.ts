@@ -49,6 +49,15 @@ async function generateAIFeedbackWithOpenRouter(content: string, documentType: s
   Document Content:
   ${content.substring(0, 8000)} ${content.length > 8000 ? '... [truncated]' : ''}
 
+  CRITICAL RULES - DO NOT GENERATE FEEDBACK ON:
+  1. Section headings and titles (e.g., "1. Communication Systems Overview", "1.1 Secure Communication Technologies")
+  2. REFERENCES section
+  3. GLOSSARY OF TERMS AND ACRONYMS section
+  4. ATTACHMENTS section
+  5. DISTRIBUTION LIST section
+
+  Only generate feedback on actual paragraph content, not on structural headings or the excluded sections above.
+
   Provide feedback in the following categories:
   1. CRITICAL - Major issues that must be fixed (missing metrics, vague statements, critical errors)
   2. MAJOR - Important improvements needed (leadership examples, specific achievements)
@@ -59,7 +68,7 @@ async function generateAIFeedbackWithOpenRouter(content: string, documentType: s
   - comment: Clear description of the issue
   - severity: CRITICAL, MAJOR, SUBSTANTIVE, or ADMINISTRATIVE
   - category: Type of issue (Performance Metrics, Leadership, Communication, Format, etc.)
-  - originalText: The problematic text from the document (max 100 chars)
+  - originalText: The problematic text from the document (max 100 chars) - MUST be actual paragraph text, NOT headings
   - suggestedText: Your suggested improvement
   - page: Estimated page number (1-5)
   - paragraph: The paragraph number in hierarchical format (e.g., "1.1", "1.2", "2.1", "2.3.1")
@@ -75,8 +84,11 @@ async function generateAIFeedbackWithOpenRouter(content: string, documentType: s
   - Innovation and improvements
   - Proper formatting and grammar
 
-  IMPORTANT: You MUST return EXACTLY ${feedbackCount} feedback items. No more, no less.
-  Distribute the feedback across all severity levels (CRITICAL, MAJOR, SUBSTANTIVE, ADMINISTRATIVE).
+  IMPORTANT:
+  - You MUST return EXACTLY ${feedbackCount} feedback items. No more, no less.
+  - Distribute the feedback across all severity levels (CRITICAL, MAJOR, SUBSTANTIVE, ADMINISTRATIVE).
+  - DO NOT provide feedback on section headings, references, glossary, attachments, or distribution lists.
+  - Only provide feedback on actual content paragraphs.
 
   Return ONLY a JSON array of exactly ${feedbackCount} feedback objects. No other text.`;
 
@@ -94,7 +106,7 @@ async function generateAIFeedbackWithOpenRouter(content: string, documentType: s
         messages: [
           {
             role: 'system',
-            content: 'You are an expert document reviewer specializing in military performance reports and official documents. Always return valid JSON arrays.'
+            content: 'You are an expert document reviewer specializing in military performance reports and official documents. Always return valid JSON arrays. NEVER provide feedback on section headings, titles, references, glossary, attachments, or distribution lists - only on actual content paragraphs.'
           },
           {
             role: 'user',

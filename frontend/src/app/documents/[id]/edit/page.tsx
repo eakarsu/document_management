@@ -106,27 +106,44 @@ export default function EditDocumentPage() {
           setTitle(data.title);
           setCategory(data.category);
           
-          // Load document content - use htmlContent first to include intro and summary
+          // Load document content - check all possible content fields
           console.log('🔴🔴🔴 EDIT PAGE - Loading document content:', {
             hasHtmlContent: !!data.customFields?.htmlContent,
             hasEditableContent: !!data.customFields?.editableContent,
+            hasContent: !!data.customFields?.content,
+            hasRootContent: !!data.content,
             htmlContentLength: data.customFields?.htmlContent?.length,
             editableContentLength: data.customFields?.editableContent?.length,
+            contentLength: data.customFields?.content?.length,
+            rootContentLength: data.content?.length,
+            allCustomFields: Object.keys(data.customFields || {}),
             htmlContentHasIntro: data.customFields?.htmlContent?.includes('INTRODUCTION') || data.customFields?.htmlContent?.includes('data-paragraph="0.1"'),
             editableContentHasIntro: data.customFields?.editableContent?.includes('INTRODUCTION') || data.customFields?.editableContent?.includes('data-paragraph="0.1"')
           });
 
+          // Try to load content from various possible locations
+          let loadedContent = null;
+
           if (data.customFields?.htmlContent) {
             // Use full HTML content (includes intro, summary, and main content)
-            setDocumentContent(data.customFields.htmlContent);
+            loadedContent = data.customFields.htmlContent;
+            console.log('🔴 Using htmlContent');
           } else if (data.customFields?.editableContent) {
             // Fallback to editable content if no htmlContent
-            setDocumentContent(data.customFields.editableContent);
+            loadedContent = data.customFields.editableContent;
+            console.log('🔴 Using editableContent');
           } else if (data.customFields?.content) {
             // Fallback to plain text content (no styles)
-            setDocumentContent(data.customFields.content);
+            loadedContent = data.customFields.content;
+            console.log('🔴 Using customFields.content');
           } else if (data.content) {
-            setDocumentContent(data.content);
+            loadedContent = data.content;
+            console.log('🔴 Using root content');
+          }
+
+          if (loadedContent) {
+            console.log('🔴🔴🔴 Content loaded successfully, length:', loadedContent.length);
+            setDocumentContent(loadedContent);
           } else if (data.mimeType === 'text/html' || data.mimeType === 'text/plain') {
             // Try to convert document to HTML for rich text editing
             try {
@@ -660,6 +677,11 @@ export default function EditDocumentPage() {
                     </Box>
                     
                     <Paper sx={{ p: 0, height: 'calc(100vh - 300px)' }}>
+                      {console.log('🔴🔴🔴 Rendering editor with content:', {
+                        hasContent: !!documentContent,
+                        contentLength: documentContent?.length,
+                        first100: documentContent?.substring(0, 100)
+                      })}
                       <DAFPublicationEditorWithPageNumbers
                         documentId={documentId}
                         initialContent={documentContent || `

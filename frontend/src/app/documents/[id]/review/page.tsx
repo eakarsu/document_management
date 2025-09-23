@@ -106,28 +106,22 @@ const DocumentReviewPage = () => {
     const username = localStorage.getItem('username');
     const userEmail = localStorage.getItem('userEmail');
 
-    console.log('🔵 REVIEW PAGE - Checking user:', { username, userEmail });
-
     // Set role based on login
     if (username === 'coordinator1' || userEmail === 'coordinator1@airforce.mil' ||
         (username && username.toLowerCase().includes('coordinator')) ||
         (userEmail && userEmail.toLowerCase().includes('coordinator'))) {
       setUserRole('Coordinator');
-      console.log('🔵 REVIEW PAGE - Setting role as Coordinator');
     } else if (username === 'reviewer1' || username === 'reviewer2' ||
                userEmail === 'reviewer1@airforce.mil' || userEmail === 'reviewer2@airforce.mil' ||
                (username && username.toLowerCase().includes('reviewer')) ||
                (userEmail && userEmail.toLowerCase().includes('reviewer'))) {
       setUserRole('Reviewer');
-      console.log('🔵 REVIEW PAGE - Setting role as Reviewer');
     } else if (username === 'ao1' || userEmail === 'ao1@airforce.mil' ||
                (username && username.toLowerCase().includes('action'))) {
       setUserRole('ACTION_OFFICER');
-      console.log('🔵 REVIEW PAGE - Setting role as Action Officer');
     } else {
       // Default to reviewer for other users
       setUserRole('Reviewer');
-      console.log('🔵 REVIEW PAGE - Setting default role as Reviewer');
     }
   }, []);
   const [currentComment, setCurrentComment] = useState<CRMComment>({
@@ -155,10 +149,6 @@ const DocumentReviewPage = () => {
           // Convert to string to ensure consistent comparison
           const stageId = String(workflowData.currentStageId || '');
           setWorkflowStage(stageId);
-          console.log('🔵 REVIEW PAGE - Current workflow stage:', stageId, 'Type:', typeof stageId);
-          console.log('🔵 REVIEW PAGE - Full workflow data:', workflowData);
-          console.log('🔵 REVIEW PAGE - Stage Order:', workflowData.stageOrder);
-          console.log('🔵 REVIEW PAGE - Current Stage Name:', workflowData.currentStageName);
         } else {
           console.error('Failed to fetch workflow instance');
         }
@@ -167,7 +157,6 @@ const DocumentReviewPage = () => {
         const storedRole = localStorage.getItem('userRole');
         if (storedRole) {
           setUserRole(storedRole);
-          console.log('🔵 REVIEW PAGE - User role from localStorage:', storedRole);
         }
 
         // Also check for user info in localStorage
@@ -177,10 +166,9 @@ const DocumentReviewPage = () => {
             const userData = JSON.parse(userInfo);
             if (userData.role) {
               setUserRole(userData.role);
-              console.log('🔵 REVIEW PAGE - User role from userInfo:', userData.role);
             }
           } catch (e) {
-            console.log('Could not parse userInfo');
+            // Could not parse userInfo
           }
         }
 
@@ -191,31 +179,24 @@ const DocumentReviewPage = () => {
         // Determine role based on username/email
         if (userEmail && userEmail.includes('coordinator')) {
           setUserRole('Coordinator');
-          console.log('🔵 REVIEW PAGE - Detected as Coordinator from email:', userEmail);
         } else if (username && username.toLowerCase().includes('coordinator')) {
           setUserRole('Coordinator');
-          console.log('🔵 REVIEW PAGE - Detected as Coordinator from username:', username);
         } else if (username === 'coordinator1' || userEmail === 'coordinator1@airforce.mil') {
           // For coordinator1 login specifically
           setUserRole('Coordinator');
-          console.log('🔵 REVIEW PAGE - Setting role as Coordinator for coordinator1 login');
         } else if (userEmail && userEmail.includes('reviewer')) {
           // Set role as Reviewer for reviewer emails
           setUserRole('Reviewer');
-          console.log('🔵 REVIEW PAGE - Detected as Reviewer from email:', userEmail);
         } else if (username && username.toLowerCase().includes('reviewer')) {
           // Set role as Reviewer for reviewer usernames
           setUserRole('Reviewer');
-          console.log('🔵 REVIEW PAGE - Detected as Reviewer from username:', username);
         } else if (username === 'reviewer1' || username === 'reviewer2' ||
                    userEmail === 'reviewer1@airforce.mil' || userEmail === 'reviewer2@airforce.mil') {
           // For specific reviewer logins
           setUserRole('Reviewer');
-          console.log('🔵 REVIEW PAGE - Setting role as Reviewer for reviewer login');
         } else {
           // Default to Reviewer if not coordinator
           setUserRole('Reviewer');
-          console.log('🔵 REVIEW PAGE - Defaulting to Reviewer role');
         }
       } catch (error) {
         console.error('Error fetching workflow info:', error);
@@ -234,14 +215,6 @@ const DocumentReviewPage = () => {
           setDocumentData(doc);
           
           // Try multiple places for content - use editableContent to avoid header
-          console.log('🟢🟢🟢 REVIEW PAGE - Loading document content:', {
-            hasHtmlContent: !!doc.customFields?.htmlContent,
-            hasEditableContent: !!doc.customFields?.editableContent,
-            htmlContentLength: doc.customFields?.htmlContent?.length,
-            editableContentLength: doc.customFields?.editableContent?.length,
-            htmlContentHasIntro: doc.customFields?.htmlContent?.includes('INTRODUCTION') || doc.customFields?.htmlContent?.includes('data-paragraph="0.1"'),
-            editableContentHasIntro: doc.customFields?.editableContent?.includes('INTRODUCTION') || doc.customFields?.editableContent?.includes('data-paragraph="0.1"')
-          });
 
           let content = '';
           if (doc.customFields?.editableContent) {
@@ -287,14 +260,10 @@ const DocumentReviewPage = () => {
             // Check for AI-generated feedback first (for AI-generated documents)
             if (customFields.crmFeedback && Array.isArray(customFields.crmFeedback)) {
               setComments(customFields.crmFeedback);
-              console.log('Loaded', customFields.crmFeedback.length, 'AI-generated CRM feedback from database');
             }
             // Fallback to draft feedback
             else if (customFields.draftFeedback && Array.isArray(customFields.draftFeedback)) {
               setComments(customFields.draftFeedback);
-              console.log('Loaded', customFields.draftFeedback.length, 'draft comments from database');
-            } else {
-              console.log('No feedback found in database');
             }
           }
         } else {
@@ -355,10 +324,7 @@ const DocumentReviewPage = () => {
         })
       });
 
-      if (response.ok) {
-        console.log('Draft feedback saved to database');
-      } else {
-        console.error('Failed to save feedback to database');
+      if (!response.ok) {
         alert('Failed to save feedback to database');
       }
     } catch (error) {
@@ -506,10 +472,7 @@ const DocumentReviewPage = () => {
         })
       });
 
-      if (response.ok) {
-        console.log('Comment deleted from database');
-      } else {
-        console.error('Failed to delete comment from database');
+      if (!response.ok) {
         alert('Failed to delete comment from database');
       }
     } catch (error) {
@@ -572,12 +535,6 @@ const DocumentReviewPage = () => {
 
         // Save the AI feedback to database
         const allFeedback = [...comments, ...aiFeedback];
-        console.log('Saving AI feedback to database:', {
-          documentId,
-          feedbackCount: allFeedback.length,
-          newFeedbackCount: aiFeedback.length,
-          isAIGeneratedDoc
-        });
 
         // Prepare update fields based on document type
         const updateFields: any = {
@@ -601,10 +558,8 @@ const DocumentReviewPage = () => {
 
         if (!saveResponse.ok) {
           const errorText = await saveResponse.text();
-          console.error('Failed to save feedback to database:', errorText);
           window.alert(`Generated ${aiFeedback.length} AI feedback items but failed to save to database`);
         } else {
-          console.log('AI feedback saved successfully to database');
           window.alert(`Generated ${aiFeedback.length} AI feedback items and saved to database`);
         }
       }
@@ -879,30 +834,6 @@ const DocumentReviewPage = () => {
 
         {/* Right Side: CRM Feedback Form */}
         <Box sx={{ width: '600px', overflow: 'auto', p: 3, bgcolor: 'background.default' }}>
-          {/* Debug Info */}
-          <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.100', border: 1, borderColor: 'grey.400' }}>
-            <Typography variant="caption" display="block">
-              Debug: Stage = {workflowStage || 'Not loaded'} | Type = {typeof workflowStage} | Role = {userRole || 'Not loaded'}
-            </Typography>
-            <Typography variant="caption" display="block">
-              Username: {localStorage.getItem('username') || 'none'} | Email: {localStorage.getItem('userEmail') || 'none'}
-            </Typography>
-            <Typography variant="caption" display="block">
-              Stage 4 check: {workflowStage === '4' ? 'TRUE (string)' : workflowStage === 4 ? 'TRUE (number)' : 'FALSE'}
-            </Typography>
-            <Typography variant="caption" display="block">
-              Stage 3.5 check: {workflowStage === '3.5' ? 'TRUE' : 'FALSE'} | Role is Reviewer: {userRole === 'Reviewer' ? 'YES' : 'NO'} | Role is Coordinator: {userRole === 'Coordinator' ? 'YES' : 'NO'}
-            </Typography>
-            <Typography variant="caption" display="block" color="primary">
-              Checking stage '3.5': {String(workflowStage) === '3.5' ? 'TRUE' : 'FALSE'} |
-              Checking stage '3': {String(workflowStage) === '3' ? 'TRUE' : 'FALSE'} |
-              Not Coordinator: {(!userRole || userRole !== 'Coordinator') ? 'TRUE' : 'FALSE'}
-            </Typography>
-            <Typography variant="caption" display="block" color="error">
-              Button will show: {((workflowStage === '3.5' || workflowStage === 3.5 || workflowStage === '3' || workflowStage === 3) && (!userRole || userRole !== 'Coordinator')) ? '✅ YES - Submit Review' : '❌ NO - Conditions not met'}
-            </Typography>
-          </Paper>
-
           {/* Stage-specific Action Buttons */}
           {workflowStage === '3.5' && userRole === 'Coordinator' && (
             <Paper sx={{ p: 2, mb: 2, bgcolor: 'warning.50', border: 2, borderColor: 'warning.main' }}>
@@ -916,9 +847,6 @@ const DocumentReviewPage = () => {
                 variant="contained"
                 color="success"
                 onClick={async () => {
-                  console.log('🔴 CLICKING PROCESS FEEDBACK - Starting API call');
-                  console.log('Document ID:', documentId);
-
                   try {
                     // First try the workflow-action API
                     const response = await fetch('/api/workflow-action', {
@@ -936,9 +864,7 @@ const DocumentReviewPage = () => {
                       })
                     });
 
-                    console.log('🔴 API Response status:', response.status);
                     const responseData = await response.json();
-                    console.log('🔴 API Response data:', responseData);
 
                     if (response.ok && responseData.success) {
                       alert('Review collection phase complete! Advancing to Stage 4.');
@@ -950,7 +876,6 @@ const DocumentReviewPage = () => {
                       alert(`Failed to advance workflow: ${responseData.error || responseData.message || 'Unknown error'}`);
                     }
                   } catch (error) {
-                    console.error('🔴 Error calling API:', error);
                     alert('Error advancing workflow: ' + error.message);
                   }
                 }}

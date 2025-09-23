@@ -278,7 +278,7 @@ function extractParagraphsWithNumbers(content: string, pages: number = 5): any[]
     const fullText = sectionMatch[1].trim();
     // Extract number if present (supports any numbering format)
     const numberMatch = fullText.match(/^([\d.]+)\s+(.+)$/);
-    
+
     if (numberMatch) {
       sections.push({
         number: numberMatch[1].replace(/\.$/, ''),
@@ -292,6 +292,20 @@ function extractParagraphsWithNumbers(content: string, pages: number = 5): any[]
         title: fullText,
         position: sectionMatch.index
       });
+    }
+  }
+
+  // Find sections to exclude from feedback
+  const excludedSections = ['REFERENCES', 'GLOSSARY', 'ATTACHMENTS', 'DISTRIBUTION'];
+  let excludeAfterPosition = content.length;
+
+  for (const section of sections) {
+    const upperTitle = section.title.toUpperCase();
+    for (const excluded of excludedSections) {
+      if (upperTitle.includes(excluded)) {
+        excludeAfterPosition = Math.min(excludeAfterPosition, section.position);
+        break;
+      }
     }
   }
   
@@ -309,10 +323,17 @@ function extractParagraphsWithNumbers(content: string, pages: number = 5): any[]
   
   while ((paragraphMatch = paragraphRegex.exec(content)) !== null) {
     const paragraphText = paragraphMatch[1].trim();
-    
+
     // Skip short paragraphs or header content
     if (paragraphText.length < 30) continue;
     if (paragraphMatch.index < contentStartIndex) continue;
+
+    // Skip content in excluded sections (REFERENCES, GLOSSARY, etc.)
+    if (paragraphMatch.index >= excludeAfterPosition) continue;
+
+    // Skip if this paragraph is just a heading (numbered section title)
+    const isHeading = /^\d+(\.\d+)*\s+[A-Z]/.test(paragraphText) && paragraphText.length < 100;
+    if (isHeading) continue;
     
     // Find which section this paragraph belongs to
     let currentSectionIndex = -1;
@@ -447,7 +468,18 @@ function generateAIFeedback(content: string, feedbackCount: number = 10, pages: 
     const rand = Math.random();
     const type = rand < 0.2 ? 'C' : rand < 0.6 ? 'S' : 'A';
     const poc = pocData[i % pocData.length];
-    
+
+    // Double-check: Skip if the text looks like a heading or is from excluded sections
+    const excludedTerms = ['REFERENCES', 'GLOSSARY', 'ATTACHMENTS', 'DISTRIBUTION', 'ACRONYMS'];
+    if (excludedTerms.some(term => item.text.toUpperCase().includes(term))) {
+      return null; // Skip this item
+    }
+
+    // Skip if it's just a section heading
+    if (/^\d+(\.\d+)*\s+[A-Z]/.test(item.text) && item.text.length < 100) {
+      return null; // Skip this item
+    }
+
     // Extract actual phrase from the selected paragraph
     const words = item.text.split(' ');
     const startWord = Math.floor(Math.random() * Math.max(1, words.length - 10));
@@ -621,8 +653,8 @@ function generateAIFeedback(content: string, feedbackCount: number = 10, pages: 
       status: 'pending',
       createdAt: new Date().toISOString()
     };
-  });
-  
+  }).filter(item => item !== null); // Remove any null items that were skipped
+
   return feedback;
 }
 

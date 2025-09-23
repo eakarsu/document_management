@@ -729,10 +729,34 @@ async function startServer() {
           req.user.organizationId
         );
 
+        // Fetch the document to get customFields with version content
+        const document = await prisma.document.findUnique({
+          where: { id: documentId },
+          select: { customFields: true }
+        });
+
+        // Extract version content from customFields
+        const customFields = document?.customFields as any || {};
+        const versionContents = customFields.versions || [];
+
+        // Merge content data with version records
+        const versionsWithContent = versions.map((version: any) => {
+          // Find matching content version by versionNumber
+          const contentVersion = versionContents.find(
+            (v: any) => v.versionNumber === version.versionNumber
+          );
+
+          return {
+            ...version,
+            content: contentVersion?.content || customFields.content || '',
+            customFields: contentVersion || customFields
+          };
+        });
+
         res.json({
           success: true,
-          versions,
-          totalVersions: versions.length
+          versions: versionsWithContent,
+          totalVersions: versionsWithContent.length
         });
 
       } catch (error) {

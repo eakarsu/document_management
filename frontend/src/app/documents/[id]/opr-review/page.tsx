@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { authTokenService } from '../../../../lib/authTokenService';
 import DocumentNumbering from '../../../../components/DocumentNumbering';
@@ -151,7 +151,22 @@ const OPRReviewPage = () => {
   const [alert, setAlert] = useState<{ severity: 'success' | 'warning' | 'error' | 'info'; message: string } | null>(null);
 
   // Track changes state management
-  const [changeHistory, setChangeHistory] = useState<Array<{ content: string, feedback: CRMComment[], timestamp: Date }>>([]);
+  const [changeHistory, setChangeHistory] = useState<Array<{
+    content: string,
+    feedback: CRMComment[],
+    timestamp: Date,
+    changes?: {
+      applied: number,
+      merged: number,
+      details: Array<{
+        id: string,
+        original: string,
+        changed: string,
+        feedbackId: string
+      }>
+    }
+  }>>([]);
+  const changeHistoryRef = useRef<typeof changeHistory>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [showComparisonView, setShowComparisonView] = useState(false);
   const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
@@ -162,16 +177,102 @@ const OPRReviewPage = () => {
   const [showCommentDialog, setShowCommentDialog] = useState(false);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
+  const [componentKey, setComponentKey] = useState(0); // Force re-render key
 
-  // Helper function to save to history
-  const saveToHistory = () => {
-    const newHistory = [...changeHistory.slice(0, historyIndex + 1), {
-      content: editableContent,
-      feedback: [...feedback],
-      timestamp: new Date()
-    }];
-    setChangeHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
+  // Keep ref in sync with state
+  useEffect(() => {
+    changeHistoryRef.current = changeHistory;
+    console.log('History ref updated, now has', changeHistory.length, 'versions');
+  }, [changeHistory]);
+
+  // Helper function to save to history and database
+  const saveToHistory = async (newAppliedChanges?: Map<string, { original: string, changed: string, feedbackId: string }>) => {
+    // Use provided changes or current state
+    const changesToSave = newAppliedChanges || appliedChanges;
+
+    // Get the latest history state from the ref to avoid stale closures
+    const currentHistoryFromRef = changeHistoryRef.current;
+    console.log('saveToHistory using ref - current history length:', currentHistoryFromRef.length);
+
+    // Get the latest history state to ensure we're not missing updates
+    let updatedHistory: any[] = [];
+
+    setChangeHistory(currentHistory => {
+      // Use the ref value as the source of truth
+      let historyToUpdate = [...currentHistoryFromRef];
+
+      // If this is the first history entry, create the original version first
+      if (historyToUpdate.length === 0) {
+        // Create the original version (before any changes)
+        const originalVersion = {
+          content: documentContent || editableContent,
+          feedback: feedback.filter(f => f.status !== 'merged'),
+          timestamp: new Date(),
+          changes: {
+            applied: 0,
+            merged: 0,
+            details: []
+          }
+        };
+        historyToUpdate = [originalVersion];
+      }
+
+      const newHistoryEntry = {
+        content: editableContent,
+        feedback: [...feedback],
+        timestamp: new Date(),
+        changes: {
+          applied: changesToSave.size,
+          merged: feedback.filter(f => f.status === 'merged').length,
+          details: Array.from(changesToSave.entries()).map(([id, change]) => ({
+            id,
+            original: change.original,
+            changed: change.changed,
+            feedbackId: change.feedbackId
+          }))
+        }
+      };
+
+      const newHistory = [...historyToUpdate, newHistoryEntry];
+      setHistoryIndex(newHistory.length - 1);
+      console.log('History updated in saveToHistory:', currentHistory.length, '->', newHistory.length);
+
+      // Store for database save
+      updatedHistory = newHistory;
+      return newHistory;
+    });
+
+    // Save to database with the updated history
+    try {
+      console.log('Saving version history to database. History length:', updatedHistory.length);
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            ...documentData?.customFields,
+            versionHistory: updatedHistory,
+            lastHistorySave: new Date().toISOString()
+          }
+        })
+      });
+
+      if (response.ok) {
+        console.log('Version history saved to database successfully');
+        // Update local documentData to keep it in sync
+        setDocumentData(prevData => ({
+          ...prevData,
+          customFields: {
+            ...prevData?.customFields,
+            versionHistory: updatedHistory,
+            lastHistorySave: new Date().toISOString()
+          }
+        }));
+      } else {
+        console.error('Failed to save version history. Response not ok:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to save version history:', error);
+    }
   };
 
   // Undo functionality
@@ -275,6 +376,8 @@ const OPRReviewPage = () => {
         const data = await docResponse.json();
         const doc = data.document || data;
         setDocumentData(doc);
+        console.log('Loaded document. Has version history?', !!(doc.customFields?.versionHistory),
+                    'History length:', doc.customFields?.versionHistory?.length || 0);
 
         // Get content - use editableContent to avoid duplicate header
         let content = '';
@@ -385,17 +488,47 @@ const OPRReviewPage = () => {
     fetchDocumentAndFeedback();
   }, [documentId, router]);
 
-  // Initialize history when document is loaded
+  // Track if history has been initialized
+  const [historyInitialized, setHistoryInitialized] = useState(false);
+
+  // Initialize history when document is loaded - load from database only
   useEffect(() => {
-    if (documentContent && changeHistory.length === 0) {
-      setChangeHistory([{
-        content: documentContent,
-        feedback: [...feedback],
-        timestamp: new Date()
-      }]);
-      setHistoryIndex(0);
+    if (documentData && documentContent && !historyInitialized) {
+      // Load existing history from database
+      if (documentData.customFields?.versionHistory && documentData.customFields.versionHistory.length > 0) {
+        // Convert stored dates back to Date objects
+        const loadedHistory = documentData.customFields.versionHistory.map((entry: any) => ({
+          ...entry,
+          timestamp: new Date(entry.timestamp)
+        }));
+        setChangeHistory(loadedHistory);
+        setHistoryIndex(loadedHistory.length - 1);
+        setHistoryInitialized(true);
+
+        // Also restore applied changes from the latest version
+        if (loadedHistory.length > 0) {
+          const latestVersion = loadedHistory[loadedHistory.length - 1];
+          if (latestVersion.changes && latestVersion.changes.details) {
+            const restoredChanges = new Map();
+            latestVersion.changes.details.forEach(change => {
+              restoredChanges.set(change.id, {
+                original: change.original,
+                changed: change.changed,
+                feedbackId: change.feedbackId
+              });
+            });
+            setAppliedChanges(restoredChanges);
+          }
+        }
+
+        console.log('Loaded version history from database:', loadedHistory.length, 'versions');
+      } else {
+        console.log('No version history found in database');
+        setHistoryInitialized(true);
+      }
+      // Don't create initial version automatically - only create when feedback is applied
     }
-  }, [documentContent]);
+  }, [documentData, documentContent, historyInitialized]);
 
   // Effect to handle highlighting when text needs to be highlighted
   useEffect(() => {
@@ -868,11 +1001,18 @@ const OPRReviewPage = () => {
   const handleMergeFeedback = async () => {
     if (!selectedFeedback) return;
 
-    // Save current state to history before making changes
-    saveToHistory();
-
-    // Track the change
+    // Track the change FIRST, before saving to history
     const changeId = `change_${Date.now()}`;
+
+    // Create a map with ONLY the current change for this version
+    const currentVersionChanges = new Map();
+    currentVersionChanges.set(changeId, {
+      original: selectedFeedback.changeFrom || '',
+      changed: selectedFeedback.changeTo || '',
+      feedbackId: selectedFeedback.id || ''
+    });
+
+    // Update the cumulative applied changes
     const newAppliedChanges = new Map(appliedChanges);
     newAppliedChanges.set(changeId, {
       original: selectedFeedback.changeFrom || '',
@@ -880,6 +1020,11 @@ const OPRReviewPage = () => {
       feedbackId: selectedFeedback.id || ''
     });
     setAppliedChanges(newAppliedChanges);
+
+    // Save to history with ONLY the current version's changes
+    console.log('Saving to history - current history length:', changeHistoryRef.current.length);
+    await saveToHistory(currentVersionChanges);
+    console.log('After saving - new history length:', changeHistoryRef.current.length);
 
     // Add change marker
     const newMarker = {
@@ -1175,10 +1320,12 @@ const OPRReviewPage = () => {
             },
             body: JSON.stringify({
               customFields: {
+                ...documentData?.customFields,
                 crmFeedback: updatedFeedback,
                 draftFeedback: updatedFeedback,
                 content: editableContent,
                 editableContent: editableContent,
+                versionHistory: changeHistory,
                 lastMergeUpdate: new Date().toISOString()
               }
             })
@@ -1569,11 +1716,25 @@ const OPRReviewPage = () => {
     setSavingDocument(true);
 
     try {
+      // First save to history if there are unsaved changes
+      if (appliedChanges.size > 0 || feedback.some(f => f.status === 'merged')) {
+        await saveToHistory(appliedChanges);
+      }
+
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           customFields: {
+            ...documentData?.customFields,
             content: editableContent,
+            editableContent: editableContent,
+            draftFeedback: feedback,
+            crmFeedback: feedback,
+            versionHistory: changeHistory,
+            appliedChanges: Array.from(appliedChanges.entries()).map(([id, change]) => ({
+              id,
+              ...change
+            })),
             lastOPRUpdate: new Date().toISOString()
           }
         })
@@ -1582,7 +1743,7 @@ const OPRReviewPage = () => {
       if (response.ok) {
         setDocumentContent(editableContent);
         setIsEditingDocument(false);
-        window.alert('Document updated successfully');
+        window.alert('Document and version history saved successfully');
       } else {
         window.alert('Failed to save document');
       }
@@ -1696,7 +1857,7 @@ const OPRReviewPage = () => {
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+      <Box key={componentKey} sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
         {/* Left Side: Document Viewer/Editor */}
         <Box sx={{ flex: 1, overflow: 'auto', borderRight: 2, borderColor: 'divider', bgcolor: 'grey.50' }}>
           <Paper sx={{ m: 3, p: 4, minHeight: 'calc(100% - 48px)' }}>
@@ -2114,6 +2275,95 @@ const OPRReviewPage = () => {
                   >
                     History
                   </Button>
+
+                  {/* TEMPORARY TEST BUTTONS */}
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    size="small"
+                    color="secondary"
+                    sx={{ mt: 1 }}
+                    onClick={() => {
+                      const testEntry = {
+                        content: editableContent,
+                        feedback: feedback,
+                        timestamp: new Date(),
+                        changes: {
+                          applied: 0,
+                          merged: 0,
+                          details: []
+                        }
+                      };
+                      setChangeHistory([...changeHistory, testEntry]);
+                      window.alert(`Added test version ${changeHistory.length + 1} to history`);
+                    }}
+                  >
+                    Add Test Version
+                  </Button>
+
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    color="error"
+                    sx={{ mt: 1 }}
+                    onClick={async () => {
+                      // Clear local state
+                      setChangeHistory([]);
+                      changeHistoryRef.current = []; // Clear ref immediately
+                      setHistoryIndex(-1);
+                      setAppliedChanges(new Map());
+                      setHistoryInitialized(false); // Reset this so it can reload from DB if needed
+                      setComponentKey(prev => prev + 1); // Force re-render of all components
+
+                      // Reset all feedback items to pending (re-enable them)
+                      const resetFeedback = feedback.map(f => ({
+                        ...f,
+                        status: 'pending' as const
+                      }));
+                      setFeedback(resetFeedback);
+
+                      // Clear history in database and reset feedback statuses
+                      try {
+                        const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+                          method: 'PATCH',
+                          body: JSON.stringify({
+                            customFields: {
+                              ...documentData?.customFields,
+                              versionHistory: [],
+                              draftFeedback: resetFeedback,
+                              crmFeedback: resetFeedback,
+                              appliedChanges: [],
+                              lastHistoryClear: new Date().toISOString()
+                            }
+                          })
+                        });
+
+                        if (response.ok) {
+                          // Update local documentData to keep it in sync
+                          setDocumentData(prevData => ({
+                            ...prevData,
+                            customFields: {
+                              ...prevData?.customFields,
+                              versionHistory: [],
+                              draftFeedback: resetFeedback,
+                              crmFeedback: resetFeedback,
+                              appliedChanges: [],
+                              lastHistoryClear: new Date().toISOString()
+                            }
+                          }));
+                          window.alert('History cleared and feedback items re-enabled');
+                        } else {
+                          window.alert('Failed to clear history from database');
+                        }
+                      } catch (error) {
+                        console.error('Error clearing history:', error);
+                        window.alert('Error clearing history from database');
+                      }
+                    }}
+                  >
+                    Clear History (Test)
+                  </Button>
                 </Grid>
                 <Grid item xs={6}>
                   <Button
@@ -2316,8 +2566,8 @@ const OPRReviewPage = () => {
               <ListIcon />
               Feedback Items ({feedback.length})
             </Typography>
-            <Box sx={{ maxHeight: '400px', overflow: 'auto' }}>
-              <List dense>
+            <Box sx={{ maxHeight: '400px', overflow: 'auto', pr: 1 }}>
+              <List dense sx={{ width: '100%' }}>
                 {feedback.map((item, index) => (
                   <ListItem
                     key={item.id || index}
@@ -2983,38 +3233,66 @@ const OPRReviewPage = () => {
                   <Box>
                     {(() => {
                       let htmlWithHighlights = editableContent;
+                      let changesApplied = false;
 
-                      // First, use appliedChanges map for tracked changes
-                      for (const [id, change] of Array.from(appliedChanges.entries())) {
-                        if (change.original && change.changed) {
-                          // First, check if the original text still exists (not yet replaced)
-                          if (htmlWithHighlights.includes(change.original)) {
-                            // Replace original with strikethrough and new with highlight
-                            const escapedOriginal = change.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                      // Process ALL feedback items that have been applied (merged, accepted, or any with changeTo)
+                      const allFeedback = feedback.filter(f =>
+                        (f.status === 'merged' || f.status === 'accepted' || !f.status) &&
+                        (f.changeTo || f.changeFrom)
+                      );
+
+                      console.log('Compare View - Processing feedback:', allFeedback.length, 'items');
+
+                      // Show all changes with strikethrough and new text
+                      for (const item of allFeedback) {
+                        if (item.changeFrom && item.changeTo) {
+                          // Both changeFrom and changeTo exist - show full change
+                          if (htmlWithHighlights.includes(item.changeTo)) {
+                            changesApplied = true;
+                            const escapedChangeTo = item.changeTo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                             htmlWithHighlights = htmlWithHighlights.replace(
-                              new RegExp(escapedOriginal, 'g'),
-                              `<span style="text-decoration: line-through; color: red; background-color: #ffcccc;">${change.original}</span> <span style="background-color: #c8e6c9; color: green; font-weight: bold;">${change.changed}</span>`
+                              new RegExp(escapedChangeTo, 'g'),
+                              `<span style="text-decoration: line-through; color: red; background-color: #ffcccc; padding: 2px;">${item.changeFrom}</span> <span style="background-color: #c8e6c9; color: green; font-weight: bold; padding: 2px;">${item.changeTo}</span>`
                             );
-                          } else if (htmlWithHighlights.includes(change.changed)) {
-                            // If original is already replaced, still show both old (strikethrough) and new
-                            const escapedChanged = change.changed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                          } else if (htmlWithHighlights.includes(item.changeFrom)) {
+                            // Original text still exists - replace it with both
+                            changesApplied = true;
+                            const escapedChangeFrom = item.changeFrom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                             htmlWithHighlights = htmlWithHighlights.replace(
-                              new RegExp(escapedChanged, 'g'),
-                              `<span style="text-decoration: line-through; color: red; background-color: #ffcccc;">${change.original}</span> <span style="background-color: #c8e6c9; color: green; font-weight: bold;">${change.changed}</span>`
+                              new RegExp(escapedChangeFrom, 'g'),
+                              `<span style="text-decoration: line-through; color: red; background-color: #ffcccc; padding: 2px;">${item.changeFrom}</span> <span style="background-color: #c8e6c9; color: green; font-weight: bold; padding: 2px;">${item.changeTo}</span>`
+                            );
+                          }
+                        } else if (item.changeTo) {
+                          // Only changeTo exists - just highlight it
+                          if (htmlWithHighlights.includes(item.changeTo)) {
+                            changesApplied = true;
+                            const escapedChangeTo = item.changeTo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            htmlWithHighlights = htmlWithHighlights.replace(
+                              new RegExp(escapedChangeTo, 'g'),
+                              `<span style="background-color: #c8e6c9; color: green; font-weight: bold; padding: 2px 4px; border-radius: 3px;">${item.changeTo}</span>`
                             );
                           }
                         }
                       }
 
-                      // Also highlight all merged feedback items (for Apply All changes)
-                      const mergedFeedback = feedback.filter(f => f.status === 'merged');
-                      for (const item of mergedFeedback) {
-                        if (item.changeTo && htmlWithHighlights.includes(item.changeTo)) {
-                          const escapedChangeTo = item.changeTo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                          htmlWithHighlights = htmlWithHighlights.replace(
-                            new RegExp(escapedChangeTo, 'g'),
-                            `<span style="background-color: #c8e6c9; color: green; font-weight: bold; padding: 2px 4px; border-radius: 3px; border: 1px solid #4caf50;">${item.changeTo}</span>`
-                          );
+                      // If no changes from feedback, highlight any text differences
+                      if (!changesApplied && documentContent !== editableContent) {
+                        // Simple highlighting of any differences
+                        const words = editableContent.split(/\s+/);
+                        const originalWords = documentContent.split(/\s+/);
+
+                        // Mark first 5 different words
+                        let differencesFound = 0;
+                        for (let i = 0; i < words.length && differencesFound < 5; i++) {
+                          if (words[i] !== originalWords[i] && words[i]) {
+                            const escapedWord = words[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            htmlWithHighlights = htmlWithHighlights.replace(
+                              new RegExp(`\\b${escapedWord}\\b`, 'g'),
+                              `<span style="background-color: #c8e6c9; color: green; font-weight: bold; padding: 1px 3px; border-radius: 2px;">${words[i]}</span>`
+                            );
+                            differencesFound++;
+                          }
                         }
                       }
 
@@ -3059,7 +3337,7 @@ const OPRReviewPage = () => {
         </Dialog>
       )}
 
-      {/* Detailed Revision History Dialog */}
+      {/* Detailed Revision History Dialog - TEMPORARILY EMPTY FOR TESTING */}
       <Dialog open={showDetailedHistory} onClose={() => setShowDetailedHistory(false)} maxWidth="lg" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3070,50 +3348,185 @@ const OPRReviewPage = () => {
         <DialogContent>
           <List>
             {changeHistory.map((entry, index) => (
-              <ListItem key={index} sx={{ flexDirection: 'column', alignItems: 'flex-start', mb: 2, bgcolor: index === historyIndex ? 'action.selected' : 'transparent' }}>
-                <Box sx={{ width: '100%', mb: 1 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                    Version {index + 1} {index === historyIndex && '(Current)'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {entry.timestamp.toLocaleString()}
-                  </Typography>
-                </Box>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Content length: {entry.content.length} characters
+              <ListItem key={`version-${index}-${entry.timestamp}`} sx={{ flexDirection: 'column', alignItems: 'flex-start', mb: 2, bgcolor: index === changeHistory.length - 1 ? 'action.selected' : 'transparent' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                      Version {index + 1} {index === changeHistory.length - 1 && '(Current)'}
                     </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      {entry.timestamp.toLocaleString()}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Content: {entry.content.length} characters
+                    </Typography>
                     <Typography variant="body2" color="text.secondary">
                       Feedback items: {entry.feedback.length}
                     </Typography>
-                  </Grid>
-                </Grid>
-                {index !== historyIndex && (
+                  </Box>
                   <Button
-                    size="small"
                     variant="outlined"
-                    sx={{ mt: 1 }}
-                    onClick={() => {
-                      if (confirm('Restore this version? Current changes will be saved to history.')) {
-                        saveToHistory();
-                        setEditableContent(entry.content);
-                        setFeedback(entry.feedback);
-                        setHistoryIndex(index);
+                    size="small"
+                    onClick={async () => {
+                      const isCurrentVersion = (index === changeHistory.length - 1);
+                      console.log('=== RESTORE DEBUG ===');
+                      console.log('Restoring version:', index + 1);
+                      console.log('Is current version:', isCurrentVersion);
+                      console.log('Total versions:', changeHistory.length);
+
+                      // For current version, we need to force UI refresh
+                      if (isCurrentVersion) {
+                        // Close and reopen dialog to force refresh
                         setShowDetailedHistory(false);
+
+                        // Force state updates with new array instances
+                        const refreshedHistory = [...changeHistory];
+                        setChangeHistory(refreshedHistory);
+                        setEditableContent(entry.content);
+                        setDocumentContent(entry.content);
+                        setFeedback(entry.feedback || []);
+
+                        // Reopen dialog after a small delay
+                        setTimeout(() => {
+                          setShowDetailedHistory(true);
+                        }, 100);
+
+                        return; // No database update needed for current version
+                      }
+
+                      // For non-current versions, truncate history
+                      const newHistory = changeHistory.slice(0, index + 1);
+                      console.log('Truncating history from', changeHistory.length, 'to', newHistory.length, 'versions');
+
+                      try {
+                        // Save to database FIRST
+                        const existingCustomFields = documentData?.customFields || {};
+                        delete existingCustomFields.versionHistory;
+
+                        const payload = {
+                          content: entry.content,
+                          customFields: {
+                            ...existingCustomFields,
+                            content: entry.content,
+                            editableContent: entry.content,
+                            draftFeedback: entry.feedback || [],
+                            crmFeedback: entry.feedback || [],
+                            versionHistory: newHistory
+                          }
+                        };
+
+                        console.log('Sending to database - versionHistory length:', newHistory.length);
+                        const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+                          method: 'PATCH',
+                          body: JSON.stringify(payload)
+                        });
+
+                        if (response.ok) {
+                          console.log('Database updated successfully');
+
+                          // Update local state AFTER successful database save
+                          setChangeHistory(newHistory);
+                          changeHistoryRef.current = newHistory; // Update ref immediately
+                          setEditableContent(entry.content);
+                          setDocumentContent(entry.content);
+                          setFeedback(entry.feedback || []);
+                          setAppliedChanges(new Map());
+                          setHistoryIndex(newHistory.length - 1); // Update history index
+
+                          // Update documentData to match what we saved
+                          setDocumentData(prev => ({
+                            ...prev,
+                            customFields: {
+                              ...prev?.customFields,
+                              versionHistory: newHistory,
+                              content: entry.content,
+                              editableContent: entry.content,
+                              draftFeedback: entry.feedback || [],
+                              crmFeedback: entry.feedback || []
+                            }
+                          }));
+
+                          console.log('Local state updated - history now has', newHistory.length, 'versions');
+                          console.log('Ref also updated to', changeHistoryRef.current.length, 'versions');
+
+                          // Force re-render of all components to get fresh handlers
+                          setComponentKey(prev => prev + 1);
+
+                          // Force a small delay to ensure all state updates propagate
+                          await new Promise(resolve => setTimeout(resolve, 100));
+                        } else {
+                          console.error('Failed to restore version');
+                          window.alert('Failed to restore version');
+                        }
+                      } catch (error) {
+                        console.error('Error restoring version:', error);
+                        window.alert('Error restoring version');
                       }
                     }}
                   >
                     Restore This Version
                   </Button>
+                </Box>
+
+                {/* Show changes if available */}
+                {entry.changes && entry.changes.details && entry.changes.details.length > 0 && (
+                  <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                      Changes Applied ({entry.changes.details.length}):
+                    </Typography>
+                    <Box sx={{ mt: 1, maxHeight: 300, overflowY: 'auto' }}>
+                      {entry.changes.details.map((change, i) => (
+                        <Box key={i} sx={{ mb: 2, p: 1, bgcolor: 'white', borderRadius: 0.5 }}>
+                          {change.original && (
+                            <Box sx={{ mb: 1 }}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  display: 'block',
+                                  color: 'error.main',
+                                  textDecoration: 'line-through',
+                                  bgcolor: '#ffebee',
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: 0.5,
+                                  wordBreak: 'break-word',
+                                  whiteSpace: 'pre-wrap'
+                                }}
+                              >
+                                {change.original}
+                              </Typography>
+                            </Box>
+                          )}
+                          {change.changed && (
+                            <Box>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  display: 'block',
+                                  color: 'success.main',
+                                  bgcolor: '#e8f5e9',
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: 0.5,
+                                  fontWeight: 'bold',
+                                  wordBreak: 'break-word',
+                                  whiteSpace: 'pre-wrap'
+                                }}
+                              >
+                                {change.changed}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
                 )}
               </ListItem>
             ))}
             {changeHistory.length === 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                No revision history available yet. Changes will be tracked as you edit.
+                No history yet - apply some feedback to create history
               </Typography>
             )}
           </List>
@@ -3123,6 +3536,7 @@ const OPRReviewPage = () => {
         </DialogActions>
       </Dialog>
 
+      {/* OLD HISTORY CODE REMOVED */}
       {/* Version History Dialog */}
       <Dialog open={showVersionHistory} onClose={() => setShowVersionHistory(false)} maxWidth="md" fullWidth>
         <DialogTitle>Document Version History</DialogTitle>

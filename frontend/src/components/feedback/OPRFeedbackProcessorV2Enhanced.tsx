@@ -842,8 +842,33 @@ const OPRFeedbackProcessorV2Enhanced: React.FC<OPRFeedbackProcessorV2EnhancedPro
                       </Typography>
                     </Box>
                   }
-                  secondary={`${item.reviewer} • ${new Date(item.createdAt).toLocaleDateString()}`}
+                  secondary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                      <Typography variant="caption">
+                        {item.reviewer} • {new Date(item.createdAt).toLocaleDateString()}
+                      </Typography>
+                      {item.status === 'pending' && (
+                        <Chip label="pending" size="small" color="warning" />
+                      )}
+                      {item.severity === 'ADMINISTRATIVE' && (
+                        <Chip label="Administrative" size="small" color="success" />
+                      )}
+                    </Box>
+                  }
                 />
+                {item.status === 'pending' && (
+                  <ListItemSecondaryAction>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="primary"
+                      onClick={() => applyFeedback([item])}
+                      sx={{ minWidth: 60 }}
+                    >
+                      Apply
+                    </Button>
+                  </ListItemSecondaryAction>
+                )}
               </ListItem>
             ))}
           </List>
