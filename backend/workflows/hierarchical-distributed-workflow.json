@@ -325,6 +325,32 @@
     {
       "id": "10",
       "order": 12,
+      "name": "PCM Final Validation",
+      "description": "PCM performs final validation before publication",
+      "assignedRole": "PCM",
+      "actions": [
+        {
+          "id": "pcm_final_review",
+          "name": "PCM Final Review",
+          "type": "REVIEW"
+        },
+        {
+          "id": "approve_for_publication",
+          "name": "Approve for Publication",
+          "type": "APPROVE",
+          "nextStage": "11"
+        },
+        {
+          "id": "return_to_leadership",
+          "name": "Return to Leadership",
+          "type": "REJECT",
+          "nextStage": "9"
+        }
+      ]
+    },
+    {
+      "id": "11",
+      "order": 13,
       "name": "AFDPO Publication",
       "description": "Final publication and distribution",
       "assignedRole": "AFDPO",
@@ -449,13 +475,28 @@
       "condition": "leadership_signed"
     },
     {
+      "from": "10",
+      "to": "11",
+      "condition": "pcm_approved"
+    },
+    {
+      "from": "10",
+      "to": "9",
+      "condition": "pcm_rejected"
+    },
+    {
+      "from": "10",
+      "to": "9",
+      "condition": "return_to_previous"
+    },
+    {
       "from": "9",
       "to": "8",
       "condition": "leadership_rejected"
     },
     {
-      "from": "10",
-      "to": "9",
+      "from": "11",
+      "to": "10",
       "condition": "return_to_previous"
     }
   ],

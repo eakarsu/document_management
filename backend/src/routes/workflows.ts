@@ -301,16 +301,17 @@ router.post('/workflow-instances/:documentId/advance', authMiddleware, async (re
     }
 
     // Check if this is a workflow completion action
-    // Only treat as completion if explicitly marked OR if it's the final stage (10) with a PUBLISH action
-    // IMPORTANT: Stage 9 (Leadership) should NEVER complete - it must transition to Stage 10
-    // IMPORTANT: Stage 10 (AFDPO) should only complete when "Publish Document" action is taken
+    // Only treat as completion if explicitly marked OR if it's the final stage (11) with a PUBLISH action
+    // IMPORTANT: Stage 9 (Leadership) should NEVER complete - it must transition to Stage 10 (PCM)
+    // IMPORTANT: Stage 10 (PCM) should NEVER complete - it must transition to Stage 11 (AFDPO)
+    // IMPORTANT: Stage 11 (AFDPO) should only complete when "Publish Document" action is taken
     const isCompletionAction = metadata?.completeWorkflow === true ||
-                              (workflowInstance.currentStageId === '10' && action === 'Publish Document' && !targetStageId);
+                              (workflowInstance.currentStageId === '11' && action === 'Publish Document' && !targetStageId);
 
-    // Special handling for Leadership Stage (id: 9) - if no targetStageId provided, default to Stage 10 (AFDPO)
-    // Note: Stage 9 in workflow definition is "OPR Leadership Final Review & Signature" (Stage 11 in test numbering)
+    // Special handling for Leadership Stage (id: 9) - if no targetStageId provided, default to Stage 10 (PCM)
+    // Note: Stage 9 in workflow definition is "OPR Leadership Final Review & Signature"
     if (workflowInstance.currentStageId === '9' && !targetStageId && action === 'Sign and Approve') {
-      console.log('[WORKFLOW FIX] Leadership Stage (9) Sign and Approve missing targetStageId, setting to 10 (AFDPO)');
+      console.log('[WORKFLOW FIX] Leadership Stage (9) Sign and Approve missing targetStageId, setting to 10 (PCM)');
       targetStageId = '10';
     }
 
