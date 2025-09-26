@@ -50,8 +50,8 @@ import {
 import { useRouter, useParams } from 'next/navigation';
 import DocumentViewer from '../../../components/DocumentViewer';
 import DocumentVersions from '../../../components/DocumentVersions';
-import { api } from '../../../lib/api';
-import { authTokenService } from '../../../lib/authTokenService';
+import { api } from '@/lib/api';
+import { authTokenService } from '@/lib/authTokenService';
 
 interface DocumentDetails {
   id: string;

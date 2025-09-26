@@ -65,7 +65,7 @@ export class AISupplementService {
 
       const content = response.choices[0]?.message?.content || '';
       return this.parseSupplementSuggestions(content);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating supplement suggestions:', error);
       throw error;
     }
@@ -109,7 +109,7 @@ export class AISupplementService {
 
       const content = response.choices[0]?.message?.content || '[]';
       return JSON.parse(content);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error analyzing document for supplements:', error);
       return [];
     }
@@ -170,7 +170,7 @@ export class AISupplementService {
 
       const result = response.choices[0]?.message?.content || '{}';
       return JSON.parse(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating supplement content:', error);
       throw error;
     }
@@ -248,7 +248,7 @@ Return as JSON array with this structure:
         rationale: 'AI-generated suggestion',
         confidence: 50
       }];
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error parsing AI suggestions:', error);
       return [];
     }
@@ -293,7 +293,7 @@ Return as JSON array with this structure:
       const content = this.formatSupplementDocument(supplements, organization);
 
       return { title, content, sections: supplements };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating complete supplement document:', error);
       throw error;
     }

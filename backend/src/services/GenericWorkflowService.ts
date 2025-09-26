@@ -98,7 +98,7 @@ export class GenericWorkflowService {
           }
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error starting workflow:', error);
       throw error;
     }
@@ -197,7 +197,7 @@ export class GenericWorkflowService {
         currentStageId: toStageId,
         isComplete: shouldComplete
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error transitioning workflow:', error);
       throw error;
     }
@@ -243,7 +243,7 @@ export class GenericWorkflowService {
           history: workflowInstance.history
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting workflow status:', error);
       throw error;
     }
@@ -261,7 +261,7 @@ export class GenericWorkflowService {
         message: 'Workflow reset successfully',
         workflowInstance: reset
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error resetting workflow:', error);
       throw error;
     }
@@ -328,7 +328,7 @@ export class GenericWorkflowService {
         success: true,
         workflows
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting available workflows:', error);
       throw error;
     }

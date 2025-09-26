@@ -107,7 +107,7 @@ export const getMongoClient = async (): Promise<MongoClient> => {
     logger.info('MongoDB connected successfully');
 
     // Handle connection events
-    mongoClient.on('error', (error) => {
+    mongoClient.on('error', (error: any) => {
       logger.error('MongoDB connection error:', error);
     });
 
@@ -163,7 +163,7 @@ export const checkDatabaseHealth = async () => {
     const prisma = getPrismaClient();
     await prisma.$queryRaw`SELECT 1`;
     health.postgres = true;
-  } catch (error) {
+  } catch (error: any) {
     logger.error('PostgreSQL health check failed:', error);
   }
 
@@ -172,7 +172,7 @@ export const checkDatabaseHealth = async () => {
     const mongo = await getMongoClient();
     await mongo.db().admin().ping();
     health.mongodb = true;
-  } catch (error) {
+  } catch (error: any) {
     logger.error('MongoDB health check failed:', error);
   }
 
@@ -181,7 +181,7 @@ export const checkDatabaseHealth = async () => {
     const redis = await getRedisClient();
     await redis.ping();
     health.redis = true;
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Redis health check failed:', error);
   }
 
@@ -249,7 +249,7 @@ export const initializeDatabases = async () => {
       redis
     };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to initialize databases:', error);
     throw error;
   }

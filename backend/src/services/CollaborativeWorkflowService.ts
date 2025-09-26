@@ -143,7 +143,7 @@ export class CollaborativeWorkflowService {
 
       return publishing;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to create collaborative review workflow:', error);
       throw error;
     }
@@ -190,7 +190,7 @@ export class CollaborativeWorkflowService {
 
       return session;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to create collaborative editing session:', error);
       throw error;
     }
@@ -249,7 +249,7 @@ export class CollaborativeWorkflowService {
 
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to record collaborative change:', error);
       throw error;
     }
@@ -315,7 +315,7 @@ export class CollaborativeWorkflowService {
 
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to acquire document lock:', error);
       throw error;
     }
@@ -364,7 +364,7 @@ export class CollaborativeWorkflowService {
 
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to release document lock:', error);
       throw error;
     }
@@ -443,7 +443,7 @@ export class CollaborativeWorkflowService {
         nextActions
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to process collaborative approval:', error);
       throw error;
     }
@@ -516,7 +516,7 @@ export class CollaborativeWorkflowService {
 
       return resolved;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to resolve workflow conflict:', error);
       throw error;
     }
@@ -573,7 +573,7 @@ export class CollaborativeWorkflowService {
         timeline
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get collaborative workflow status:', error);
       throw error;
     }

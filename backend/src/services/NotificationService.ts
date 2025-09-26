@@ -125,7 +125,7 @@ export class NotificationService {
 
           notifications.push(notification);
 
-        } catch (error) {
+        } catch (error: any) {
           this.logger.error(`Failed to send notification via ${deliveryMethod}:`, {
             publishingId: input.publishingId,
             recipientId: input.recipientId,
@@ -137,7 +137,7 @@ export class NotificationService {
 
       return notifications;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to send notification:', error);
       throw error;
     }
@@ -222,7 +222,7 @@ export class NotificationService {
 
           notifications.push(notification);
 
-        } catch (error) {
+        } catch (error: any) {
           this.logger.error('Failed to send bulk notification to recipient:', {
             recipientId: recipient.id,
             error
@@ -240,7 +240,7 @@ export class NotificationService {
 
       return { successful, failed, notifications };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to send bulk notification:', error);
       throw error;
     }
@@ -312,7 +312,7 @@ export class NotificationService {
         unreadCount
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get user notifications:', error);
       throw error;
     }
@@ -340,7 +340,7 @@ export class NotificationService {
 
       return updated.count > 0;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to mark notification as read:', error);
       throw error;
     }
@@ -364,7 +364,7 @@ export class NotificationService {
 
       return updated.count;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to mark all notifications as read:', error);
       throw error;
     }
@@ -453,7 +453,7 @@ export class NotificationService {
 
       return success;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to send notification digest:', error);
       return false;
     }
@@ -551,7 +551,7 @@ export class NotificationService {
       await this.emailTransporter.sendMail(mailOptions);
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to send email notification:', error);
       return false;
     }
@@ -577,7 +577,7 @@ export class NotificationService {
 
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to send SMS notification:', error);
       return false;
     }
@@ -604,7 +604,7 @@ export class NotificationService {
 
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to send push notification:', error);
       return false;
     }
@@ -780,7 +780,7 @@ export class NotificationService {
       await this.emailTransporter.sendMail(mailOptions);
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to send digest email:', error);
       return false;
     }

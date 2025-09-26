@@ -110,7 +110,7 @@ router.get('/editor/documents/:id/attachments', authMiddleware, async (req: Auth
     });
 
     res.json({ attachments });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching attachments:', error);
     res.status(500).json({ error: 'Failed to fetch attachments' });
   }
@@ -192,7 +192,7 @@ router.post(
       );
 
       res.json({ attachments });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading attachments:', error);
       res.status(500).json({ error: 'Failed to upload attachments' });
     }
@@ -242,7 +242,7 @@ router.get(
 
       // Send file
       res.download(attachment.storagePath, attachment.originalName);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error downloading attachment:', error);
       res.status(500).json({ error: 'Failed to download attachment' });
     }
@@ -291,7 +291,7 @@ router.delete(
       // Delete file from storage
       try {
         await fs.unlink(attachment.storagePath);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error deleting file:', error);
         // Continue even if file deletion fails
       }
@@ -302,7 +302,7 @@ router.delete(
       });
 
       res.json({ message: 'Attachment deleted successfully' });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting attachment:', error);
       res.status(500).json({ error: 'Failed to delete attachment' });
     }
@@ -369,7 +369,7 @@ router.put(
       });
 
       res.json({ attachment: updatedAttachment });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating attachment:', error);
       res.status(500).json({ error: 'Failed to update attachment' });
     }

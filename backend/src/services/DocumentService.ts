@@ -1,78 +1,21 @@
-import { PrismaClient, Document, DocumentStatus, DocumentVersion } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { StorageService } from './StorageService';
 import { SearchService } from './SearchService';
 import { BinaryDiffService } from './BinaryDiffService';
-import crypto from 'crypto';
 import winston from 'winston';
-import QRCode from 'qrcode';
-
-interface CreateDocumentInput {
-  title: string;
-  description?: string;
-  fileName: string;
-  originalName: string;
-  mimeType: string;
-  fileBuffer: Buffer;
-  category?: string;
-  tags?: string[];
-  customFields?: Record<string, any>;
-  folderId?: string;
-  parentDocumentId?: string;
-}
-
-interface UpdateDocumentInput {
-  title?: string;
-  description?: string;
-  category?: string;
-  tags?: string[];
-  customFields?: Record<string, any>;
-  status?: DocumentStatus;
-  folderId?: string;
-}
-
-interface DocumentWithRelations extends Document {
-  versions: DocumentVersion[];
-  createdBy: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
-  folder?: {
-    id: string;
-    name: string;
-    fullPath: string;
-  };
-  parentDocument?: {
-    id: string;
-    title: string;
-  };
-  childDocuments: {
-    id: string;
-    title: string;
-  }[];
-  _count: {
-    versions: number;
-    comments: number;
-  };
-}
-
-interface SearchDocumentsInput {
-  query?: string;
-  category?: string;
-  tags?: string[];
-  status?: DocumentStatus;
-  folderId?: string;
-  mimeType?: string;
-  dateRange?: {
-    from: Date;
-    to: Date;
-  };
-  page?: number;
-  limit?: number;
-  sortBy?: 'title' | 'createdAt' | 'updatedAt' | 'fileSize';
-  sortOrder?: 'asc' | 'desc';
-}
+import { DocumentCRUD } from './document/DocumentCRUD';
+import { DocumentVersioning } from './document/DocumentVersioning';
+import {
+  CreateDocumentInput,
+  UpdateDocumentInput,
+  DocumentWithRelations,
+  SearchDocumentsInput,
+  CreateVersionInput,
+  BulkOperationInput,
+  DocumentStatistics,
+  AuditLogEntry
+} from '../types/document/document.types';
+import { buildDocumentSearchQuery, buildDocumentInclude } from '../utils/document/documentUtils';
 
 export class DocumentService {
   private prisma: PrismaClient;
@@ -80,6 +23,8 @@ export class DocumentService {
   private searchService: SearchService;
   private binaryDiffService: BinaryDiffService;
   private logger: winston.Logger;
+  private crud: DocumentCRUD;
+  private versioning: DocumentVersioning;
 
   constructor() {
     this.prisma = new PrismaClient();
@@ -91,340 +36,36 @@ export class DocumentService {
       format: winston.format.json(),
       transports: [new winston.transports.Console()]
     });
+
+    this.crud = new DocumentCRUD(
+      this.prisma,
+      this.storageService,
+      this.searchService,
+      this.logger
+    );
+
+    this.versioning = new DocumentVersioning(
+      this.prisma,
+      this.binaryDiffService,
+      this.logger
+    );
   }
 
+  // Document CRUD operations
   async createDocument(
     input: CreateDocumentInput,
     userId: string,
     organizationId: string
   ): Promise<DocumentWithRelations | null> {
-    try {
-      this.logger.info('Creating document', {
-        title: input.title,
-        fileName: input.fileName,
-        userId,
-        organizationId
-      });
-
-      // Calculate file checksum and size
-      const checksum = crypto.createHash('sha256').update(input.fileBuffer).digest('hex');
-      const fileSize = input.fileBuffer.length;
-
-      // Check for duplicate document
-      const existingDoc = await this.prisma.document.findUnique({
-        where: { checksum }
-      });
-
-      if (existingDoc) {
-        this.logger.warn('Document with same checksum already exists', { 
-          checksum, 
-          existingDocId: existingDoc.id 
-        });
-        
-        // If the existing document is deleted, reactivate it
-        if (existingDoc.status === 'DELETED') {
-          this.logger.info('Reactivating deleted document with same checksum', {
-            documentId: existingDoc.id,
-            checksum
-          });
-          
-          await this.prisma.document.update({
-            where: { id: existingDoc.id },
-            data: {
-              status: 'DRAFT',
-              lastAccessedAt: new Date()
-            }
-          });
-          
-          // Re-index the document in Elasticsearch since it was deleted
-          await this.searchService.indexDocumentWithExtraction(existingDoc.id, organizationId);
-        } else {
-          // Just update lastAccessedAt for active documents
-          await this.prisma.document.update({
-            where: { id: existingDoc.id },
-            data: {
-              lastAccessedAt: new Date()
-            }
-          });
-        }
-        
-        // Return existing document (now reactivated if it was deleted)
-        return this.getDocumentById(existingDoc.id, userId, organizationId);
-      }
-
-      // Upload file to storage
-      const uploadResult = await this.storageService.uploadDocument(
-        input.fileBuffer,
-        {
-          filename: input.fileName,
-          originalName: input.originalName,
-          mimeType: input.mimeType,
-          size: fileSize,
-          checksum
-        },
-        organizationId,
-        userId
-      );
-
-      if (!uploadResult.success) {
-        throw new Error(`File upload failed: ${uploadResult.error}`);
-      }
-
-      // Generate document number and QR code
-      const documentNumber = await this.generateDocumentNumber(organizationId);
-      const qrCode = await this.generateQRCode(documentNumber);
-
-      // Create document in database
-      const document = await this.prisma.document.create({
-        data: {
-          title: input.title,
-          description: input.description,
-          fileName: input.fileName,
-          originalName: input.originalName,
-          mimeType: input.mimeType,
-          fileSize,
-          checksum,
-          storagePath: uploadResult.storagePath!,
-          storageProvider: 'minio',
-          status: DocumentStatus.DRAFT,
-          category: input.category,
-          tags: input.tags || [],
-          customFields: input.customFields || {},
-          documentNumber,
-          qrCode,
-          createdById: userId,
-          organizationId,
-          folderId: input.folderId,
-          parentDocumentId: input.parentDocumentId,
-          currentVersion: 1
-        },
-        include: {
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true
-            }
-          },
-          folder: {
-            select: {
-              id: true,
-              name: true,
-              fullPath: true
-            }
-          },
-          parentDocument: {
-            select: {
-              id: true,
-              title: true
-            }
-          },
-          childDocuments: {
-            select: {
-              id: true,
-              title: true
-            }
-          },
-          versions: true,
-          _count: {
-            select: {
-              versions: true,
-              comments: true
-            }
-          }
-        }
-      });
-
-      // Create initial version
-      await this.prisma.documentVersion.create({
-        data: {
-          versionNumber: 1,
-          title: input.title,
-          description: input.description,
-          fileName: input.fileName,
-          fileSize,
-          checksum,
-          storagePath: uploadResult.storagePath!,
-          changeNotes: 'Initial version',
-          documentId: document.id,
-          createdById: userId
-        }
-      });
-
-      // Index document for search
-      await this.searchService.indexDocument({
-        id: document.id,
-        title: document.title,
-        content: '', // Will be populated by AI/OCR processing
-        metadata: {
-          category: document.category || undefined,
-          tags: document.tags,
-          mimeType: document.mimeType,
-          customFields: document.customFields as Record<string, any> || undefined
-        },
-        organizationId
-      });
-
-      // Log audit trail
-      await this.createAuditLog({
-        action: 'CREATE',
-        resource: 'DOCUMENT',
-        resourceId: document.id,
-        userId,
-        newValues: {
-          title: document.title,
-          fileName: document.fileName,
-          status: document.status
-        }
-      });
-
-      this.logger.info('Document created successfully', {
-        documentId: document.id,
-        title: document.title,
-        documentNumber: document.documentNumber
-      });
-
-      // Automatically index document in Elasticsearch with text extraction
-      try {
-        this.logger.info('Indexing uploaded document in Elasticsearch with text extraction', { 
-          documentId: document.id,
-          mimeType: document.mimeType 
-        });
-        
-        // Use the new efficient method that extracts text content during indexing
-        await this.searchService.indexDocumentWithExtraction(document.id, document.organizationId);
-        
-        this.logger.info('Document indexed successfully in Elasticsearch with full text content', { 
-          documentId: document.id 
-        });
-      } catch (indexError) {
-        // Log error but don't fail document creation
-        this.logger.error('Failed to index document in Elasticsearch:', {
-          documentId: document.id,
-          error: indexError
-        });
-      }
-
-      return document as DocumentWithRelations;
-
-    } catch (error) {
-      this.logger.error('Failed to create document:', error);
-      throw error;
-    }
-  }
-
-  async getDocumentById(
-    documentId: string,
-    userId: string,
-    organizationId: string
-  ): Promise<DocumentWithRelations | null> {
-    try {
-      // Check permissions
-      const hasAccess = await this.checkDocumentAccess(documentId, userId, 'READ');
-      if (!hasAccess) {
-        throw new Error('Access denied');
-      }
-
-      // Get user's role
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          role: {
-            select: { name: true }
-          }
-        }
-      });
-
-      // PERMANENT FIX: Check if user has a workflow task for this document
-      // If they do, they can access it regardless of organization
-      const hasWorkflowTask = await this.prisma.workflowTask.findFirst({
-        where: {
-          assignedToId: userId,
-          status: {
-            in: ['PENDING', 'IN_PROGRESS']
-          },
-          formData: {
-            path: ['documentId'],
-            equals: documentId
-          }
-        }
-      });
-
-      // Build where clause - allow cross-org access for admins and workflow participants
-      const whereClause: any = { id: documentId };
-      if (user?.role?.name !== 'Admin' && !hasWorkflowTask) {
-        // Only enforce organization check if not admin and not assigned a workflow task
-        whereClause.organizationId = organizationId;
-      }
-
-      const document = await this.prisma.document.findFirst({
-        where: whereClause,
-        include: {
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true
-            }
-          },
-          folder: {
-            select: {
-              id: true,
-              name: true,
-              fullPath: true
-            }
-          },
-          parentDocument: {
-            select: {
-              id: true,
-              title: true
-            }
-          },
-          childDocuments: {
-            select: {
-              id: true,
-              title: true
-            }
-          },
-          versions: {
-            orderBy: {
-              versionNumber: 'desc'
-            },
-            take: 5 // Latest 5 versions
-          },
-          _count: {
-            select: {
-              versions: true,
-              comments: true
-            }
-          }
-        }
-      });
-
-      if (document) {
-        // Update last accessed timestamp
-        await this.prisma.document.update({
-          where: { id: documentId },
-          data: { lastAccessedAt: new Date() }
-        });
-
-        // Log access
-        await this.createAuditLog({
-          action: 'VIEW',
-          resource: 'DOCUMENT',
-          resourceId: documentId,
-          userId
-        });
-      }
-
-      return document as DocumentWithRelations;
-
-    } catch (error) {
-      this.logger.error('Failed to get document:', error);
-      throw error;
-    }
+    const result = await this.crud.createDocument(input, userId, organizationId);
+    await this.createAuditLog({
+      action: 'CREATE',
+      resource: 'DOCUMENT',
+      resourceId: result?.id || '',
+      userId,
+      newValues: { title: input.title, fileName: input.fileName }
+    });
+    return result;
   }
 
   async updateDocument(
@@ -433,157 +74,15 @@ export class DocumentService {
     userId: string,
     organizationId: string
   ): Promise<DocumentWithRelations | null> {
-    try {
-      // Check permissions
-      const hasAccess = await this.checkDocumentAccess(documentId, userId, 'WRITE');
-      if (!hasAccess) {
-        throw new Error('Access denied');
-      }
-
-      // Get current document
-      // Check if user has workflow task access (cross-organization)
-      const hasWorkflowTask = await this.prisma.workflowTask.findFirst({
-        where: {
-          assignedToId: userId,
-          status: {
-            in: ['PENDING', 'IN_PROGRESS']
-          },
-          OR: [
-            {
-              formData: {
-                equals: { documentId }
-              }
-            },
-            {
-              formData: {
-                path: ['documentId'],
-                equals: documentId
-              }
-            }
-          ]
-        }
-      });
-
-      // For workflow participants, allow cross-organization updates
-      const currentDoc = await this.prisma.document.findFirst({
-        where: hasWorkflowTask
-          ? { id: documentId }  // Workflow participants can update across organizations
-          : { id: documentId, organizationId }  // Regular users need organization match
-      });
-
-      if (!currentDoc) {
-        throw new Error('Document not found');
-      }
-
-      // Prepare update data - merge customFields if provided
-      const updateData: any = {
-        ...input,
-        updatedAt: new Date()
-      };
-
-      // If customFields is being updated, merge with existing
-      if (input.customFields) {
-        const existingCustomFields = (typeof currentDoc.customFields === 'object' && currentDoc.customFields !== null)
-          ? currentDoc.customFields as Record<string, any>
-          : {};
-        updateData.customFields = {
-          ...existingCustomFields,
-          ...input.customFields
-        };
-
-        this.logger.info('Merging customFields for document update:', {
-          documentId,
-          existingFields: Object.keys(existingCustomFields),
-          newFields: Object.keys(input.customFields as any),
-          mergedFields: Object.keys(updateData.customFields)
-        });
-      }
-
-      // Update document
-      const updatedDocument = await this.prisma.document.update({
-        where: { id: documentId },
-        data: updateData,
-        include: {
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true
-            }
-          },
-          folder: {
-            select: {
-              id: true,
-              name: true,
-              fullPath: true
-            }
-          },
-          parentDocument: {
-            select: {
-              id: true,
-              title: true
-            }
-          },
-          childDocuments: {
-            select: {
-              id: true,
-              title: true
-            }
-          },
-          versions: {
-            orderBy: {
-              versionNumber: 'desc'
-            },
-            take: 5
-          },
-          _count: {
-            select: {
-              versions: true,
-              comments: true
-            }
-          }
-        }
-      });
-
-      this.logger.info('Document updated in database:', {
-        documentId,
-        updatedCustomFields: updatedDocument.customFields ? Object.keys(updatedDocument.customFields) : null,
-        customFieldsValue: updatedDocument.customFields
-      });
-
-      // REMOVED ELASTICSEARCH - ONLY USING POSTGRESQL
-      // No search index update needed - all data is in PostgreSQL
-
-      // Log audit trail
-      await this.createAuditLog({
-        action: 'UPDATE',
-        resource: 'DOCUMENT',
-        resourceId: documentId,
-        userId,
-        oldValues: {
-          title: currentDoc.title,
-          status: currentDoc.status,
-          category: currentDoc.category
-        },
-        newValues: {
-          title: updatedDocument.title,
-          status: updatedDocument.status,
-          category: updatedDocument.category
-        }
-      });
-
-      this.logger.info('Document updated successfully', {
-        documentId,
-        title: updatedDocument.title
-      });
-
-      return updatedDocument as DocumentWithRelations;
-
-    } catch (error) {
-      this.logger.error('Failed to update document:', error);
-      throw error;
-    }
+    const result = await this.crud.updateDocument(documentId, input, userId, organizationId);
+    await this.createAuditLog({
+      action: 'UPDATE',
+      resource: 'DOCUMENT',
+      resourceId: documentId,
+      userId,
+      newValues: input
+    });
+    return result;
   }
 
   async deleteDocument(
@@ -592,774 +91,206 @@ export class DocumentService {
     organizationId: string,
     permanent: boolean = false
   ): Promise<boolean> {
-    try {
-      // Check permissions
-      const hasAccess = await this.checkDocumentAccess(documentId, userId, 'DELETE');
-      if (!hasAccess) {
-        throw new Error('Access denied');
-      }
-
-      // Get user's role to check if they're an admin
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          role: {
-            select: { name: true }
-          }
-        }
-      });
-
-      // For Admin users, don't filter by organizationId
-      const whereClause: any = { id: documentId };
-      if (user?.role?.name !== 'Admin') {
-        whereClause.organizationId = organizationId;
-      }
-
-      const document = await this.prisma.document.findFirst({
-        where: whereClause
-      });
-
-      if (!document) {
-        throw new Error('Document not found');
-      }
-
-      if (permanent) {
-        // Permanent deletion
-        // Delete from storage
-        await this.storageService.deleteDocument(document.storagePath);
-
-        // Delete from database (cascade will handle versions, etc.)
-        await this.prisma.document.delete({
-          where: { id: documentId }
-        });
-
-        // Remove from search index
-        await this.searchService.deleteDocument(documentId);
-
-        this.logger.info('Document permanently deleted', { documentId });
-      } else {
-        // Soft deletion
-        await this.prisma.document.update({
-          where: { id: documentId },
-          data: {
-            status: DocumentStatus.DELETED,
-            updatedAt: new Date()
-          }
-        });
-
-        this.logger.info('Document soft deleted', { documentId });
-      }
-
-      // Log audit trail
-      await this.createAuditLog({
-        action: permanent ? 'DELETE_PERMANENT' : 'DELETE_SOFT',
-        resource: 'DOCUMENT',
-        resourceId: documentId,
-        userId,
-        oldValues: {
-          title: document.title,
-          status: document.status
-        }
-      });
-
-      return true;
-
-    } catch (error) {
-      this.logger.error('Failed to delete document:', error);
-      throw error;
-    }
+    const result = await this.crud.deleteDocument(documentId, userId, organizationId, permanent);
+    await this.createAuditLog({
+      action: permanent ? 'DELETE_PERMANENT' : 'DELETE',
+      resource: 'DOCUMENT',
+      resourceId: documentId,
+      userId
+    });
+    return result;
   }
 
-  async searchDocuments(
-    input: SearchDocumentsInput,
-    userId: string,
-    organizationId: string
-  ): Promise<{
-    documents: DocumentWithRelations[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  }> {
-    try {
-      const page = Math.max(1, input.page || 1);
-      const limit = Math.min(100, Math.max(1, input.limit || 20));
-      const skip = (page - 1) * limit;
-
-      // Build where clause
-      const where: any = {
-        organizationId,
-        status: {
-          not: DocumentStatus.DELETED
-        }
-      };
-
-      if (input.category) {
-        where.category = input.category;
-      }
-
-      if (input.tags && input.tags.length > 0) {
-        where.tags = {
-          hasSome: input.tags
-        };
-      }
-
-      if (input.status) {
-        where.status = input.status;
-      }
-
-      if (input.folderId) {
-        where.folderId = input.folderId;
-      }
-
-      if (input.mimeType) {
-        where.mimeType = input.mimeType;
-      }
-
-      if (input.dateRange) {
-        where.createdAt = {
-          gte: input.dateRange.from,
-          lte: input.dateRange.to
-        };
-      }
-
-      if (input.query) {
-        where.OR = [
-          { title: { contains: input.query, mode: 'insensitive' } },
-          { description: { contains: input.query, mode: 'insensitive' } },
-          { originalName: { contains: input.query, mode: 'insensitive' } },
-          { tags: { hasSome: [input.query] } }
-        ];
-      }
-
-      // Build order by
-      const orderBy: any = {};
-      const sortBy = input.sortBy || 'updatedAt';
-      const sortOrder = input.sortOrder || 'desc';
-      orderBy[sortBy] = sortOrder;
-
-      // Execute queries
-      const [documents, total] = await Promise.all([
-        this.prisma.document.findMany({
-          where,
-          include: {
-            createdBy: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true
-              }
-            },
-            folder: {
-              select: {
-                id: true,
-                name: true,
-                fullPath: true
-              }
-            },
-            parentDocument: {
-              select: {
-                id: true,
-                title: true
-              }
-            },
-            childDocuments: {
-              select: {
-                id: true,
-                title: true
-              }
-            },
-            versions: {
-              orderBy: {
-                versionNumber: 'desc'
-              },
-              take: 1
-            },
-            _count: {
-              select: {
-                versions: true,
-                comments: true
-              }
-            }
-          },
-          orderBy,
-          skip,
-          take: limit
-        }),
-        this.prisma.document.count({ where })
-      ]);
-
-      // Filter based on user permissions
-      const accessibleDocuments = await this.filterDocumentsByAccess(
-        documents as DocumentWithRelations[],
-        userId,
-        'READ'
-      );
-
-      const totalPages = Math.ceil(total / limit);
-
-      return {
-        documents: accessibleDocuments,
-        total,
-        page,
-        limit,
-        totalPages
-      };
-
-    } catch (error) {
-      this.logger.error('Failed to search documents:', error);
-      throw error;
-    }
-  }
-
-  async getDocumentContent(
+  async getDocumentById(
     documentId: string,
     userId: string,
     organizationId: string
-  ): Promise<Buffer | null> {
-    try {
-      // Check permissions
-      const hasAccess = await this.checkDocumentAccess(documentId, userId, 'READ');
-      if (!hasAccess) {
-        throw new Error('Access denied');
-      }
-
-      // Get user's role
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          role: {
-            select: { name: true }
-          }
-        }
-      });
-
-      // PERMANENT FIX: Admin users can access documents from ANY organization
-      const whereClause: any = { id: documentId };
-      if (user?.role?.name !== 'Admin') {
-        whereClause.organizationId = organizationId;
-      }
-
-      const document = await this.prisma.document.findFirst({
-        where: whereClause
-      });
-
-      if (!document) {
-        return null;
-      }
-
-      const content = await this.storageService.downloadDocument(document.storagePath);
-
-      // Log download
-      await this.createAuditLog({
-        action: 'DOWNLOAD',
-        resource: 'DOCUMENT',
-        resourceId: documentId,
-        userId
-      });
-
-      return content;
-
-    } catch (error) {
-      this.logger.error('Failed to get document content:', error);
-      throw error;
-    }
+  ): Promise<DocumentWithRelations | null> {
+    return this.crud.getDocumentById(documentId, userId, organizationId);
   }
 
-  /**
-   * Create a new document version with binary diff tracking
-   */
+  // Version management
   async createDocumentVersion(
     documentId: string,
     fileBuffer: Buffer,
-    input: {
-      title?: string;
-      description?: string;
-      fileName: string;
-      changeNotes?: string;
-      changeType?: 'MAJOR' | 'MINOR' | 'PATCH';
-    },
+    input: CreateVersionInput,
     userId: string,
     organizationId: string
-  ): Promise<DocumentVersion | null> {
-    try {
-      this.logger.info('Creating document version with binary diff', {
-        documentId,
-        fileName: input.fileName,
-        fileSize: fileBuffer.length,
-        userId
-      });
-
-      // Get current document and latest version
-      const currentDoc = await this.prisma.document.findFirst({
-        where: { id: documentId, organizationId },
-        include: {
-          versions: {
-            orderBy: { versionNumber: 'desc' },
-            take: 1
-          }
-        }
-      });
-
-      if (!currentDoc) {
-        throw new Error('Document not found');
-      }
-
-      // Check permissions
-      const hasAccess = await this.checkDocumentAccess(documentId, userId, 'WRITE');
-      if (!hasAccess) {
-        throw new Error('Access denied');
-      }
-
-      // Calculate file checksum and next version number
-      const checksum = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-      const nextVersion = (currentDoc.versions[0]?.versionNumber || 0) + 1;
-
-      // Upload new file to storage
-      const uploadResult = await this.storageService.uploadDocument(
-        fileBuffer,
-        {
-          filename: input.fileName,
-          originalName: input.fileName,
-          mimeType: currentDoc.mimeType,
-          size: fileBuffer.length,
-          checksum
-        },
-        organizationId,
-        userId
-      );
-
-      if (!uploadResult.success) {
-        throw new Error(`File upload failed: ${uploadResult.error}`);
-      }
-
-      // Generate binary diff if there's a previous version
-      let diffData = null;
-      if (currentDoc.versions.length > 0) {
-        try {
-          const previousVersion = currentDoc.versions[0];
-          const previousFileBuffer = await this.storageService.downloadDocument(previousVersion.storagePath);
-          
-          if (!previousFileBuffer) {
-            throw new Error('Could not download previous version for diff comparison');
-          }
-          
-          // Generate binary diff
-          const binaryDiffResult = await this.binaryDiffService.generateBinaryDiff(
-            previousFileBuffer,
-            fileBuffer,
-            documentId,
-            nextVersion,
-            organizationId
-          );
-
-          diffData = {
-            diffPath: binaryDiffResult.diffPath,
-            diffSize: binaryDiffResult.diffSize,
-            compressionRatio: binaryDiffResult.compressionRatio,
-            patchAlgorithm: binaryDiffResult.patchAlgorithm,
-            bytesChanged: binaryDiffResult.changeAnalysis.bytesChanged,
-            percentChanged: binaryDiffResult.changeAnalysis.percentChanged,
-            changeCategory: binaryDiffResult.changeAnalysis.changeCategory,
-            similarity: binaryDiffResult.changeAnalysis.similarity
-          };
-
-          this.logger.info('Binary diff generated', {
-            documentId,
-            version: nextVersion,
-            diffSize: diffData.diffSize,
-            compressionRatio: diffData.compressionRatio,
-            changeCategory: diffData.changeCategory
-          });
-        } catch (diffError) {
-          this.logger.warn('Failed to generate binary diff, continuing without diff tracking', {
-            documentId,
-            version: nextVersion,
-            error: diffError instanceof Error ? diffError.message : 'Unknown error'
-          });
-        }
-      }
-
-      // Create new version record
-      const newVersion = await this.prisma.documentVersion.create({
-        data: {
-          documentId,
-          versionNumber: nextVersion,
-          title: input.title || currentDoc.title,
-          description: input.description,
-          fileName: input.fileName,
-          fileSize: fileBuffer.length,
-          checksum,
-          storagePath: uploadResult.storagePath!,
-          changeType: input.changeType || 'MINOR',
-          changeNotes: input.changeNotes,
-          createdById: userId,
-          // Binary diff data
-          diffPath: diffData?.diffPath,
-          diffSize: diffData?.diffSize,
-          compressionRatio: diffData?.compressionRatio,
-          patchAlgorithm: diffData?.patchAlgorithm,
-          bytesChanged: diffData?.bytesChanged,
-          percentChanged: diffData?.percentChanged,
-          changeCategory: diffData?.changeCategory,
-          similarity: diffData?.similarity
-        }
-      });
-
-      // Update document with new current version and set to IN_REVIEW
-      await this.prisma.document.update({
-        where: { id: documentId },
-        data: {
-          currentVersion: nextVersion,
-          status: DocumentStatus.IN_REVIEW,
-          updatedAt: new Date()
-        }
-      });
-
-      // Log audit trail
-      await this.createAuditLog({
-        action: 'CREATE_VERSION',
-        resource: 'DOCUMENT_VERSION',
-        resourceId: newVersion.id,
-        userId,
-        newValues: {
-          documentId,
-          versionNumber: nextVersion,
-          fileSize: fileBuffer.length,
-          changeCategory: diffData?.changeCategory,
-          similarity: diffData?.similarity
-        }
-      });
-
-      this.logger.info('Document version created successfully', {
-        documentId,
-        versionId: newVersion.id,
-        versionNumber: nextVersion,
-        hasDiff: !!diffData
-      });
-
-      return newVersion;
-
-    } catch (error) {
-      this.logger.error('Failed to create document version:', {
-        documentId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
-    }
+  ) {
+    return this.versioning.createDocumentVersion(documentId, fileBuffer, input, userId, organizationId);
   }
 
-  /**
-   * Get detailed version history with diff information
-   */
   async getVersionHistory(
     documentId: string,
     userId: string,
     organizationId: string
-  ): Promise<DocumentVersion[]> {
-    try {
-      // Check permissions
-      const hasAccess = await this.checkDocumentAccess(documentId, userId, 'READ');
-      if (!hasAccess) {
-        throw new Error('Access denied');
-      }
-
-      const versions = await this.prisma.documentVersion.findMany({
-        where: { documentId },
-        include: {
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true
-            }
-          }
-        },
-        orderBy: { versionNumber: 'desc' }
-      });
-
-      return versions;
-    } catch (error) {
-      this.logger.error('Failed to get version history:', error);
-      throw error;
-    }
+  ) {
+    return this.versioning.getVersionHistory(documentId, userId, organizationId);
   }
 
-  /**
-   * Compare two versions and return diff information
-   */
   async compareVersions(
     documentId: string,
     fromVersion: number,
     toVersion: number,
     userId: string,
     organizationId: string
-  ): Promise<{
-    fromVersion: DocumentVersion;
-    toVersion: DocumentVersion;
-    diffSummary: {
-      bytesChanged: number;
-      percentChanged: number;
-      changeCategory: string;
-      similarity: number;
-    } | null;
-  }> {
-    try {
-      // Check permissions
-      const hasAccess = await this.checkDocumentAccess(documentId, userId, 'READ');
-      if (!hasAccess) {
-        throw new Error('Access denied');
-      }
-
-      const [fromVersionRecord, toVersionRecord] = await Promise.all([
-        this.prisma.documentVersion.findFirst({
-          where: { documentId, versionNumber: fromVersion },
-          include: {
-            createdBy: {
-              select: { id: true, firstName: true, lastName: true, email: true }
-            }
-          }
-        }),
-        this.prisma.documentVersion.findFirst({
-          where: { documentId, versionNumber: toVersion },
-          include: {
-            createdBy: {
-              select: { id: true, firstName: true, lastName: true, email: true }
-            }
-          }
-        })
-      ]);
-
-      if (!fromVersionRecord || !toVersionRecord) {
-        throw new Error('Version not found');
-      }
-
-      const diffSummary = toVersionRecord.bytesChanged ? {
-        bytesChanged: toVersionRecord.bytesChanged,
-        percentChanged: toVersionRecord.percentChanged || 0,
-        changeCategory: toVersionRecord.changeCategory || 'UNKNOWN',
-        similarity: toVersionRecord.similarity || 0
-      } : null;
-
-      return {
-        fromVersion: fromVersionRecord,
-        toVersion: toVersionRecord,
-        diffSummary
-      };
-    } catch (error) {
-      this.logger.error('Failed to compare versions:', error);
-      throw error;
-    }
+  ) {
+    return this.versioning.compareVersions(documentId, fromVersion, toVersion, userId, organizationId);
   }
 
-  private async generateDocumentNumber(organizationId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    
-    // Use timestamp + random for guaranteed uniqueness
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 999).toString().padStart(3, '0');
-    const documentNumber = `DOC-${year}-${timestamp}${random}`;
-    
-    // Very rare collision check
-    const existing = await this.prisma.document.findFirst({
-      where: { documentNumber, organizationId }
-    });
-    
-    if (existing) {
-      // Use UUID as ultimate fallback
-      return `DOC-${year}-${crypto.randomUUID().slice(0, 9).toUpperCase()}`;
-    }
-    
-    return documentNumber;
-  }
-
-  private async generateQRCode(documentNumber: string): Promise<string> {
-    try {
-      return await QRCode.toDataURL(documentNumber);
-    } catch (error) {
-      this.logger.error('Failed to generate QR code:', error);
-      return '';
-    }
-  }
-
-  private async checkDocumentAccess(
+  async restoreVersion(
     documentId: string,
+    versionNumber: number,
     userId: string,
-    permission: 'READ' | 'WRITE' | 'DELETE'
-  ): Promise<boolean> {
-    try {
-      // Get user's role first
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          organizationId: true,
-          role: {
-            select: {
-              name: true,
-              permissions: true
+    organizationId: string
+  ) {
+    return this.versioning.restoreVersion(documentId, versionNumber, userId, organizationId);
+  }
+
+  // Search operations
+  async searchDocuments(
+    params: SearchDocumentsInput & { organizationId: string }
+  ): Promise<{ documents: DocumentWithRelations[]; total: number }> {
+    const where = buildDocumentSearchQuery(params);
+    const include = buildDocumentInclude();
+
+    const [documents, total] = await Promise.all([
+      this.prisma.document.findMany({
+        where,
+        include,
+        skip: params.page ? (params.page - 1) * (params.limit || 10) : 0,
+        take: params.limit || 10,
+        orderBy: params.sortBy ? { [params.sortBy]: params.sortOrder || 'desc' } : { createdAt: 'desc' }
+      }),
+      this.prisma.document.count({ where })
+    ]);
+
+    return {
+      documents: documents as DocumentWithRelations[],
+      total
+    };
+  }
+
+  // Bulk operations
+  async bulkOperation(
+    input: BulkOperationInput,
+    userId: string,
+    organizationId: string
+  ): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const documentId of input.documentIds) {
+      try {
+        switch (input.operation) {
+          case 'DELETE':
+            await this.deleteDocument(documentId, userId, organizationId, false);
+            break;
+          case 'ARCHIVE':
+            await this.updateDocument(documentId, { status: 'ARCHIVED' }, userId, organizationId);
+            break;
+          case 'RESTORE':
+            await this.updateDocument(documentId, { status: 'DRAFT' }, userId, organizationId);
+            break;
+          case 'MOVE':
+            if (input.targetFolderId) {
+              await this.updateDocument(documentId, { folderId: input.targetFolderId }, userId, organizationId);
             }
-          }
+            break;
         }
-      });
-
-      // PERMANENT FIX: Admin users have full access to ALL documents
-      if (user?.role?.name === 'Admin') {
-        return true;
+        success++;
+      } catch (error: any) {
+        this.logger.error(`Bulk operation failed for document ${documentId}:`, error);
+        failed++;
       }
-
-      // Check if user has specific document permission
-      const docPermission = await this.prisma.documentPermission.findFirst({
-        where: {
-          documentId,
-          userId,
-          permission: permission.toUpperCase() as any
-        }
-      });
-
-      if (docPermission) {
-        return true;
-      }
-
-      // PERMANENT FIX: Check if user has an active workflow task for this document
-      // This allows reviewers to access documents they are assigned to review
-      const workflowTask = await this.prisma.workflowTask.findFirst({
-        where: {
-          assignedToId: userId,
-          status: {
-            in: ['PENDING', 'IN_PROGRESS']
-          },
-          OR: [
-            // Check if documentId is directly in formData
-            {
-              formData: {
-                equals: { documentId }
-              }
-            },
-            // Check if documentId is nested in formData
-            {
-              formData: {
-                path: ['documentId'],
-                equals: documentId
-              }
-            }
-          ]
-        }
-      });
-
-      if (workflowTask) {
-        // Users with active workflow tasks can READ and WRITE the document (for feedback)
-        this.logger.info(`User ${userId} granted ${permission} access to document ${documentId} via workflow task`);
-        return true;
-      }
-
-      // Check if user is the creator
-      const document = await this.prisma.document.findFirst({
-        where: { id: documentId },
-        select: { createdById: true, organizationId: true }
-      });
-
-      if (document?.createdById === userId) {
-        return true;
-      }
-
-      // Check if user is a coordinator with workflow permissions
-      if (user?.role?.name === 'Coordinator' && permission === 'READ') {
-        // Check if this document is in a workflow that the coordinator is handling
-        const workflowInstance = await this.prisma.jsonWorkflowInstance.findFirst({
-          where: {
-            documentId,
-            isActive: true
-          }
-        });
-
-        if (workflowInstance) {
-          // Coordinators can read documents in active workflows
-          return true;
-        }
-      }
-
-      // For now, allow workflow participants access
-      // Check if document is in an active workflow
-      const docWorkflow = await this.prisma.jsonWorkflowInstance.findFirst({
-        where: {
-          documentId,
-          isActive: true
-        }
-      });
-
-      if (docWorkflow) {
-        // Allow access for workflow participants
-        return true;
-      }
-
-      // Check if user has any role that gives document:view permission
-      const rolePermissions = user?.role?.permissions as string[] || [];
-      if (permission === 'READ' && rolePermissions.includes('document:view')) {
-        return true;
-      }
-
-      // Allow access if user and document are in the same organization (for admins/managers)
-      if (user?.organizationId && document?.organizationId === user.organizationId) {
-        // Only if user has appropriate role
-        const adminRoles = ['Admin', 'Administrator', 'Manager'];
-        if (user.role?.name && adminRoles.includes(user.role.name)) {
-          return true;
-        }
-      }
-
-      // Check folder permissions
-      // TODO: Implement folder-based permissions
-
-      // Check role permissions
-      // TODO: Implement role-based permissions
-
-      return false;
-
-    } catch (error) {
-      this.logger.error('Failed to check document access:', error);
-      return false;
     }
+
+    return { success, failed };
   }
 
-  private async filterDocumentsByAccess(
-    documents: DocumentWithRelations[],
-    userId: string,
-    permission: 'READ' | 'WRITE' | 'DELETE'
-  ): Promise<DocumentWithRelations[]> {
-    // TEMPORARY: Return all documents to test if this is the filtering issue
-    return documents;
+  // Statistics
+  async getDocumentStatistics(organizationId: string): Promise<DocumentStatistics> {
+    const [
+      totalDocuments,
+      statusCounts,
+      categoryCounts,
+      fileSizes
+    ] = await Promise.all([
+      this.prisma.document.count({
+        where: { organizationId, status: { not: 'DELETED' } }
+      }),
+      this.prisma.document.groupBy({
+        by: ['status'],
+        where: { organizationId },
+        _count: true
+      }),
+      this.prisma.document.groupBy({
+        by: ['category'],
+        where: { organizationId, status: { not: 'DELETED' } },
+        _count: true
+      }),
+      this.prisma.document.aggregate({
+        where: { organizationId, status: { not: 'DELETED' } },
+        _avg: { fileSize: true },
+        _sum: { fileSize: true }
+      })
+    ]);
+
+    const recentlyModified = await this.prisma.document.count({
+      where: {
+        organizationId,
+        status: { not: 'DELETED' },
+        updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+      }
+    });
+
+    return {
+      totalDocuments,
+      documentsByStatus: statusCounts.reduce((acc, item) => {
+        acc[item.status] = item._count;
+        return acc;
+      }, {} as Record<string, number>),
+      documentsByCategory: categoryCounts.reduce((acc, item) => {
+        if (item.category) acc[item.category] = item._count;
+        return acc;
+      }, {} as Record<string, number>),
+      averageFileSize: fileSizes._avg.fileSize || 0,
+      totalStorageUsed: fileSizes._sum.fileSize || 0,
+      recentlyModified
+    };
   }
 
-  private async createAuditLog(logData: {
-    action: string;
-    resource: string;
-    resourceId: string;
-    userId: string;
-    oldValues?: any;
-    newValues?: any;
-  }): Promise<void> {
+  // Audit logging
+  private async createAuditLog(entry: AuditLogEntry): Promise<void> {
     try {
-      // Get user's IP and user agent from request context
-      // This would typically come from the request context
-      const ipAddress = '0.0.0.0'; // TODO: Get from request
-      const userAgent = 'Unknown'; // TODO: Get from request
-
       await this.prisma.auditLog.create({
         data: {
-          action: logData.action,
-          resource: logData.resource,
-          resourceId: logData.resourceId,
-          oldValues: logData.oldValues,
-          newValues: logData.newValues,
-          ipAddress,
-          userAgent,
-          userId: logData.userId
+          action: entry.action,
+          resource: entry.resource,
+          resourceId: entry.resourceId,
+          userId: entry.userId,
+          oldValues: entry.oldValues || {},
+          newValues: entry.newValues || {},
+          ipAddress: entry.ipAddress || 'unknown',
+          userAgent: entry.userAgent || 'unknown'
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to create audit log:', error);
     }
+  }
+  // Add missing method
+  async getDocument(documentId: string): Promise<any> {
+    return this.prisma.document.findUnique({
+      where: { id: documentId }
+    });
+  }
+
+  async getDocumentContent(documentId: string): Promise<Buffer> {
+    const doc = await this.getDocument(documentId);
+    if (!doc || !doc.content) {
+      throw new Error('Document not found or has no content');
+    }
+    return Buffer.from(doc.content);
   }
 }

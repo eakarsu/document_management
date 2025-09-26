@@ -139,7 +139,7 @@ export class TemplateService {
 
       return template;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to create publishing template:', error);
       throw error;
     }
@@ -172,7 +172,7 @@ export class TemplateService {
 
       return templates;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get templates:', error);
       throw error;
     }
@@ -217,7 +217,7 @@ export class TemplateService {
         throw new Error('Document not found or access denied');
       }
 
-      const documentContent = await documentService.getDocumentContent(input.documentId, userId, organizationId);
+      const documentContent = await documentService.getDocumentContent(input.documentId);
       
       if (!documentContent) {
         throw new Error('Could not retrieve document content');
@@ -259,7 +259,7 @@ export class TemplateService {
         formattedDocumentPath: formattedPath
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to apply template:', error);
       throw error;
     }
@@ -290,7 +290,7 @@ export class TemplateService {
 
       return previewDocument;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to generate template preview:', error);
       throw error;
     }
@@ -364,7 +364,7 @@ export class TemplateService {
 
         doc.end();
 
-      } catch (error) {
+      } catch (error: any) {
         reject(error);
       }
     });
@@ -578,7 +578,7 @@ export class TemplateService {
       doc.image(qrCodeImage, doc.page.width - 100, doc.page.height - 100, {
         fit: [80, 80]
       });
-    } catch (error) {
+    } catch (error: any) {
       this.logger.warn('Failed to add QR code to document:', error);
     }
   }

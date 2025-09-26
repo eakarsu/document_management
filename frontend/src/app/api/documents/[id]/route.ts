@@ -137,73 +137,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  let body: any;
+
   try {
-    const body = await request.json();
+    body = await request.json();
 
-    // If updating customFields with draftFeedback, handle it locally using direct database connection
-    if (body.customFields && body.customFields.draftFeedback !== undefined) {
-      const { Pool } = await import('pg');
-
-      const pool = new Pool({
-        user: 'postgres',
-        host: 'localhost',
-        database: 'dms_dev',
-        password: 'postgres',
-        port: 5432,
-      });
-
-      try {
-        // Get existing document - column name is "customFields" not "custom_fields"
-        const result = await pool.query(
-          'SELECT "customFields" FROM documents WHERE id = $1',
-          [params.id]
-        );
-
-        if (result.rows.length === 0) {
-          await pool.end();
-          return NextResponse.json({
-            success: false,
-            error: 'Document not found'
-          }, { status: 404 });
-        }
-
-        // Merge customFields
-        const existingCustomFields = result.rows[0].customFields || {};
-        const updatedCustomFields = {
-          ...existingCustomFields,
-          ...body.customFields
-        };
-
-        // Update document - column name is "customFields" not "custom_fields"
-        const updateResult = await pool.query(
-          'UPDATE documents SET "customFields" = $1 WHERE id = $2 RETURNING "customFields"',
-          [JSON.stringify(updatedCustomFields), params.id]
-        );
-
-        console.log('Updated customFields with draftFeedback:', {
-          documentId: params.id,
-          feedbackCount: updatedCustomFields.draftFeedback?.length || 0,
-          updated: updateResult.rowCount > 0
-        });
-
-        await pool.end();
-
-        return NextResponse.json({
-          success: true,
-          message: 'Feedback updated successfully',
-          customFields: updateResult.rows[0]?.customFields
-        });
-      } catch (dbError) {
-        await pool.end();
-        console.error('Database update error:', dbError);
-        return NextResponse.json({
-          success: false,
-          error: 'Failed to update document'
-        }, { status: 500 });
-      }
-    }
-
-    // For other updates, forward to backend
+    // Always forward to backend, don't try direct DB connection
     // Get token from cookies or headers
     let token = request.cookies.get('token')?.value || request.cookies.get('accessToken')?.value;
 
@@ -233,6 +172,9 @@ export async function PATCH(
                       process.env.BACKEND_URL ||
                       'http://localhost:4000';
 
+    console.log('PATCH request to backend:', `${backendUrl}/api/documents/${params.id}`);
+    console.log('PATCH body:', JSON.stringify(body).substring(0, 200));
+
     // Forward to backend with token
     const backendResponse = await fetch(`${backendUrl}/api/documents/${params.id}`, {
       method: 'PATCH',
@@ -243,19 +185,32 @@ export async function PATCH(
       body: JSON.stringify(body)
     });
 
+    console.log('Backend PATCH response status:', backendResponse.status);
+
     if (backendResponse.ok) {
       const responseData = await backendResponse.json();
       return NextResponse.json(responseData);
     } else {
-      const errorData = await backendResponse.json();
+      let errorData;
+      try {
+        errorData = await backendResponse.json();
+      } catch {
+        errorData = {
+          success: false,
+          error: `Backend error: ${backendResponse.statusText}`
+        };
+      }
+      console.error('Backend PATCH error:', errorData);
       return NextResponse.json(errorData, { status: backendResponse.status });
     }
 
   } catch (error) {
     console.error("PATCH API error:", error);
+    console.error("PATCH body:", body);
+    console.error("Document ID:", params.id);
     return NextResponse.json({
       success: false,
-      error: "Internal server error"
+      error: error instanceof Error ? error.message : "Internal server error"
     }, { status: 500 });
   }
 }

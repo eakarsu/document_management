@@ -45,7 +45,7 @@ router.get('/documents/:documentId/versions/latest', authMiddleware, async (req:
         };
 
     res.json(latestVersion);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching latest version:', error);
     res.status(500).json({ error: 'Failed to fetch latest version' });
   }
@@ -70,7 +70,7 @@ router.get('/documents/:documentId/versions', authMiddleware, async (req: Reques
     const versions = customFields?.versions || [];
 
     res.json(versions);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching versions:', error);
     res.status(500).json({ error: 'Failed to fetch versions' });
   }
@@ -124,7 +124,7 @@ router.post('/documents/:documentId/versions', authMiddleware, async (req: Reque
       success: true,
       version: versions[versions.length - 1]
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating version:', error);
     res.status(500).json({ error: 'Failed to create version' });
   }
@@ -168,7 +168,7 @@ router.get('/documents/:documentId/versions/diff', authMiddleware, async (req: R
     };
 
     res.json(diff);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error calculating diff:', error);
     res.status(500).json({ error: 'Failed to calculate diff' });
   }
@@ -235,7 +235,7 @@ router.post('/documents/:documentId/versions/:versionId/revert', authMiddleware,
       message: `Reverted to version ${targetVersion.versionNumber}`,
       newVersion: revertVersion
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error reverting version:', error);
     res.status(500).json({ error: 'Failed to revert version' });
   }

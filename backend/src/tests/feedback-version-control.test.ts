@@ -484,7 +484,7 @@ export async function runVersionControlTests() {
     // Run the tests programmatically
     const { execSync } = require('child_process');
     execSync('npm test -- feedback-version-control.test.ts', { stdio: 'inherit' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Test execution failed:', error);
   }
 }

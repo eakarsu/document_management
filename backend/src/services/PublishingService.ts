@@ -136,7 +136,7 @@ export class PublishingService {
 
       return workflow;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to create publishing workflow:', error);
       throw error;
     }
@@ -233,7 +233,7 @@ export class PublishingService {
 
       return publishing;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to submit document for publishing:', error);
       throw error;
     }
@@ -338,7 +338,7 @@ export class PublishingService {
 
       return approval;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to process approval:', error);
       throw error;
     }
@@ -405,7 +405,7 @@ export class PublishingService {
 
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to publish document:', error);
       
       // Update status to failed
@@ -524,7 +524,7 @@ export class PublishingService {
         myApprovals
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get publishing dashboard:', error);
       throw error;
     }
@@ -580,7 +580,7 @@ export class PublishingService {
             publishingId: publishing.id,
             documentId: publishing.documentId
           });
-        } catch (error) {
+        } catch (error: any) {
           this.logger.error('Failed to process scheduled publication:', {
             publishingId: publishing.id,
             error
@@ -588,7 +588,7 @@ export class PublishingService {
         }
       }
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to process scheduled publications:', error);
     }
   }
@@ -626,7 +626,7 @@ export class PublishingService {
         await this.sendExpirationNotification(approval);
       }
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to process expired approvals:', error);
     }
   }

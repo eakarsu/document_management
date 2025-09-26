@@ -56,7 +56,7 @@ router.post('/pdf', async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${title || 'document'}.pdf"`);
     res.end(pdfBuffer);
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('PDF generation error:', error);
     res.status(500).json({ error: 'Failed to generate PDF' });
   }
@@ -118,7 +118,7 @@ router.post('/docx', async (req: Request, res: Response) => {
       res.end(Buffer.from(docxBuffer));
     }
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('DOCX generation error:', error);
     res.status(500).json({ error: 'Failed to generate DOCX' });
   }

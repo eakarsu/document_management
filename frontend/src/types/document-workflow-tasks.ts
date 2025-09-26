@@ -1,6 +1,15 @@
 // Comprehensive Document Management Workflow Task Types
 
 export enum DocumentTaskType {
+  // Basic workflow task types
+  START = 'start',
+  REVIEW = 'review',
+  APPROVAL = 'approval',
+  NOTIFICATION = 'notification',
+  CONDITION = 'condition',
+  PARALLEL = 'parallel',
+  END = 'end',
+
   // Document Creation & Ingestion
   CREATE_DOCUMENT = 'CREATE_DOCUMENT',
   UPLOAD_DOCUMENT = 'UPLOAD_DOCUMENT',

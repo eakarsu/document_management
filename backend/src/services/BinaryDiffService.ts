@@ -87,7 +87,7 @@ export class BinaryDiffService {
         changeAnalysis
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to generate binary diff:', {
         documentId,
         toVersion,
@@ -117,7 +117,7 @@ export class BinaryDiffService {
       
       return reconstructedBuffer;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to apply binary diff:', {
         diffPath,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -162,7 +162,7 @@ export class BinaryDiffService {
         diffSize: diffBuffer.length,
         checksum
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get diff statistics:', error);
       throw error;
     }
@@ -182,7 +182,7 @@ export class BinaryDiffService {
       const originalChecksum = crypto.createHash('sha256').update(newBuffer).digest('hex');
       
       return reconstructedChecksum === originalChecksum;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Diff validation failed:', error);
       return false;
     }
@@ -195,7 +195,7 @@ export class BinaryDiffService {
     try {
       const diffBuffer = await bsdiff(oldBuffer, newBuffer);
       return diffBuffer;
-    } catch (error) {
+    } catch (error: any) {
       // If bsdiff fails, log and rethrow
       this.logger.error('bsdiff operation failed:', error);
       throw new Error(`Binary diff generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -209,7 +209,7 @@ export class BinaryDiffService {
     try {
       const patchedBuffer = await bspatch(baseBuffer, diffBuffer);
       return patchedBuffer;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('bspatch operation failed:', error);
       throw new Error(`Binary patch application failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -295,8 +295,42 @@ export class BinaryDiffService {
       // This would implement cleanup logic for old diff files
       // to prevent storage bloat over time
       this.logger.info('Diff cleanup not yet implemented', { documentId, keepVersions });
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to cleanup old diffs:', error);
+    }
+  }
+
+  /**
+   * Calculate diff between two buffers (alias for generateBinaryDiff with minimal params)
+   */
+  async calculateDiff(
+    oldBuffer: Buffer,
+    newBuffer: Buffer
+  ): Promise<Buffer> {
+    try {
+      return await this.createBinaryDiff(oldBuffer, newBuffer);
+    } catch (error: any) {
+      this.logger.error('Failed to calculate diff:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get diff between two specific versions
+   */
+  async getDiffBetweenVersions(
+    oldBuffer: Buffer,
+    newBuffer: Buffer
+  ): Promise<{ diffSize: number; diffBuffer: Buffer }> {
+    try {
+      const diffBuffer = await this.createBinaryDiff(oldBuffer, newBuffer);
+      return {
+        diffSize: diffBuffer.length,
+        diffBuffer
+      };
+    } catch (error: any) {
+      this.logger.error('Failed to get diff between versions:', error);
+      throw error;
     }
   }
 }

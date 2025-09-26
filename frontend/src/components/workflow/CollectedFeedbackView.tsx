@@ -61,6 +61,7 @@ interface FeedbackComment {
 interface CollectedFeedbackViewProps {
   documentId: string;
   userRole?: string;
+  onClose?: () => void;
 }
 
 const CollectedFeedbackView: React.FC<CollectedFeedbackViewProps> = ({
@@ -83,14 +84,16 @@ const CollectedFeedbackView: React.FC<CollectedFeedbackViewProps> = ({
       setLoading(true);
 
       // First fetch workflow instance to get current stage
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+      // Use POST with documentId in body to avoid Next.js route issues
       const workflowResponse = await authTokenService.authenticatedFetch(
-        `${backendUrl}/api/workflow-instances/${documentId}`,
+        `/api/workflow-instances-get`,
         {
-          method: 'GET',
+          method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'Accept': 'application/json'
-          }
+          },
+          body: JSON.stringify({ documentId })
         }
       );
 
@@ -464,7 +467,7 @@ const CollectedFeedbackView: React.FC<CollectedFeedbackViewProps> = ({
 
                   // Use the proper workflow advance endpoint
                   const advanceResponse = await authTokenService.authenticatedFetch(
-                    `${backendUrl}/api/workflow-instances/${documentId}/advance`,
+                    `/api/workflow-instances/${documentId}/advance`,
                     {
                       method: 'POST',
                       headers: {

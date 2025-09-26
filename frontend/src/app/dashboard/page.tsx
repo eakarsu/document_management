@@ -424,72 +424,212 @@ const DashboardPage: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Stats Cards */}
+        {/* Feature Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
+          {/* Document Management */}
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <DocumentIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-                <Typography variant="h4" component="div">
-                  {dashboardData.totalDocuments}
+            <Card
+              sx={{
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={() => router.push('/documents')}
+            >
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <DocumentIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Document Management
                 </Typography>
-                <Typography color="text.secondary">
-                  Total Documents
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <AccountCircle sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
-                <Typography variant="h4" component="div">
-                  {dashboardData.totalUsers}
-                </Typography>
-                <Typography color="text.secondary">
-                  Total Users
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <PublishIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-                <Typography variant="h4" component="div">
-                  {dashboardData.recentDocuments.filter(doc => doc.status === 'PUBLISHED').length}
-                </Typography>
-                <Typography color="text.secondary">
-                  Published Documents
+                <Typography color="text.secondary" variant="body2">
+                  Create, edit, and manage documents with collaborative workflows
                 </Typography>
               </CardContent>
             </Card>
           </Grid>
 
+          {/* AI Document Generator */}
           <Grid item xs={12} sm={6} md={3}>
-            <Card 
-              sx={{ 
+            <Card
+              sx={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
                 cursor: 'pointer',
+                transition: 'all 0.3s ease',
                 '&:hover': {
                   background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={handleAIDocumentGenerator}
+            >
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <SmartIcon sx={{ fontSize: 48, color: 'white', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  AI Document Generator
+                </Typography>
+                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }} variant="body2">
+                  Generate professional documents with AI assistance
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Workflow Builder */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                color: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={handleWorkflowBuilder}
+            >
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <WorkflowBuilderIcon sx={{ fontSize: 48, color: 'white', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Workflow Builder
+                </Typography>
+                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }} variant="body2">
+                  Design and manage document approval workflows
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* AI Workflow Assistant */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3
                 }
               }}
               onClick={handleAIWorkflow}
             >
-              <CardContent sx={{ textAlign: 'center' }}>
-                <AIIcon sx={{ fontSize: 40, color: 'white', mb: 1 }} />
-                <Typography variant="h4" component="div">
-                  8
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <AIIcon sx={{ fontSize: 48, color: 'white', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  AI Workflow Assistant
                 </Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                  AI Features
+                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }} variant="body2">
+                  8 AI-powered features for workflow optimization
                 </Typography>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                  Click to explore
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Search & Analytics */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={handleSearchDocuments}
+            >
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <SearchIcon sx={{ fontSize: 48, color: 'info.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Search & Analytics
+                </Typography>
+                <Typography color="text.secondary" variant="body2">
+                  Find documents and analyze workflow performance
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Publishing Management */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={handlePublishing}
+            >
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <PublishIcon sx={{ fontSize: 48, color: 'success.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Publishing Management
+                </Typography>
+                <Typography color="text.secondary" variant="body2">
+                  Manage document publishing and distribution
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* User Management */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={handleUsersManagement}
+            >
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <AdminIcon sx={{ fontSize: 48, color: 'warning.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  User Management
+                </Typography>
+                <Typography color="text.secondary" variant="body2">
+                  Manage users, roles, and permissions
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* File Upload */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card
+              sx={{
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={handleUploadDocument}
+            >
+              <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                <UploadIcon sx={{ fontSize: 48, color: 'secondary.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  File Upload
+                </Typography>
+                <Typography color="text.secondary" variant="body2">
+                  Upload and import documents from various sources
                 </Typography>
               </CardContent>
             </Card>
@@ -603,39 +743,40 @@ const DashboardPage: React.FC = () => {
 
           <Grid item xs={12} md={4}>
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CreateIcon />
                 Quick Actions
               </Typography>
               <Stack spacing={2}>
                 <Button
                   fullWidth
                   variant="contained"
+                  startIcon={<CreateIcon />}
+                  size="large"
+                  onClick={() => router.push('/documents/create')}
+                  sx={{
+                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                    }
+                  }}
+                >
+                  Create New Document
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
                   startIcon={<SmartIcon />}
                   size="large"
                   onClick={handleAIDocumentGenerator}
                   sx={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    borderColor: 'primary.main',
                     '&:hover': {
-                      background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                      backgroundColor: 'primary.light'
                     }
                   }}
                 >
-                  🤖 Create AI Document
-                </Button>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={<WorkflowBuilderIcon />}
-                  size="large"
-                  onClick={handleWorkflowBuilder}
-                  sx={{
-                    background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                    }
-                  }}
-                >
-                  📊 Workflow Builder
+                  Generate with AI
                 </Button>
                 <Button
                   fullWidth
@@ -644,7 +785,7 @@ const DashboardPage: React.FC = () => {
                   size="large"
                   onClick={handleUploadDocument}
                 >
-                  Upload Document
+                  Upload Files
                 </Button>
                 <Button
                   fullWidth
@@ -653,61 +794,35 @@ const DashboardPage: React.FC = () => {
                   size="large"
                   onClick={handleBrowseFolders}
                 >
-                  Browse Folders
-                </Button>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<SearchIcon />}
-                  size="large"
-                  onClick={handleSearchDocuments}
-                >
-                  Search Documents
-                </Button>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<AnalyticsIcon />}
-                  size="large"
-                  onClick={handleViewAnalytics}
-                >
-                  View Analytics
-                </Button>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<AdminIcon />}
-                  size="large"
-                  onClick={handleUsersManagement}
-                  sx={{
-                    color: 'warning.main',
-                    borderColor: 'warning.main',
-                    '&:hover': {
-                      borderColor: 'warning.dark',
-                      backgroundColor: 'rgba(237, 108, 2, 0.04)'
-                    }
-                  }}
-                >
-                  Users Management
-                </Button>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<PublishIcon />}
-                  size="large"
-                  onClick={handlePublishing}
-                  sx={{
-                    color: 'success.main',
-                    borderColor: 'success.main',
-                    '&:hover': {
-                      borderColor: 'success.dark',
-                      backgroundColor: 'success.light'
-                    }
-                  }}
-                >
-                  Publishing Management
+                  Browse Documents
                 </Button>
               </Stack>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AnalyticsIcon sx={{ fontSize: 18 }} />
+                System Overview
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Documents</Typography>
+                  <Chip size="small" label={dashboardData.totalDocuments} color="primary" variant="outlined" />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Active Users</Typography>
+                  <Chip size="small" label={dashboardData.totalUsers} color="secondary" variant="outlined" />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Published</Typography>
+                  <Chip
+                    size="small"
+                    label={dashboardData.recentDocuments.filter(doc => doc.status === 'PUBLISHED').length}
+                    color="success"
+                    variant="outlined"
+                  />
+                </Box>
+              </Box>
             </Paper>
           </Grid>
 
@@ -811,14 +926,33 @@ const DashboardPage: React.FC = () => {
             <ReviewerTasks />
           </Box>
 
-        {/* API Status */}
+        {/* System Status */}
         <Box sx={{ mt: 4 }}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-              🚀 System Status: Backend API running at {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'} | 
-              Frontend running at http://localhost:{process.env.PORT || '3000'} | 
-              Database: {dashboardData.totalUsers} users, {dashboardData.totalDocuments} documents
+          <Paper sx={{ p: 3, background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <MonitorIcon />
+              System Status
             </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">Backend API</Typography>
+                  <Chip label="Online" color="success" size="small" sx={{ mt: 0.5 }} />
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">Database</Typography>
+                  <Chip label="Connected" color="success" size="small" sx={{ mt: 0.5 }} />
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">AI Services</Typography>
+                  <Chip label="Available" color="success" size="small" sx={{ mt: 0.5 }} />
+                </Box>
+              </Grid>
+            </Grid>
           </Paper>
         </Box>
       </Container>

@@ -50,11 +50,10 @@ export const documentResolvers: any = {
     ) {
       if (!user) throw new Error('Authentication required');
 
-      return await services.document.searchDocuments(
-        input,
-        user.id,
-        user.organizationId
-      );
+      return await services.document.searchDocuments({
+        ...input,
+        organizationId: user.organizationId
+      });
     },
 
     async searchDocuments(
@@ -64,11 +63,10 @@ export const documentResolvers: any = {
     ) {
       if (!user) throw new Error('Authentication required');
 
-      return await services.document.searchDocuments(
-        input,
-        user.id,
-        user.organizationId
-      );
+      return await services.document.searchDocuments({
+        ...input,
+        organizationId: user.organizationId
+      });
     }
   },
 
@@ -112,7 +110,7 @@ export const documentResolvers: any = {
           document
         };
 
-      } catch (error) {
+      } catch (error: any) {
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Upload failed'
@@ -152,7 +150,7 @@ export const documentResolvers: any = {
 
         return { success };
 
-      } catch (error) {
+      } catch (error: any) {
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Delete failed'

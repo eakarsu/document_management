@@ -39,7 +39,7 @@ router.post('/analyze-document', async (req: any, res) => {
       success: true,
       analysis
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to analyze document for workflow:', error);
     res.status(500).json({
       success: false,
@@ -63,7 +63,7 @@ router.post('/analyze-decision-support', async (req: any, res) => {
       success: true,
       analysis
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to analyze document for decision support:', error);
     res.status(500).json({
       success: false,
@@ -88,7 +88,7 @@ router.post('/auto-assign-reviewers', async (req: any, res) => {
       success: true,
       assignedReviewers
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to auto-assign reviewers:', error);
     res.status(500).json({
       success: false,
@@ -108,7 +108,7 @@ router.post('/predict-outcome', async (req: any, res) => {
       success: true,
       prediction
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to predict workflow outcome:', error);
     res.status(500).json({
       success: false,
@@ -139,7 +139,7 @@ router.post('/smart-submit', async (req: any, res) => {
       success: true,
       result
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to smart submit for publishing:', error);
     res.status(500).json({
       success: false,
@@ -162,7 +162,7 @@ router.post('/generate-workflow', async (req: any, res) => {
       success: true,
       workflow
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to generate workflow from natural language:', error);
     res.status(500).json({
       success: false,
@@ -253,7 +253,7 @@ router.post('/optimize-workflow', async (req: any, res) => {
       success: true,
       optimization
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to optimize workflow:', error);
     res.status(500).json({
       success: false,
@@ -277,7 +277,7 @@ router.post('/generate-checklist', async (req: any, res) => {
       success: true,
       checklist
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to generate approval checklist:', error);
     res.status(500).json({
       success: false,
@@ -297,7 +297,7 @@ router.post('/analyze-content-quality', async (req: any, res) => {
       success: true,
       analysis
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to analyze content quality:', error);
     res.status(500).json({
       success: false,
@@ -326,7 +326,7 @@ router.post('/collaborative/create-ai-session', async (req: any, res) => {
       success: true,
       session
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to create AI collaborative session:', error);
     res.status(500).json({
       success: false,
@@ -346,7 +346,7 @@ router.post('/collaborative/schedule-ai-meeting', async (req: any, res) => {
       success: true,
       meeting
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to schedule AI meeting:', error);
     res.status(500).json({
       success: false,
@@ -366,7 +366,7 @@ router.get('/collaborative/analyze/:sessionId', async (req: any, res) => {
       success: true,
       analysis
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to analyze collaboration in real-time:', error);
     res.status(500).json({
       success: false,
@@ -390,7 +390,7 @@ router.post('/collaborative/mediate-conflict', async (req: any, res) => {
       success: true,
       mediation
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to mediate conflict with AI:', error);
     res.status(500).json({
       success: false,
@@ -413,7 +413,7 @@ router.post('/collaborative/build-consensus', async (req: any, res) => {
       success: true,
       consensus
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to build consensus with AI:', error);
     res.status(500).json({
       success: false,
@@ -449,7 +449,7 @@ router.get('/analytics/dashboard', async (req: any, res) => {
       success: true,
       dashboard
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to get AI workflow dashboard:', error);
     res.status(500).json({
       success: false,
@@ -492,7 +492,7 @@ router.post('/generate-insights', async (req: any, res) => {
       insights,
       documentInsights
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to generate insights:', error);
     res.status(500).json({
       success: false,
@@ -523,7 +523,7 @@ router.get('/analytics/performance-insights', async (req: any, res) => {
       success: true,
       insights
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to generate performance insights:', error);
     res.status(500).json({
       success: false,
@@ -554,7 +554,7 @@ router.get('/analytics/comprehensive-insights', async (req: any, res) => {
       success: true,
       insights
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to generate comprehensive insights:', error);
     res.status(500).json({
       success: false,
@@ -582,7 +582,7 @@ router.post('/resolve-conflict', async (req: any, res) => {
       success: true,
       resolution
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to resolve workflow conflict:', error);
     res.status(500).json({
       success: false,
@@ -601,7 +601,7 @@ router.get('/suggestions/:publishingId', async (req: any, res) => {
     
     const suggestions = {
       nextBestActions: prediction.recommendations,
-      potentialIssues: prediction.potentialBottlenecks.map(b => b.mitigation),
+      potentialIssues: prediction.potentialBottlenecks.map((b: any) => b.mitigation),
       optimizations: [
         'Consider parallel processing for remaining approvals',
         'Send reminder notifications to pending reviewers',
@@ -613,7 +613,7 @@ router.get('/suggestions/:publishingId', async (req: any, res) => {
       success: true,
       suggestions
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to get AI suggestions:', error);
     res.status(500).json({
       success: false,
@@ -652,7 +652,7 @@ router.get('/health/real-time', async (req: any, res) => {
       success: true,
       healthMetrics
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to get workflow health metrics:', error);
     res.status(500).json({
       success: false,
@@ -672,7 +672,7 @@ router.post('/collaborative/meeting-summary', async (req: any, res) => {
       success: true,
       summary
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to generate meeting summary:', error);
     res.status(500).json({
       success: false,

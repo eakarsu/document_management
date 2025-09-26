@@ -1,7 +1,252 @@
 // Import critical templates
 import { criticalTemplates } from './criticalPubOneTemplates';
+import { militaryDocumentTemplates } from './militaryDocumentTemplates';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// Document templates with full content
+// Function to create DAFMAN header
+function createDAFMANHeader(): string {
+  return `
+        <style>
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11pt;
+    line-height: 1.3;
+    color: #000;
+    padding: 20px;
+  }
+
+  /* Header table layout */
+  .header-table {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .header-table td {
+    vertical-align: top;
+    padding: 10px;
+  }
+
+  /* Left column */
+  .left-column {
+    width: 35%;
+    text-align: center;
+  }
+
+  .by-order {
+    font-weight: bold;
+    font-size: 10pt;
+    margin-bottom: 5px;
+  }
+
+  .secretary {
+    font-weight: bold;
+    font-size: 10pt;
+    margin-bottom: 20px;
+  }
+
+  .seal-container img {
+    width: 100px;
+    height: 100px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Right column */
+  .right-column {
+    width: 65%;
+    text-align: right;
+  }
+
+  .department {
+    font-style: italic;
+    font-size: 11pt;
+    margin-bottom: 5px;
+  }
+
+  .doc-type {
+    font-weight: bold;
+    font-size: 11pt;
+    margin-bottom: 20px;
+  }
+
+  .doc-date {
+    font-size: 10pt;
+    margin-bottom: 10px;
+  }
+
+  .doc-subtitle {
+    font-style: italic;
+    font-size: 10pt;
+    margin-bottom: 10px;
+  }
+
+  .doc-title {
+    font-weight: bold;
+    font-size: 12pt;
+    margin-bottom: 5px;
+  }
+
+  .doc-version {
+    font-size: 10pt;
+  }
+
+  /* Compliance section */
+  .compliance-section {
+    text-align: center;
+    font-weight: bold;
+    font-size: 10pt;
+    margin: 30px 0;
+    padding: 10px 0;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+  }
+
+  /* Info table */
+  .info-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+
+  .info-table td {
+    padding: 8px;
+    border-top: 1px solid #000;
+    font-size: 10pt;
+    vertical-align: top;
+  }
+
+  .info-label {
+    font-weight: bold;
+    width: 20%;
+  }
+
+  .info-value {
+    width: 80%;
+  }
+
+  /* Bottom section */
+  .bottom-section {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 1px solid #000;
+  }
+
+  .opr-section {
+    font-size: 10pt;
+  }
+
+  .certified-section {
+    text-align: right;
+    font-size: 10pt;
+  }
+
+  .pages-section {
+    text-align: right;
+    font-size: 10pt;
+  }
+</style>
+
+
+<table class="header-table">
+  <tr>
+    <td class="left-column">
+      <div class="by-order">BY ORDER OF THE</div>
+      <div class="secretary">SECRETARY OF THE AIR FORCE</div>
+      <div class="seal-container">
+        <img src="http://localhost:3000/images/air-force-seal.png" alt="Official Seal">
+      </div>
+    </td>
+    <td class="right-column">
+      <div class="department">DEPARTMENT OF THE AIR FORCE</div>
+      <div class="doc-type">DEPARTMENT OF THE AIR FORCE MANUAL DAFMAN-2618</div>
+      <div class="doc-date">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}</div>
+      <div class="doc-subtitle">The Enlisted Force Structure</div>
+      <div class="doc-title">AIRMAN AND FAMILY READINESS</div>
+      <div class="doc-version">Version 1.0</div>
+    </td>
+  </tr>
+</table>
+
+<div class="compliance-section">
+  COMPLIANCE WITH THIS PUBLICATION IS MANDATORY
+</div>
+
+<table class="info-table">
+  <tr>
+    <td class="info-label">DISTRIBUTION:</td>
+    <td class="info-value">DISTRIBUTION STATEMENT A: Approved for public release; distribution unlimited</td>
+  </tr>
+  <tr>
+    <td class="info-label">ACCESSIBILITY:</td>
+    <td class="info-value">Publications and forms are available on the e-Publishing website at http://www.e-publishing.af.mil</td>
+  </tr>
+  <tr>
+    <td class="info-label">RELEASABILITY:</td>
+    <td class="info-value">There are no releasability restrictions on this publication.</td>
+  </tr>
+  <tr>
+    <td class="info-label">EFFECTIVE DATE:</td>
+    <td class="info-value" colspan="2">
+      <div style="display: flex; justify-content: space-between;">
+        <span>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}</span>
+        <span style="font-weight: bold; white-space: nowrap;">REVIEW DATE: ${new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}</span>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td class="info-label">POC:</td>
+    <td class="info-value">Lt Col Smith, John A.<br>
+    DSN: 555-1234 | Commercial: (555) 555-1234<br>
+    Email: john.a.smith@us.af.mil</td>
+  </tr>
+</table>
+
+<table style="width: 100%; margin-top: 20px; border-top: 1px solid #000;">
+  <tr>
+    <td style="width: 33%; padding-top: 10px; font-size: 10pt;">
+      <strong>OPR:</strong> SAF/IG
+    </td>
+    <td style="width: 33%; text-align: center; padding-top: 10px; font-size: 10pt;">
+    </td>
+    <td style="width: 33%; text-align: right; padding-top: 10px; font-size: 10pt;">
+      Certified by: AF/CV<br>
+      (General Larry O. Spencer)<br>
+      <br>
+      Pages: 5
+    </td>
+  </tr>
+</table>
+`;
+}
+
+// Function to combine header with content
+function createDocumentWithHeader(templateId: string, content: string): string {
+  // For now, just add DAFMAN header to DAFMAN templates
+  if (templateId === 'dafman' || templateId === 'dafpd') {
+    return createDAFMANHeader() + `
+        <div style="page-break-before: always; margin-top: 2in;">
+          ${content}
+        </div>
+      `;
+  }
+  return content;
+}
+
+// Document templates with full content - combining all template sources
 export const documentTemplates = {
   // CRITICAL TEMPLATES - From PubOne Requirements
   'comment-resolution-matrix': {
@@ -32,11 +277,11 @@ export const documentTemplates = {
   // HIGH PRIORITY TEMPLATES
   'dafpd-template': {
     name: criticalTemplates['dafpd-template'].name,
-    content: criticalTemplates['dafpd-template'].content
+    content: createDocumentWithHeader('dafpd', criticalTemplates['dafpd-template'].content)
   },
   'dafman-template': {
     name: criticalTemplates['dafman-template'].name,
-    content: criticalTemplates['dafman-template'].content
+    content: createDocumentWithHeader('dafman', criticalTemplates['dafman-template'].content)
   },
   'guidance-memorandum': {
     name: criticalTemplates['guidance-memorandum'].name,
@@ -50,8 +295,7 @@ export const documentTemplates = {
   // EXISTING TEMPLATES
   'air-force-manual': {
     name: 'Air Force Technical Manual',
-    content: `
-      <h1>Air Force Technical Manual</h1>
+    content: createDocumentWithHeader('af-manual', `
       <h2>Chapter 1: Introduction</h2>
       <p>This document provides comprehensive guidance for Air Force personnel regarding operational procedures and best practices.</p>
       
@@ -107,7 +351,7 @@ export const documentTemplates = {
       </ol>
       
       <p><em>Document classification: For Official Use Only (FOUO)</em></p>
-    `
+    `)
   },
   'operational-plan': {
     name: 'Operational Planning Document',
@@ -270,10 +514,67 @@ export const documentTemplates = {
       <h1>New Document</h1>
       <p>Start typing your content here...</p>
     `
-  }
+  },
+
+  // Military Document Templates
+  ...militaryDocumentTemplates
 };
 
 export function getTemplateContent(templateId: string): string {
+  const headersDir = path.join(__dirname, '../../headers');
+  const headerFile = path.join(headersDir, `${templateId}-header.html`);
+
+  // Check if it's a military template
+  const militaryTemplate = militaryDocumentTemplates[templateId as keyof typeof militaryDocumentTemplates];
+  if (militaryTemplate && fs.existsSync(headerFile)) {
+    // For military templates with header files, combine header with content
+    const header = fs.readFileSync(headerFile, 'utf8');
+    // Extract styles and body content from the full HTML header
+    const styleMatch = header.match(/<style>([\s\S]*?)<\/style>/);
+    const bodyMatch = header.match(/<body>([\s\S]*)<\/body>/);
+
+    if (styleMatch && bodyMatch) {
+      // Return styles + header body + template content
+      return `<style>${styleMatch[1]}</style>\n${bodyMatch[1]}${militaryTemplate.content}`;
+    } else if (bodyMatch) {
+      // Return header body + template content (which only has document content, no header)
+      return bodyMatch[1] + militaryTemplate.content;
+    }
+    return militaryTemplate.content;
+  } else if (militaryTemplate) {
+    // Military template without header file
+    return militaryTemplate.content;
+  }
+
+  // For non-military templates, check if there's a generated header
+
+  if (fs.existsSync(headerFile)) {
+    // Load the header from generated files
+    const header = fs.readFileSync(headerFile, 'utf8');
+    const template = documentTemplates[templateId as keyof typeof documentTemplates];
+    const baseContent = template ? template.content : documentTemplates.blank.content;
+
+    // Extract styles and body from header
+    const styleMatch = header.match(/<style>([\s\S]*?)<\/style>/);
+    const bodyMatch = header.match(/<body>([\s\S]*)<\/body>/);
+
+    // Remove any existing styles/headers from base content to avoid duplication
+    const contentWithoutHeader = baseContent.replace(/<style[\s\S]*?<\/style>/g, '')
+      .replace(/<div class="classification-header"[\s\S]*?<\/div>/g, '')
+      .replace(/<div class="air-force-document-header"[\s\S]*?<\/div>/g, '');
+
+    if (styleMatch && bodyMatch) {
+      // Combine styles + header body + content
+      return `<style>${styleMatch[1]}</style>\n${bodyMatch[1]}${contentWithoutHeader}`;
+    } else if (bodyMatch) {
+      // Combine header body with content
+      return bodyMatch[1] + contentWithoutHeader;
+    }
+    // Fallback to original behavior
+    return header + contentWithoutHeader;
+  }
+
+  // Fallback to regular template content
   const template = documentTemplates[templateId as keyof typeof documentTemplates];
   return template ? template.content : documentTemplates.blank.content;
 }

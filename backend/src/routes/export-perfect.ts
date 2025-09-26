@@ -92,7 +92,7 @@ router.post('/docx-perfect', async (req: Request, res: Response) => {
       res.end(pdfBuffer);
     }
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Export error:', error);
     res.status(500).json({ error: 'Failed to generate document' });
   }

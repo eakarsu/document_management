@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Container,
@@ -22,486 +22,217 @@ import {
   Alert,
   Chip,
   Divider,
-  Stepper,
-  Step,
-  StepLabel
+  CardActionArea
 } from '@mui/material';
 import {
   ArrowBack,
   Business,
   Description as DocumentIcon,
-  Create as CreateIcon,
-  Assignment as AssignmentIcon,
-  Gavel as LegalIcon,
-  School as ManualIcon,
-  Policy as PolicyIcon
+  Create as CreateIcon
 } from '@mui/icons-material';
-import { api } from '../../../lib/api';
-
-// Templates matching backend template IDs
-const documentTemplates = [
-  // CRITICAL TEMPLATES - Coordination & Workflow
-  {
-    id: 'comment-resolution-matrix',
-    name: 'Comment Resolution Matrix (CRM)',
-    description: 'Track and resolve coordination comments',
-    icon: AssignmentIcon,
-    sections: ['Header Info', 'Comments', 'Resolutions', 'Coordinator Concurrence'],
-    hasBiography: false
-  },
-  {
-    id: 'af-form-673',
-    name: 'AF Form 673 - Coordination Record',
-    description: 'Official coordination and approval record',
-    icon: LegalIcon,
-    sections: ['Publication Info', 'Coordination List', 'Signatures', 'Concurrence'],
-    hasBiography: false
-  },
-  {
-    id: 'supplement-template',
-    name: 'Supplement Template',
-    description: 'Supplement to existing publication',
-    icon: DocumentIcon,
-    sections: ['Parent Pub Reference', 'Added Paragraphs', 'Modified Paragraphs', 'Local Procedures'],
-    hasBiography: false
-  },
-  {
-    id: 'o6-gs15-coordination',
-    name: 'O6/GS15 Coordination',
-    description: 'SME review and coordination template',
-    icon: AssignmentIcon,
-    sections: ['Document Info', 'SME Review', 'Technical Comments', 'Resolution'],
-    hasBiography: false
-  },
-  {
-    id: '2-letter-coordination',
-    name: '2-Letter Coordination',
-    description: 'Senior leadership review template',
-    icon: PolicyIcon,
-    sections: ['Executive Summary', 'Key Issues', 'Recommendations', 'Leadership Decision'],
-    hasBiography: false
-  },
-  {
-    id: 'legal-coordination',
-    name: 'Legal Coordination',
-    description: 'Legal review and compliance template',
-    icon: LegalIcon,
-    sections: ['Legal Requirements', 'Compliance Check', 'Statutory Review', 'Legal Approval'],
-    hasBiography: false
-  },
-  
-  // HIGH PRIORITY TEMPLATES - Policy Documents
-  {
-    id: 'dafpd-template',
-    name: 'DAF Policy Directive (DAFPD)',
-    description: 'Department of Air Force Policy Directive',
-    icon: PolicyIcon,
-    sections: ['Overview', 'Policy', 'Roles & Responsibilities', 'Summary', 'Attachments'],
-    hasBiography: false
-  },
-  {
-    id: 'dafman-template',
-    name: 'DAF Manual (DAFMAN)',
-    description: 'Department of Air Force Manual template',
-    icon: ManualIcon,
-    sections: ['General Information', 'Responsibilities', 'Procedures', 'Glossary'],
-    hasBiography: false
-  },
-  {
-    id: 'guidance-memorandum',
-    name: 'Guidance Memorandum',
-    description: 'Interim guidance pending formal publication update',
-    icon: PolicyIcon,
-    sections: ['Purpose', 'Background', 'Guidance', 'Specific Changes', 'Expiration'],
-    hasBiography: false
-  },
-  {
-    id: 'waiver-request',
-    name: 'Waiver Request',
-    description: 'Request for waiver from existing requirements',
-    icon: LegalIcon,
-    sections: ['Request', 'Justification', 'Alternative Compliance', 'Risk Assessment', 'Approval'],
-    hasBiography: false
-  },
-  
-  // EXISTING TEMPLATES
-  {
-    id: 'air-force-manual',
-    name: 'Air Force Technical Manual',
-    description: 'Comprehensive technical manual with procedures',
-    icon: ManualIcon,
-    sections: ['Introduction', 'Purpose', 'Scope', 'Safety Procedures', 'PPE Requirements'],
-    hasBiography: false
-  },
-  {
-    id: 'operational-plan',
-    name: 'Operational Planning Document',
-    description: 'Strategic and tactical planning template',
-    icon: AssignmentIcon,
-    sections: ['Executive Summary', 'Mission Statement', 'Strategic Objectives', 'Resources', 'Timeline'],
-    hasBiography: false
-  },
-  {
-    id: 'safety-bulletin',
-    name: 'Safety Bulletin',
-    description: 'High-priority safety communications',
-    icon: PolicyIcon,
-    sections: ['Priority', 'Immediate Actions', 'Background', 'Requirements', 'Compliance'],
-    hasBiography: false
-  },
-  {
-    id: 'meeting-minutes',
-    name: 'Meeting Minutes',
-    description: 'Standard meeting documentation',
-    icon: DocumentIcon,
-    sections: ['Attendees', 'Agenda Items', 'Discussion', 'Action Items', 'Next Meeting'],
-    hasBiography: false
-  },
-  {
-    id: 'blank',
-    name: 'Blank Document',
-    description: 'Start with a blank document',
-    icon: CreateIcon,
-    sections: ['Custom Content'],
-    hasBiography: false
-  }
-];
-
-const steps = ['Select Template', 'Document Details', 'Create'];
+import { api } from '@/lib/api';
 
 const CreateDocumentPage: React.FC = () => {
   const router = useRouter();
-  const [activeStep, setActiveStep] = useState(0);
   const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [documentData, setDocumentData] = useState({
-    title: '',
-    description: '',
-    category: '',
-    publicationNumber: '',
-    opr: '',
-    certifyingOfficial: '',
-    supersedes: ''
-  });
-  const [loading, setLoading] = useState(false);
+  const [documentTitle, setDocumentTitle] = useState('');
+  const [documentDescription, setDocumentDescription] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleNext = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep + 1);
-  };
+  const templates = [
+    // Air Force Documents
+    { value: 'af-manual', label: 'Air Force Manual (AFM)', category: 'Air Force' },
+    { value: 'afi', label: 'Air Force Instruction (AFI)', category: 'Air Force' },
+    { value: 'afpd', label: 'Air Force Policy Directive (AFPD)', category: 'Air Force' },
+    { value: 'afman', label: 'Air Force Manual (AFMAN)', category: 'Air Force' },
+    { value: 'afjqs', label: 'Air Force Job Qualification Standard (AFJQS)', category: 'Air Force' },
+    { value: 'afto', label: 'Air Force Technical Order (AFTO)', category: 'Air Force' },
+    { value: 'afva', label: 'Air Force Visual Aid (AFVA)', category: 'Air Force' },
+    { value: 'afh', label: 'Air Force Handbook (AFH)', category: 'Air Force' },
+    { value: 'afgm', label: 'Air Force Guidance Memorandum (AFGM)', category: 'Air Force' },
+    { value: 'afmd', label: 'Air Force Mission Directive (AFMD)', category: 'Air Force' },
 
-  const handleBack = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep - 1);
-  };
+    // Department of the Air Force
+    { value: 'dafi-template', label: 'Department of the Air Force Instruction (DAFI)', category: 'DAF' },
+    { value: 'dafman-template', label: 'Department of the Air Force Manual (DAFMAN)', category: 'DAF' },
+    { value: 'dafpd-template', label: 'Department of the Air Force Policy Directive (DAFPD)', category: 'DAF' },
 
-  const handleTemplateSelect = (templateId: string) => {
-    setSelectedTemplate(templateId);
-    const template = documentTemplates.find(t => t.id === templateId);
-    if (template) {
-      setDocumentData(prev => ({ 
-        ...prev, 
-        category: template.name.includes('DAFPD') ? 'Policy' : 
-                 template.name.includes('Instruction') ? 'Instruction' :
-                 template.name.includes('Manual') ? 'Manual' : 'Document'
-      }));
-    }
-  };
+    // Space Force
+    { value: 'spaceforce', label: 'Space Force Instruction (SFI)', category: 'Space Force' },
+
+    // Other Services
+    { value: 'army', label: 'Army Regulation (AR)', category: 'Army' },
+    { value: 'navy', label: 'Navy Instruction (OPNAVINST)', category: 'Navy' },
+    { value: 'marine', label: 'Marine Corps Order (MCO)', category: 'Marines' },
+
+    // Department of Defense
+    { value: 'dodd', label: 'Department of Defense Directive (DODD)', category: 'DoD' },
+    { value: 'dodi', label: 'Department of Defense Instruction (DODI)', category: 'DoD' },
+    { value: 'cjcs', label: 'Chairman Joint Chiefs of Staff Instruction (CJCSI)', category: 'Joint' },
+
+    // Operational Documents
+    { value: 'oplan', label: 'Operation Plan (OPLAN)', category: 'Operations' },
+    { value: 'opord', label: 'Operation Order (OPORD)', category: 'Operations' },
+    { value: 'conops', label: 'Concept of Operations (CONOPS)', category: 'Operations' },
+
+    // Generic Documents
+    { value: 'technical', label: 'Technical Documentation', category: 'Generic' },
+    { value: 'policy', label: 'Policy Document', category: 'Generic' },
+    { value: 'training', label: 'Training Manual', category: 'Generic' },
+    { value: 'sop', label: 'Standard Operating Procedure (SOP)', category: 'Generic' },
+    { value: 'blank', label: 'Blank Document', category: 'Generic' }
+  ];
+
+  const categories = Array.from(new Set(templates.map(t => t.category)));
 
   const handleCreateDocument = async () => {
-    if (!selectedTemplate || !documentData.title) {
-      alert('Please fill in required fields');
+    if (!documentTitle || !selectedTemplate) {
+      setError('Please provide a title and select a template');
       return;
     }
 
-    setLoading(true);
-    try {
-      const template = documentTemplates.find(t => t.id === selectedTemplate);
-      if (!template) return;
+    setCreating(true);
+    setError(null);
 
-      // Create document with the ACTUAL template content from backend
+    try {
       const response = await api.post('/api/documents/create-with-template', {
-        title: documentData.title,
-        description: documentData.description || `${template.name}: ${documentData.title}`,
-        category: documentData.category,
+        title: documentTitle,
+        description: documentDescription,
         templateId: selectedTemplate,
-        tags: ['air-force', template.name.toLowerCase()]
+        category: 'manual'
       });
 
       if (response.ok) {
         const data = await response.json();
-        
-        if (data.success && data.document) {
-          // DO NOT overwrite the template content!
-          // The backend already has the proper HTML template content
-          // Just navigate to the editor
-          alert('Document created successfully with template content!');
-          // Navigate to the document view/edit page
-          router.push(`/documents/${data.document.id}`);
-        } else {
-          throw new Error('Failed to create document');
-        }
+        router.push(`/editor/${data.document.id}`);
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create document');
+        setError(errorData.error || 'Failed to create document');
       }
     } catch (error) {
       console.error('Error creating document:', error);
-      alert('Failed to create document. Please try again.');
+      setError('Failed to create document');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const renderStepContent = (step: number) => {
-    switch (step) {
-      case 0:
-        return (
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Choose Document Template
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Select from our available templates (4 include biography sections)
-            </Typography>
-            <Grid container spacing={3}>
-              {documentTemplates.map((template) => (
-                <Grid item xs={12} md={6} key={template.id}>
-                  <Card 
-                    sx={{ 
-                      cursor: 'pointer',
-                      border: selectedTemplate === template.id ? 2 : 1,
-                      borderColor: selectedTemplate === template.id ? 'primary.main' : 'divider',
-                      '&:hover': { boxShadow: 3 }
-                    }}
-                    onClick={() => handleTemplateSelect(template.id)}
-                  >
-                    <CardContent>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <template.icon sx={{ mr: 1, color: 'primary.main' }} />
-                        <Typography variant="h6">
-                          {template.name}
-                        </Typography>
-                        {template.hasBiography && (
-                          <Chip 
-                            label="Biography Section" 
-                            size="small" 
-                            color="secondary" 
-                            sx={{ ml: 1 }}
-                          />
-                        )}
-                      </Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {template.description}
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                        Includes:
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {template.sections.map((section) => (
-                          <Chip 
-                            key={section}
-                            label={section}
-                            size="small"
-                            variant="outlined"
-                            color={section.toLowerCase().includes('biograph') ? 'secondary' : 'default'}
-                          />
-                        ))}
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
-        );
-
-      case 1:
-        return (
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Document Information
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Provide the basic details for your document
-            </Typography>
-            
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Document Title"
-                  value={documentData.title}
-                  onChange={(e) => setDocumentData(prev => ({ ...prev, title: e.target.value }))}
-                  required
-                  placeholder="Enter the full title of your publication"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Publication Number"
-                  value={documentData.publicationNumber}
-                  onChange={(e) => setDocumentData(prev => ({ ...prev, publicationNumber: e.target.value }))}
-                  placeholder="e.g., DAFPD 10-1, AFI 36-2903"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Office of Primary Responsibility (OPR)"
-                  value={documentData.opr}
-                  onChange={(e) => setDocumentData(prev => ({ ...prev, opr: e.target.value }))}
-                  placeholder="e.g., AF/A1, SAF/MR"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Certifying Official"
-                  value={documentData.certifyingOfficial}
-                  onChange={(e) => setDocumentData(prev => ({ ...prev, certifyingOfficial: e.target.value }))}
-                  placeholder="Name and title of certifying official"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Supersedes (if applicable)"
-                  value={documentData.supersedes}
-                  onChange={(e) => setDocumentData(prev => ({ ...prev, supersedes: e.target.value }))}
-                  placeholder="Previous publication being replaced"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label="Description"
-                  value={documentData.description}
-                  onChange={(e) => setDocumentData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Brief description of the publication's purpose and scope"
-                />
-              </Grid>
-            </Grid>
-          </Box>
-        );
-
-      case 2:
-        const selectedTemplateObj = documentTemplates.find(t => t.id === selectedTemplate);
-        return (
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Ready to Create
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Review your selections and create the document
-            </Typography>
-            
-            <Alert severity="info" sx={{ mb: 3 }}>
-              Your document will be created with the selected template structure. 
-              {selectedTemplateObj?.hasBiography && ' The biography section will be included with guidance for completion.'}
-            </Alert>
-
-            <Paper sx={{ p: 3 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="text.secondary">Template:</Typography>
-                  <Typography variant="body1">{selectedTemplateObj?.name}</Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="text.secondary">Title:</Typography>
-                  <Typography variant="body1">{documentData.title}</Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">Publication Number:</Typography>
-                  <Typography variant="body1">{documentData.publicationNumber || 'To be assigned'}</Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">OPR:</Typography>
-                  <Typography variant="body1">{documentData.opr || 'To be specified'}</Typography>
-                </Grid>
-              </Grid>
-            </Paper>
-          </Box>
-        );
-
-      default:
-        return null;
+      setCreating(false);
     }
   };
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static" elevation={1}>
+      <AppBar position="static">
         <Toolbar>
           <IconButton
             edge="start"
             color="inherit"
-            onClick={() => router.push('/documents')}
+            onClick={() => router.push('/dashboard')}
             sx={{ mr: 2 }}
           >
             <ArrowBack />
           </IconButton>
           <Business sx={{ mr: 2 }} />
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Create Document - Richmond DMS
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            Create New Document
           </Typography>
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" gutterBottom>
-            Create New Document
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Document Information */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Document Information
           </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
-            Create a new Air Force publication using our template system (includes biography sections)
-          </Typography>
-        </Box>
-
-        <Paper sx={{ p: 4 }}>
-          <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-
-          <Box sx={{ minHeight: 400 }}>
-            {renderStepContent(activeStep)}
-          </Box>
-
-          <Divider sx={{ my: 3 }} />
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button
-              disabled={activeStep === 0}
-              onClick={handleBack}
-            >
-              Back
-            </Button>
-            <Box>
-              {activeStep === steps.length - 1 ? (
-                <Button
-                  variant="contained"
-                  onClick={handleCreateDocument}
-                  disabled={loading || !documentData.title || !selectedTemplate}
-                  startIcon={<CreateIcon />}
-                >
-                  {loading ? 'Creating...' : 'Create Document'}
-                </Button>
-              ) : (
-                <Button
-                  variant="contained"
-                  onClick={handleNext}
-                  disabled={activeStep === 0 && !selectedTemplate}
-                >
-                  Next
-                </Button>
-              )}
-            </Box>
-          </Box>
+          <TextField
+            label="Document Title"
+            value={documentTitle}
+            onChange={(e) => setDocumentTitle(e.target.value)}
+            fullWidth
+            required
+            sx={{ mb: 2 }}
+            placeholder="Enter document title..."
+          />
+          <TextField
+            label="Description (Optional)"
+            value={documentDescription}
+            onChange={(e) => setDocumentDescription(e.target.value)}
+            fullWidth
+            multiline
+            rows={2}
+            placeholder="Enter document description..."
+          />
         </Paper>
+
+        {/* Template Selection */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Select Document Template
+          </Typography>
+
+          {categories.map(category => (
+            <Box key={category} sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" color="primary" sx={{ mb: 1, fontWeight: 600 }}>
+                {category}
+              </Typography>
+              <Grid container spacing={2}>
+                {templates
+                  .filter(t => t.category === category)
+                  .map(template => (
+                    <Grid item xs={12} sm={6} md={4} key={template.value}>
+                      <Card
+                        sx={{
+                          cursor: 'pointer',
+                          border: selectedTemplate === template.value ? 2 : 1,
+                          borderColor: selectedTemplate === template.value ? 'primary.main' : 'divider',
+                          backgroundColor: selectedTemplate === template.value ? 'action.selected' : 'background.paper',
+                          '&:hover': {
+                            boxShadow: 3
+                          }
+                        }}
+                      >
+                        <CardActionArea onClick={() => setSelectedTemplate(template.value)}>
+                          <CardContent>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <DocumentIcon color={selectedTemplate === template.value ? 'primary' : 'action'} />
+                              <Typography variant="body1" sx={{ fontWeight: selectedTemplate === template.value ? 600 : 400 }}>
+                                {template.label}
+                              </Typography>
+                            </Box>
+                          </CardContent>
+                        </CardActionArea>
+                      </Card>
+                    </Grid>
+                  ))}
+              </Grid>
+              {category !== categories[categories.length - 1] && <Divider sx={{ mt: 2 }} />}
+            </Box>
+          ))}
+        </Paper>
+
+        {/* Actions */}
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+          <Button
+            variant="outlined"
+            onClick={() => router.push('/dashboard')}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleCreateDocument}
+            disabled={creating || !documentTitle || !selectedTemplate}
+            startIcon={<CreateIcon />}
+          >
+            {creating ? 'Creating...' : 'Create Document'}
+          </Button>
+        </Box>
       </Container>
     </Box>
   );

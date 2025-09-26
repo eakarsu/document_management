@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { WorkflowRegistry } from '../services/WorkflowRegistry';
 import { WorkflowEngine } from '../services/WorkflowEngine';
-import { AirForce8StagePlugin } from '../plugins/AirForce8StagePlugin';
+import { AirForce12StagePlugin } from '../plugins/AirForce12StagePlugin';
 import { SimpleApprovalPlugin } from '../plugins/SimpleApprovalPlugin';
 import { CorporateReviewPlugin } from '../plugins/CorporateReviewPlugin';
 import { IWorkflowContext, IWorkflowConfig } from '../types/workflow.types';
@@ -18,12 +18,31 @@ const engine = new WorkflowEngine();
 async function initializePlugins() {
   try {
     // Register pre-built plugins
-    await registry.register(new AirForce8StagePlugin());
+    await registry.register(new AirForce12StagePlugin());
     await registry.register(new SimpleApprovalPlugin());
     await registry.register(new CorporateReviewPlugin());
-    
+
     console.log('✅ Pre-built workflow plugins loaded');
-  } catch (error) {
+
+    // Set default active workflows for document types
+    // Use AirForce 12-stage as default for all document types
+    // Note: Only activate if plugins are successfully registered
+    const documentTypes = ['standard', 'memo', 'report', 'policy', 'instruction', 'manual'];
+    const pluginId = 'af-12-stage-review';
+
+    // Check if the plugin exists before activating
+    const plugin = registry.getWorkflow(pluginId);
+    if (plugin) {
+      for (const docType of documentTypes) {
+        await registry.activateForDocumentType(pluginId, docType);
+      }
+      console.log(`✅ Default workflow '${pluginId}' activated for document types: ${documentTypes.join(', ')}`);
+    } else {
+      console.warn(`⚠️ Plugin '${pluginId}' not found, skipping activation`);
+    }
+
+    console.log('✅ Default workflows activated for document types');
+  } catch (error: any) {
     console.error('Failed to initialize workflow plugins:', error);
   }
 }
@@ -39,7 +58,7 @@ router.get('/workflows', authMiddleware, async (req: Request, res: Response) => 
       success: true,
       workflows
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching workflows:', error);
     res.status(500).json({
       success: false,
@@ -61,7 +80,7 @@ router.get('/workflows/active', authMiddleware, async (req: Request, res: Respon
       success: true,
       mappings
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching active workflows:', error);
     res.status(500).json({
       success: false,
@@ -74,28 +93,47 @@ router.get('/workflows/active', authMiddleware, async (req: Request, res: Respon
 router.get('/workflows/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // First try to get from database for persistence
+    const dbWorkflow = await prisma.workflowPlugin.findUnique({
+      where: { id }
+    });
+
+    if (dbWorkflow) {
+      // Return workflow from database with stages from config
+      const config = dbWorkflow.config as any;
+      return res.json({
+        id: dbWorkflow.id,
+        name: dbWorkflow.name,
+        version: dbWorkflow.version,
+        description: dbWorkflow.description,
+        organization: dbWorkflow.organization,
+        stages: config.stages || [],
+        config: config
+      });
+    }
+
+    // Fallback to registry
     const workflow = registry.getWorkflow(id);
-    
+
     if (!workflow) {
       return res.status(404).json({
         success: false,
         error: 'Workflow not found'
       });
     }
-    
+
+    // Return workflow details directly
     res.json({
-      success: true,
-      workflow: {
-        id: workflow.id,
-        name: workflow.name,
-        version: workflow.version,
-        description: workflow.description,
-        organization: workflow.organization,
-        stages: workflow.getStages(),
-        config: workflow.config
-      }
+      id: workflow.id,
+      name: workflow.name,
+      version: workflow.version,
+      description: workflow.description,
+      organization: workflow.organization,
+      stages: workflow.config.stages || workflow.getStages(),
+      config: workflow.config
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching workflow:', error);
     res.status(500).json({
       success: false,
@@ -123,7 +161,7 @@ router.post('/workflows/register', authMiddleware, async (req: Request, res: Res
       workflowId: pluginId,
       message: 'Workflow registered successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error registering workflow:', error);
     res.status(500).json({
       success: false,
@@ -151,7 +189,7 @@ router.post('/workflows/:id/activate', authMiddleware, async (req: Request, res:
       success: true,
       message: `Workflow ${id} activated for document type ${documentType}`
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error activating workflow:', error);
     res.status(500).json({
       success: false,
@@ -178,7 +216,7 @@ router.post('/workflows/deactivate', authMiddleware, async (req: Request, res: R
       success: true,
       message: `Workflow deactivated for document type ${documentType}`
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deactivating workflow:', error);
     res.status(500).json({
       success: false,
@@ -191,22 +229,73 @@ router.post('/workflows/deactivate', authMiddleware, async (req: Request, res: R
 router.post('/documents/:id/workflow/initialize', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id: documentId } = req.params;
-    const { documentType, title } = req.body;
-    
+    const { documentType, title, workflowId } = req.body;
+
+    console.log('Received request body:', req.body);
+    console.log('Document type received:', documentType);
+    console.log('Workflow ID received:', workflowId);
+
+    // Check if workflow instance already exists
+    const existingInstance = await prisma.jsonWorkflowInstance.findFirst({
+      where: {
+        documentId,
+        isActive: true
+      }
+    });
+
+    if (existingInstance) {
+      return res.status(400).json({
+        success: false,
+        error: 'Workflow already active for this document'
+      });
+    }
+
+    // Create new workflow instance in database
+    const workflowInstance = await prisma.jsonWorkflowInstance.create({
+      data: {
+        documentId,
+        workflowId: workflowId || 'af-12-stage-review', // Default to 12-stage workflow
+        currentStageId: '1', // Start at stage 1
+        isActive: true,
+        metadata: JSON.stringify({
+          documentType,
+          title: title || 'Untitled Document',
+          startedAt: new Date().toISOString(),
+          startedBy: (req as any).user.id
+        })
+      }
+    });
+
+    // Also create initial history entry
+    await prisma.jsonWorkflowHistory.create({
+      data: {
+        workflowInstanceId: workflowInstance.id,
+        stageId: '1',
+        stageName: 'Initial Draft Preparation',
+        action: 'workflow_started',
+        performedBy: (req as any).user.id,
+        metadata: JSON.stringify({
+          documentType,
+          title: title || 'Untitled Document'
+        })
+      }
+    });
+
     const document = {
       id: documentId,
       type: documentType,
       title: title || 'Untitled Document'
     };
-    
+
     const state = await engine.initializeWorkflow(document);
-    
+
     res.json({
       success: true,
       state,
-      message: 'Workflow initialized for document'
+      workflowInstance,
+      message: 'Workflow initialized and saved to database'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error initializing workflow:', error);
     res.status(500).json({
       success: false,
@@ -276,7 +365,7 @@ router.post('/documents/:id/workflow/action', authMiddleware, async (req: Reques
       result,
       message: result.success ? 'Workflow action processed' : 'Workflow action failed'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error processing workflow action:', error);
     res.status(500).json({
       success: false,
@@ -304,7 +393,7 @@ router.get('/documents/:id/workflow/actions', authMiddleware, async (req: Reques
       success: true,
       actions
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching available actions:', error);
     res.status(500).json({
       success: false,
@@ -318,51 +407,54 @@ router.get('/documents/:id/workflow/status', authMiddleware, async (req: Request
   try {
     const { id: documentId } = req.params;
 
-    // Use WorkflowManager to get the actual workflow from database
-    const { workflowManager } = require('../services/WorkflowManager');
-    const workflowInstance = await workflowManager.getWorkflowStatus(documentId);
+    // Get the workflow state from our new system
+    const { WorkflowStateManager } = require('../services/WorkflowStateManager');
+    const stateManager = new WorkflowStateManager();
+    const workflowState = await stateManager.getState(documentId);
 
-    if (!workflowInstance) {
+    if (!workflowState) {
       return res.json({
         success: false,
         workflow: null
       });
     }
 
-    // Load workflow definition to get stage names
-    const fs = require('fs');
-    const path = require('path');
-    let currentStageName = workflowInstance.currentStageId;
-
-    try {
-      const workflowPath = path.join(__dirname, '../../workflows', `${workflowInstance.workflowId}.json`);
-      if (fs.existsSync(workflowPath)) {
-        const workflowDef = JSON.parse(fs.readFileSync(workflowPath, 'utf-8'));
-        const currentStage = workflowDef.stages.find((s: any) => s.id === workflowInstance.currentStageId);
-        if (currentStage) {
-          currentStageName = currentStage.name;
-        }
-      }
-    } catch (err) {
-      console.warn('Could not load workflow definition for stage name:', err);
+    // Get the workflow plugin to get stage details
+    const workflow = registry.getWorkflow(workflowState.workflowId);
+    if (!workflow) {
+      return res.json({
+        success: false,
+        workflow: null
+      });
     }
 
-    // Return in the format the frontend expects
+    // Get all stages from the workflow
+    const allStages = workflow.getStages();
+    const currentStage = allStages.find(s => s.id === workflowState.currentStage);
+    const currentStageName = currentStage?.name || workflowState.currentStage;
+    const currentStageOrder = currentStage?.order || 1;
+    const totalStages = allStages.filter(s => !s.id.includes('.')).length; // Count main stages only
+
+    // Return in the format the frontend expects with full stage information
     res.json({
       success: true,
       workflow: {
-        id: workflowInstance.id,
+        id: workflowState.workflowId,
         document_id: documentId,
         current_stage: currentStageName,
-        is_active: workflowInstance.isActive,
-        created_at: workflowInstance.createdAt,
-        updated_at: workflowInstance.updatedAt,
-        completed_at: workflowInstance.completedAt,
-        metadata: workflowInstance.metadata,
-        history: workflowInstance.history || []
+        current_stage_id: workflowState.currentStage,
+        current_stage_order: currentStageOrder,
+        total_stages: totalStages,
+        all_stages: allStages,
+        is_active: workflowState.status === 'active',
+        created_at: workflowState.startedAt,
+        updated_at: workflowState.updatedAt,
+        completed_at: workflowState.completedAt,
+        status: workflowState.status,
+        history: workflowState.history || []
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching workflow status:', error);
     res.status(500).json({
       success: false,
@@ -382,7 +474,7 @@ router.get('/documents/:id/workflow/history', authMiddleware, async (req: Reques
       success: true,
       history
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching workflow history:', error);
     res.status(500).json({
       success: false,
@@ -411,7 +503,7 @@ router.post('/documents/:id/workflow/cancel', authMiddleware, async (req: Reques
       success: true,
       message: 'Workflow cancelled successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error cancelling workflow:', error);
     res.status(500).json({
       success: false,
@@ -440,7 +532,7 @@ router.post('/documents/:id/workflow/suspend', authMiddleware, async (req: Reque
       success: true,
       message: 'Workflow suspended successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error suspending workflow:', error);
     res.status(500).json({
       success: false,
@@ -461,7 +553,7 @@ router.post('/documents/:id/workflow/resume', authMiddleware, async (req: Reques
       success: true,
       message: 'Workflow resumed successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error resuming workflow:', error);
     res.status(500).json({
       success: false,
@@ -488,7 +580,7 @@ router.get('/workflows/:id/export', authMiddleware, async (req: Request, res: Re
       success: true,
       config
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error exporting workflow:', error);
     res.status(500).json({
       success: false,
@@ -516,7 +608,7 @@ router.post('/workflows/import', authMiddleware, async (req: Request, res: Respo
       workflowId,
       message: 'Workflow imported successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error importing workflow:', error);
     res.status(500).json({
       success: false,

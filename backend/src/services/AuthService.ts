@@ -69,7 +69,7 @@ export class AuthService {
     try {
       await this.redis.connect();
       this.logger.info('Redis connected successfully');
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Redis connection failed:', error);
       // Continue without Redis for now
     }
@@ -161,7 +161,7 @@ export class AuthService {
         refreshToken
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Login error:', error);
       return {
         success: false,
@@ -270,7 +270,7 @@ export class AuthService {
         }
       };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Registration error details:', error);
       this.logger.error('Registration error:', error);
       return {
@@ -327,7 +327,7 @@ export class AuthService {
       this.logger.info('User logged out', { userId, sessionId });
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Logout error:', error);
       return false;
     }
@@ -357,7 +357,7 @@ export class AuthService {
 
       return { accessToken };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Token refresh error:', error);
       return { error: 'Invalid refresh token' };
     }
@@ -413,7 +413,7 @@ export class AuthService {
         organizationId: user.organizationId
       };
 
-    } catch (error) {
+    } catch (error: any) {
       return null;
     }
   }
@@ -508,7 +508,7 @@ export class AuthService {
 
       return user.role.permissions.includes(permission) || user.role.permissions.includes('*');
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Permission check error:', error);
       return false;
     }
@@ -528,7 +528,7 @@ export class AuthService {
 
       return count;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Session count error:', error);
       return 0;
     }

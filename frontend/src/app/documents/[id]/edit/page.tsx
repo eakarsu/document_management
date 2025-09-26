@@ -37,7 +37,7 @@ import {
   Preview as PreviewIcon,
   FormatListNumbered
 } from '@mui/icons-material';
-import { api } from '../../../../lib/api';
+import { api } from '@/lib/api';
 import { DAFPublicationEditor } from '../../../../components/editor/DAFPublicationEditor';
 import { DAFPublicationEditorWithPageNumbers } from '../../../../components/editor/DAFPublicationEditorWithPageNumbers';
 import DocumentNumbering from '../../../../components/DocumentNumbering';

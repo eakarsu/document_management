@@ -36,6 +36,8 @@ import {
 
 interface AppendixFormatterProps {
   editor: any; // TipTap editor instance
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 interface ReferenceItem {
@@ -55,7 +57,7 @@ interface TermItem {
   definition: string;
 }
 
-export const AppendixFormatter: React.FC<AppendixFormatterProps> = ({ editor }) => {
+export const AppendixFormatter: React.FC<AppendixFormatterProps> = ({ editor, isOpen, onClose }) => {
   const [appendixDialog, setAppendixDialog] = useState(false);
   const [appendixType, setAppendixType] = useState<'attachment' | 'appendix'>('attachment');
   const [appendixNumber, setAppendixNumber] = useState('1');

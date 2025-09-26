@@ -1,67 +1,74 @@
-import { IWorkflowState } from '../types/workflow.types';
 import { PrismaClient } from '@prisma/client';
-import { Redis } from 'ioredis';
+import { IWorkflowState } from '../types/workflow.types';
+import Redis from 'ioredis';
 
 export class WorkflowStateManager {
   private prisma: PrismaClient;
   private redis: Redis | null = null;
-  private cache: Map<string, IWorkflowState> = new Map();
+  private cache: Map<string, IWorkflowState>;
 
   constructor() {
     this.prisma = new PrismaClient();
-    
-    // Try to connect to Redis for caching
+    this.cache = new Map();
+
     try {
       this.redis = new Redis({
-        host: 'localhost',
-        port: 6379,
-        retryStrategy: () => null // Don't retry if Redis is not available
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        retryStrategy: () => null
       });
-      
+
       this.redis.on('error', (err: Error) => {
         console.warn('Redis connection error, falling back to in-memory cache:', err.message);
         this.redis = null;
       });
-    } catch (error) {
+    } catch (error: any) {
       console.warn('Redis not available, using in-memory cache');
     }
   }
 
-  // Create new workflow state
+  // Create new workflow state using Prisma ORM
   async createState(documentId: string, state: IWorkflowState): Promise<void> {
     try {
-      // Save to database
-      await this.prisma.$executeRaw`
-        INSERT INTO workflow_states (
-          document_id, 
-          workflow_id, 
-          current_stage, 
-          previous_stage,
-          status, 
-          started_at, 
-          updated_at,
-          data,
-          history
-        )
-        VALUES (
-          ${documentId},
-          ${state.workflowId},
-          ${state.currentStage},
-          ${state.previousStage || null},
-          ${state.status},
-          ${state.startedAt},
-          ${state.updatedAt},
-          ${JSON.stringify(state.data || {})}::jsonb,
-          ${JSON.stringify(state.history || [])}::jsonb
-        )
-      `;
+      // Use upsert to handle existing states gracefully
+      await this.prisma.workflowState.upsert({
+        where: { documentId },
+        create: {
+          documentId,
+          workflowId: state.workflowId,
+          currentStage: state.currentStage,
+          previousStage: state.previousStage || null,
+          status: state.status,
+          startedAt: state.startedAt,
+          updatedAt: state.updatedAt,
+          completedAt: state.completedAt || null,
+          data: state.data || {},
+          history: (state.history || []) as any
+        },
+        update: {
+          workflowId: state.workflowId,
+          currentStage: state.currentStage,
+          previousStage: state.previousStage || null,
+          status: state.status,
+          startedAt: state.startedAt,
+          updatedAt: state.updatedAt,
+          completedAt: state.completedAt || null,
+          data: state.data || {},
+          history: (state.history || []) as any
+        }
+      });
 
       // Cache the state
       await this.cacheState(documentId, state);
-      
+
       console.log(`✅ Workflow state created for document ${documentId}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create workflow state:', error);
+      console.error('Full error details:', {
+        code: error.code,
+        message: error.message,
+        meta: error.meta
+      });
       // Still cache it even if DB fails
       this.cache.set(documentId, state);
       throw error;
@@ -71,55 +78,38 @@ export class WorkflowStateManager {
   // Get workflow state
   async getState(documentId: string): Promise<IWorkflowState | null> {
     try {
-      // Try cache first
-      const cached = await this.getCachedState(documentId);
-      if (cached) {
-        return cached;
+      // Check cache first
+      const cachedState = await this.getCachedState(documentId);
+      if (cachedState) return cachedState;
+
+      // Query database using Prisma
+      const result = await this.prisma.workflowState.findUnique({
+        where: { documentId }
+      });
+
+      if (!result) {
+        return this.cache.get(documentId) || null;
       }
 
-      // Fetch from database
-      const result = await this.prisma.$queryRaw<any[]>`
-        SELECT 
-          workflow_id,
-          current_stage,
-          previous_stage,
-          status,
-          started_at,
-          updated_at,
-          completed_at,
-          data,
-          history
-        FROM workflow_states
-        WHERE document_id = ${documentId}
-        ORDER BY updated_at DESC
-        LIMIT 1
-      `;
-
-      if (result.length === 0) {
-        return null;
-      }
-
-      const row = result[0];
       const state: IWorkflowState = {
-        workflowId: row.workflow_id,
-        documentId: documentId,
-        currentStage: row.current_stage,
-        previousStage: row.previous_stage,
-        status: row.status,
-        startedAt: new Date(row.started_at),
-        updatedAt: new Date(row.updated_at),
-        completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
-        data: row.data || {},
-        history: row.history || []
+        workflowId: result.workflowId,
+        documentId: result.documentId,
+        currentStage: result.currentStage,
+        previousStage: result.previousStage || undefined,
+        status: result.status as any,
+        startedAt: result.startedAt,
+        updatedAt: result.updatedAt,
+        completedAt: result.completedAt || undefined,
+        data: result.data as any || {},
+        history: result.history as any[] || []
       };
 
       // Cache the state
       await this.cacheState(documentId, state);
 
       return state;
-    } catch (error) {
-      console.error('Failed to get workflow state:', error);
-      
+    } catch (error: any) {
+      console.error('Error getting workflow state:', error);
       // Fallback to cache
       return this.cache.get(documentId) || null;
     }
@@ -128,27 +118,26 @@ export class WorkflowStateManager {
   // Update workflow state
   async updateState(documentId: string, state: IWorkflowState): Promise<void> {
     try {
-      // Update in database
-      await this.prisma.$executeRaw`
-        UPDATE workflow_states
-        SET 
-          current_stage = ${state.currentStage},
-          previous_stage = ${state.previousStage || null},
-          status = ${state.status},
-          updated_at = ${state.updatedAt},
-          completed_at = ${state.completedAt || null},
-          data = ${JSON.stringify(state.data || {})}::jsonb,
-          history = ${JSON.stringify(state.history || [])}::jsonb
-        WHERE document_id = ${documentId}
-      `;
+      // Update database using Prisma
+      await this.prisma.workflowState.update({
+        where: { documentId },
+        data: {
+          currentStage: state.currentStage,
+          previousStage: state.previousStage || null,
+          status: state.status,
+          updatedAt: state.updatedAt,
+          completedAt: state.completedAt || null,
+          data: state.data || {},
+          history: (state.history || []) as any
+        }
+      });
 
       // Update cache
       await this.cacheState(documentId, state);
-      
+
       console.log(`✅ Workflow state updated for document ${documentId}`);
-    } catch (error) {
-      console.error('Failed to update workflow state:', error);
-      
+    } catch (error: any) {
+      console.error('Error updating workflow state:', error);
       // Still update cache even if DB fails
       this.cache.set(documentId, state);
       throw error;
@@ -158,252 +147,172 @@ export class WorkflowStateManager {
   // Delete workflow state
   async deleteState(documentId: string): Promise<void> {
     try {
-      // Delete from database
-      await this.prisma.$executeRaw`
-        DELETE FROM workflow_states
-        WHERE document_id = ${documentId}
-      `;
+      // Delete from database using Prisma
+      await this.prisma.workflowState.delete({
+        where: { documentId }
+      });
 
       // Remove from cache
-      await this.removeCachedState(documentId);
-      
+      this.cache.delete(documentId);
+      if (this.redis) {
+        await this.redis.del(`workflow:${documentId}`);
+      }
+
       console.log(`✅ Workflow state deleted for document ${documentId}`);
-    } catch (error) {
-      console.error('Failed to delete workflow state:', error);
+    } catch (error: any) {
+      console.error('Error deleting workflow state:', error);
       throw error;
     }
   }
 
-  // Get states by workflow ID
+  // Get all states for a workflow
   async getStatesByWorkflow(workflowId: string): Promise<IWorkflowState[]> {
     try {
-      const results = await this.prisma.$queryRaw<any[]>`
-        SELECT 
-          document_id,
-          workflow_id,
-          current_stage,
-          previous_stage,
-          status,
-          started_at,
-          updated_at,
-          completed_at,
-          data,
-          history
-        FROM workflow_states
-        WHERE workflow_id = ${workflowId}
-        ORDER BY updated_at DESC
-      `;
+      const results = await this.prisma.workflowState.findMany({
+        where: { workflowId },
+        orderBy: { updatedAt: 'desc' }
+      });
 
       return results.map(row => ({
-        workflowId: row.workflow_id,
-        documentId: row.document_id,
-        currentStage: row.current_stage,
-        previousStage: row.previous_stage,
-        status: row.status,
-        startedAt: new Date(row.started_at),
-        updatedAt: new Date(row.updated_at),
-        completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
-        data: row.data || {},
-        history: row.history || []
+        workflowId: row.workflowId,
+        documentId: row.documentId,
+        currentStage: row.currentStage,
+        previousStage: row.previousStage || undefined,
+        status: row.status as any,
+        startedAt: row.startedAt,
+        updatedAt: row.updatedAt,
+        completedAt: row.completedAt || undefined,
+        data: row.data as any || {},
+        history: row.history as any[] || []
       }));
-    } catch (error) {
-      console.error('Failed to get states by workflow:', error);
+    } catch (error: any) {
+      console.error('Error getting states by workflow:', error);
       return [];
     }
   }
 
-  // Get states by status
+  // Get all states at a specific stage
+  async getStatesByStage(stage: string): Promise<IWorkflowState[]> {
+    try {
+      const results = await this.prisma.workflowState.findMany({
+        where: { currentStage: stage },
+        orderBy: { updatedAt: 'desc' }
+      });
+
+      return results.map(row => ({
+        workflowId: row.workflowId,
+        documentId: row.documentId,
+        currentStage: row.currentStage,
+        previousStage: row.previousStage || undefined,
+        status: row.status as any,
+        startedAt: row.startedAt,
+        updatedAt: row.updatedAt,
+        completedAt: row.completedAt || undefined,
+        data: row.data as any || {},
+        history: row.history as any[] || []
+      }));
+    } catch (error: any) {
+      console.error('Error getting states by stage:', error);
+      return [];
+    }
+  }
+
+  // Get all states with a specific status
   async getStatesByStatus(status: string): Promise<IWorkflowState[]> {
     try {
-      const results = await this.prisma.$queryRaw<any[]>`
-        SELECT 
-          document_id,
-          workflow_id,
-          current_stage,
-          previous_stage,
-          status,
-          started_at,
-          updated_at,
-          completed_at,
-          data,
-          history
-        FROM workflow_states
-        WHERE status = ${status}
-        ORDER BY updated_at DESC
-      `;
+      const results = await this.prisma.workflowState.findMany({
+        where: { status },
+        orderBy: { updatedAt: 'desc' }
+      });
 
       return results.map(row => ({
-        workflowId: row.workflow_id,
-        documentId: row.document_id,
-        currentStage: row.current_stage,
-        previousStage: row.previous_stage,
-        status: row.status,
-        startedAt: new Date(row.started_at),
-        updatedAt: new Date(row.updated_at),
-        completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
-        data: row.data || {},
-        history: row.history || []
+        workflowId: row.workflowId,
+        documentId: row.documentId,
+        currentStage: row.currentStage,
+        previousStage: row.previousStage || undefined,
+        status: row.status as any,
+        startedAt: row.startedAt,
+        updatedAt: row.updatedAt,
+        completedAt: row.completedAt || undefined,
+        data: row.data as any || {},
+        history: row.history as any[] || []
       }));
-    } catch (error) {
-      console.error('Failed to get states by status:', error);
+    } catch (error: any) {
+      console.error('Error getting states by status:', error);
       return [];
     }
   }
 
-  // Get overdue workflows
-  async getOverdueWorkflows(hoursOverdue: number = 24): Promise<IWorkflowState[]> {
-    try {
-      const cutoffTime = new Date(Date.now() - hoursOverdue * 60 * 60 * 1000);
-      
-      const results = await this.prisma.$queryRaw<any[]>`
-        SELECT 
-          document_id,
-          workflow_id,
-          current_stage,
-          previous_stage,
-          status,
-          started_at,
-          updated_at,
-          completed_at,
-          data,
-          history
-        FROM workflow_states
-        WHERE status = 'active'
-          AND updated_at < ${cutoffTime}
-        ORDER BY updated_at ASC
-      `;
-
-      return results.map(row => ({
-        workflowId: row.workflow_id,
-        documentId: row.document_id,
-        currentStage: row.current_stage,
-        previousStage: row.previous_stage,
-        status: row.status,
-        startedAt: new Date(row.started_at),
-        updatedAt: new Date(row.updated_at),
-        completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
-        data: row.data || {},
-        history: row.history || []
-      }));
-    } catch (error) {
-      console.error('Failed to get overdue workflows:', error);
-      return [];
-    }
+  // Check if document has active workflow
+  async hasActiveWorkflow(documentId: string): Promise<boolean> {
+    const state = await this.getState(documentId);
+    return state !== null && state.status !== 'completed' && state.status !== 'cancelled';
   }
 
-  // Get workflow statistics
-  async getStatistics(): Promise<{
-    total: number;
-    active: number;
-    completed: number;
-    cancelled: number;
-    suspended: number;
-    averageCompletionTime: number;
-  }> {
-    try {
-      const stats = await this.prisma.$queryRaw<any[]>`
-        SELECT 
-          COUNT(*) as total,
-          COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
-          COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
-          COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled,
-          COUNT(CASE WHEN status = 'suspended' THEN 1 END) as suspended,
-          AVG(
-            CASE 
-              WHEN status = 'completed' AND completed_at IS NOT NULL 
-              THEN EXTRACT(EPOCH FROM (completed_at - started_at))
-              ELSE NULL 
-            END
-          ) as avg_completion_time
-        FROM workflow_states
-      `;
-
-      const result = stats[0];
-      return {
-        total: parseInt(result.total),
-        active: parseInt(result.active),
-        completed: parseInt(result.completed),
-        cancelled: parseInt(result.cancelled),
-        suspended: parseInt(result.suspended),
-        averageCompletionTime: parseFloat(result.avg_completion_time) || 0
-      };
-    } catch (error) {
-      console.error('Failed to get workflow statistics:', error);
-      return {
-        total: 0,
-        active: 0,
-        completed: 0,
-        cancelled: 0,
-        suspended: 0,
-        averageCompletionTime: 0
-      };
-    }
-  }
-
-  // Cache management methods
+  // Private: Cache state
   private async cacheState(documentId: string, state: IWorkflowState): Promise<void> {
-    // In-memory cache
+    // Cache in memory
     this.cache.set(documentId, state);
 
-    // Redis cache if available
+    // Cache in Redis if available
     if (this.redis) {
       try {
         await this.redis.setex(
-          `workflow:state:${documentId}`,
+          `workflow:${documentId}`,
           3600, // 1 hour TTL
           JSON.stringify(state)
         );
-      } catch (error) {
-        console.warn('Failed to cache state in Redis:', error);
+      } catch (error: any) {
+        console.warn('Failed to cache in Redis:', error.message);
       }
     }
   }
 
+  // Private: Get cached state
   private async getCachedState(documentId: string): Promise<IWorkflowState | null> {
-    // Check in-memory cache first
-    const memCached = this.cache.get(documentId);
-    if (memCached) {
-      return memCached;
+    // Check memory cache first
+    if (this.cache.has(documentId)) {
+      return this.cache.get(documentId)!;
     }
 
     // Check Redis if available
     if (this.redis) {
       try {
-        const cached = await this.redis.get(`workflow:state:${documentId}`);
+        const cached = await this.redis.get(`workflow:${documentId}`);
         if (cached) {
           const state = JSON.parse(cached);
-          // Update in-memory cache
+          // Also update memory cache
           this.cache.set(documentId, state);
           return state;
         }
-      } catch (error) {
-        console.warn('Failed to get cached state from Redis:', error);
+      } catch (error: any) {
+        console.warn('Failed to get from Redis:', error.message);
       }
     }
 
     return null;
   }
 
-  private async removeCachedState(documentId: string): Promise<void> {
-    // Remove from in-memory cache
-    this.cache.delete(documentId);
+  // Cleanup old workflow states
+  async cleanupOldStates(daysOld: number = 90): Promise<number> {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
-    // Remove from Redis if available
-    if (this.redis) {
-      try {
-        await this.redis.del(`workflow:state:${documentId}`);
-      } catch (error) {
-        console.warn('Failed to remove cached state from Redis:', error);
-      }
-    }
-  }
+      const result = await this.prisma.workflowState.deleteMany({
+        where: {
+          AND: [
+            { status: { in: ['completed', 'cancelled'] } },
+            { updatedAt: { lt: cutoffDate } }
+          ]
+        }
+      });
 
-  // Cleanup method
-  async cleanup(): Promise<void> {
-    if (this.redis) {
-      await this.redis.quit();
+      console.log(`✅ Cleaned up ${result.count} old workflow states`);
+      return result.count;
+    } catch (error: any) {
+      console.error('Error cleaning up old states:', error);
+      return 0;
     }
-    this.cache.clear();
-    await this.prisma.$disconnect();
   }
 }

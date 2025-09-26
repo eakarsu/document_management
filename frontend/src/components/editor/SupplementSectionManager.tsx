@@ -55,18 +55,26 @@ interface SupplementSection {
 
 interface SupplementSectionManagerProps {
   documentId: string;
-  isSupplementDocument: boolean;
+  isSupplementDocument?: boolean;
   organization?: string;
   editor: any; // TipTap editor instance
   onSectionMarked?: (section: SupplementSection) => void;
+  isOpen: boolean;
+  onClose: () => void;
+  supplementType: string;
+  supplementLevel: number;
 }
 
 export const SupplementSectionManager: React.FC<SupplementSectionManagerProps> = ({
   documentId,
-  isSupplementDocument,
+  isSupplementDocument = false,
   organization = '',
   editor,
-  onSectionMarked
+  onSectionMarked,
+  isOpen,
+  onClose,
+  supplementType,
+  supplementLevel
 }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sections, setSections] = useState<SupplementSection[]>([]);

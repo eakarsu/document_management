@@ -134,7 +134,7 @@ export class DynamicWorkflowService {
       logger.info(`Dynamic workflow template created: ${template.id} by ${params.createdBy}`);
 
       return { success: true, template };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error creating workflow template:', error);
       return { success: false, error: 'Failed to create workflow template' };
     }
@@ -199,7 +199,7 @@ export class DynamicWorkflowService {
       logger.info(`Dynamic workflow instance started: ${instance.id} for document ${params.documentId}`);
 
       return { success: true, instance };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error starting workflow instance:', error);
       return { success: false, error: 'Failed to start workflow instance' };
     }
@@ -281,7 +281,7 @@ export class DynamicWorkflowService {
       logger.info(`Workflow advanced: ${params.instanceId} from ${currentStep.name} to ${nextStep.name}`);
 
       return { success: true, nextStep };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error advancing workflow:', error);
       return { success: false, error: 'Failed to advance workflow' };
     }
@@ -301,14 +301,14 @@ export class DynamicWorkflowService {
       });
 
       const templates = documents
-        .map(doc => {
+        .map((doc: any) => {
           const customFields = doc.customFields as any;
           return customFields?.template as WorkflowTemplate;
         })
         .filter(template => template && (!category || template.category === category));
 
       return templates;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting workflow templates:', error);
       return [];
     }
@@ -343,7 +343,7 @@ export class DynamicWorkflowService {
         variables: workflowData.variables || {},
         stepHistory: workflowData.stepHistory || []
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting workflow instance:', error);
       return null;
     }
@@ -365,7 +365,7 @@ export class DynamicWorkflowService {
 
       const customFields = document.customFields as any;
       return customFields?.template as WorkflowTemplate;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting workflow template:', error);
       return null;
     }
@@ -411,7 +411,7 @@ export class DynamicWorkflowService {
       });
 
       return { success: true, role };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error creating custom role:', error);
       return { success: false, error: 'Failed to create custom role' };
     }

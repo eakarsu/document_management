@@ -2,95 +2,98 @@
 
 import React from 'react';
 import {
-  DocumentIcon,
-  FolderIcon,
-  CloudArrowUpIcon,
-  EyeIcon,
-} from '@heroicons/react/24/outline';
+  Grid,
+  Card,
+  CardContent,
+  Typography
+} from '@mui/material';
+import {
+  Description as DocumentIcon,
+  AccountCircle,
+  Publish as PublishIcon,
+  Psychology as AIIcon
+} from '@mui/icons-material';
+import { DashboardData } from '@/types/dashboard';
 
-interface StatCard {
-  name: string;
-  value: string;
-  change: string;
-  changeType: 'increase' | 'decrease';
-  icon: React.ComponentType<any>;
-  color: string;
+interface StatsCardsProps {
+  dashboardData: DashboardData;
+  onAIWorkflowClick: () => void;
 }
 
-const StatsCards: React.FC = () => {
-  // In a real app, this data would come from an API call
-  const stats: StatCard[] = [
-    {
-      name: 'Total Documents',
-      value: '2,847',
-      change: '+12.5%',
-      changeType: 'increase',
-      icon: DocumentIcon,
-      color: 'bg-blue-500',
-    },
-    {
-      name: 'Folders',
-      value: '156',
-      change: '+3.2%',
-      changeType: 'increase',
-      icon: FolderIcon,
-      color: 'bg-green-500',
-    },
-    {
-      name: 'Storage Used',
-      value: '24.8 GB',
-      change: '+8.1%',
-      changeType: 'increase',
-      icon: CloudArrowUpIcon,
-      color: 'bg-purple-500',
-    },
-    {
-      name: 'Views Today',
-      value: '1,429',
-      change: '-2.4%',
-      changeType: 'decrease',
-      icon: EyeIcon,
-      color: 'bg-orange-500',
-    },
-  ];
-
+export const StatsCards: React.FC<StatsCardsProps> = ({
+  dashboardData,
+  onAIWorkflowClick
+}) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {stats.map((stat) => (
-        <div key={stat.name} className="card hover:shadow-md transition-shadow">
-          <div className="card-content">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className={`${stat.color} rounded-lg p-3`}>
-                  <stat.icon className="h-6 w-6 text-white" />
-                </div>
-              </div>
-              <div className="ml-4 flex-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">{stat.name}</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
-                  </div>
-                </div>
-                <div className="flex items-center mt-1">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      stat.changeType === 'increase'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}
-                  >
-                    {stat.changeType === 'increase' ? '↗' : '↘'} {stat.change}
-                  </span>
-                  <span className="text-xs text-gray-500 ml-2">from last month</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
+    <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid item xs={12} sm={6} md={3}>
+        <Card>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <DocumentIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+            <Typography variant="h4" component="div">
+              {dashboardData.totalDocuments}
+            </Typography>
+            <Typography color="text.secondary">
+              Total Documents
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={3}>
+        <Card>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <AccountCircle sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
+            <Typography variant="h4" component="div">
+              {dashboardData.totalUsers}
+            </Typography>
+            <Typography color="text.secondary">
+              Total Users
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={3}>
+        <Card>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <PublishIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+            <Typography variant="h4" component="div">
+              {dashboardData.recentDocuments.filter(doc => doc.status === 'PUBLISHED').length}
+            </Typography>
+            <Typography color="text.secondary">
+              Published Documents
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={3}>
+        <Card
+          sx={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            cursor: 'pointer',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+            }
+          }}
+          onClick={onAIWorkflowClick}
+        >
+          <CardContent sx={{ textAlign: 'center' }}>
+            <AIIcon sx={{ fontSize: 40, color: 'white', mb: 1 }} />
+            <Typography variant="h4" component="div">
+              8
+            </Typography>
+            <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>
+              AI Features
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+              Click to explore
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
   );
 };
-
-export default StatsCards;

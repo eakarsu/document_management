@@ -62,7 +62,7 @@ export const authMiddleware = async (
     req.user = user;
     next();
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth middleware error:', error);
     return res.status(500).json({
       error: 'Internal server error during authentication',
@@ -92,7 +92,7 @@ export const requirePermission = (permission: string) => {
 
       next();
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Permission middleware error:', error);
       return res.status(500).json({
         error: 'Internal server error during permission check',
@@ -167,7 +167,7 @@ export const optionalAuthMiddleware = async (
 
     next();
 
-  } catch (error) {
+  } catch (error: any) {
     // Continue without authentication on error
     next();
   }
@@ -240,7 +240,7 @@ export const graphqlAuthMiddleware = async (
     req.user = user;
     next();
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('GraphQL auth middleware error:', error);
     return res.status(500).json({
       error: 'Internal server error during authentication',

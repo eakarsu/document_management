@@ -100,6 +100,21 @@ const nextConfig = {
         source: '/api/documents/:id/feedback/:feedbackId',
         destination: '/api/documents/:id/feedback/:feedbackId',
       },
+      // Don't proxy comments routes - handle them locally
+      {
+        source: '/api/documents/:id/comments',
+        destination: '/api/documents/:id/comments',
+      },
+      // Don't proxy update-content routes - handle them locally
+      {
+        source: '/api/documents/:id/update-content',
+        destination: '/api/documents/:id/update-content',
+      },
+      // Don't proxy AI document generator - handle locally
+      {
+        source: '/api/ai-document-generator',
+        destination: '/api/ai-document-generator',
+      },
       // Don't proxy documents PATCH route - handle feedback locally
       {
         source: '/api/documents/:id',

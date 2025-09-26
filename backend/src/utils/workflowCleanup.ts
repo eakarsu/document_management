@@ -80,7 +80,7 @@ export async function cleanupOrphanedWorkflows() {
       workflowsDeactivated: deactivated.count
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[CLEANUP] Error during cleanup:', error);
     throw error;
   } finally {
@@ -106,7 +106,7 @@ export async function deactivateDocumentWorkflows(documentId: string) {
     console.log(`[CLEANUP] Deactivated ${result.count} workflows for document ${documentId}`);
     return result.count;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[CLEANUP] Error deactivating workflows:', error);
     throw error;
   }
@@ -138,7 +138,7 @@ export async function removeAllDocumentWorkflows(documentId: string) {
       historyDeleted: historyDeleted.count
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[CLEANUP] Error removing workflows:', error);
     throw error;
   }

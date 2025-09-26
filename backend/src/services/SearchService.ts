@@ -160,7 +160,7 @@ export class SearchService {
         }
       }
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to initialize Elasticsearch index:', error);
       throw error;
     }
@@ -190,7 +190,7 @@ export class SearchService {
         title: document.title
       });
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to index document:', error);
       throw error;
     }
@@ -245,7 +245,7 @@ export class SearchService {
         contentLength: content.length
       });
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to index document with extraction:', error);
       throw error;
     }
@@ -270,7 +270,7 @@ export class SearchService {
 
       this.logger.info('Document updated in index', { documentId: document.id });
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to update document in index:', error);
       throw error;
     }
@@ -285,7 +285,7 @@ export class SearchService {
 
       this.logger.info('Document deleted from index', { documentId });
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to delete document from index:', error);
       throw error;
     }
@@ -435,7 +435,7 @@ export class SearchService {
         aggregations: processedAggregations
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Search failed:', error);
       throw error;
     }
@@ -479,7 +479,7 @@ export class SearchService {
         .filter((value: any, index: number, array: any[]) => array.indexOf(value) === index); // Remove duplicates
 
       return suggestions;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Suggest failed:', error);
       return [];
     }
@@ -557,7 +557,7 @@ export class SearchService {
         organizationId
       });
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Document reindexing failed:', error);
       throw error;
     }
@@ -574,7 +574,7 @@ export class SearchService {
         tags: { buckets: [] },
         documents_per_month: { buckets: [] }
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get search stats:', error);
       throw error;
     }
@@ -584,7 +584,7 @@ export class SearchService {
     try {
       const response = await this.elasticsearch.ping();
       return response === true || (typeof response === 'object' && response !== null);
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Elasticsearch health check failed:', error);
       return false;
     }
@@ -649,7 +649,7 @@ export class SearchService {
         this.logger.error('Failed to download file from storage:', { filePath, error: storageError });
         return '';
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Text extraction failed completely:', { 
         filePath, 
         error: error instanceof Error ? error.message : error
@@ -811,7 +811,7 @@ export class SearchService {
       this.logger.info('📝 Using filename as content for unsupported type', { filePath, mimeType });
       return `${filename} document content`;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Local text extraction failed:', { 
         filePath, 
         error: error instanceof Error ? error.message : error

@@ -127,7 +127,7 @@ router.get('/users', authMiddleware, isAdmin, async (req: AuthenticatedRequest, 
         roleCount: stats[3]
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
@@ -163,7 +163,7 @@ router.get('/users/:id', authMiddleware, isAdmin, async (req: AuthenticatedReque
     }
 
     res.json(user);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching user:', error);
     res.status(500).json({ error: 'Failed to fetch user' });
   }
@@ -243,7 +243,7 @@ router.put('/users/:id', authMiddleware, isAdmin, async (req: AuthenticatedReque
     });
 
     res.json(updatedUser);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating user:', error);
     res.status(500).json({ error: 'Failed to update user' });
   }
@@ -345,7 +345,7 @@ router.post('/users', authMiddleware, isAdmin, async (req: AuthenticatedRequest,
     });
 
     res.status(201).json(newUser);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user' });
   }
@@ -376,7 +376,7 @@ router.delete('/users/:id', authMiddleware, isAdmin, async (req: AuthenticatedRe
     });
 
     res.json({ message: 'User deleted successfully' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting user:', error);
     res.status(500).json({ error: 'Failed to delete user' });
   }
@@ -411,7 +411,7 @@ router.post('/users/bulk-delete', authMiddleware, isAdmin, async (req: Authentic
       deletedCount: deleteResult.count,
       skippedCount: userIds.length - idsToDelete.length
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in bulk delete:', error);
     res.status(500).json({ error: 'Failed to delete users' });
   }
@@ -445,7 +445,7 @@ router.get('/roles', authMiddleware, isAdmin, async (req: AuthenticatedRequest, 
         userCount: r._count.users
       }))
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching roles:', error);
     res.status(500).json({ error: 'Failed to fetch roles' });
   }

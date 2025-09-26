@@ -153,7 +153,7 @@ export class EnhancedPublishingService extends PublishingService {
         recommendations
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Smart publishing submission failed:', error);
       throw error;
     }
@@ -230,7 +230,7 @@ export class EnhancedPublishingService extends PublishingService {
         performanceGain
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Workflow optimization failed:', error);
       throw error;
     }
@@ -290,7 +290,7 @@ export class EnhancedPublishingService extends PublishingService {
         success
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Workflow conflict resolution failed:', error);
       throw error;
     }
@@ -341,7 +341,7 @@ export class EnhancedPublishingService extends PublishingService {
               documentTitle: publishing.documentId, // Will be populated with actual title
               prediction
             };
-          } catch (error) {
+          } catch (error: any) {
             this.aiLogger.warn('Failed to get prediction for publishing', { 
               publishingId: publishing.id, 
               error: (error as Error).message 
@@ -367,7 +367,7 @@ export class EnhancedPublishingService extends PublishingService {
         bottlenecks: insights.bottleneckAnalysis
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to generate AI workflow dashboard:', error);
       throw error;
     }
@@ -461,7 +461,7 @@ export class EnhancedPublishingService extends PublishingService {
 
     if (prediction.potentialBottlenecks.length > 0) {
       recommendations.push(
-        `Potential bottlenecks identified at: ${prediction.potentialBottlenecks.map(b => b.stepName).join(', ')}`
+        `Potential bottlenecks identified at: ${prediction.potentialBottlenecks.map((b: any) => b.stepName).join(', ')}`
       );
     }
 
@@ -497,7 +497,7 @@ export class EnhancedPublishingService extends PublishingService {
           estimatedTime: prediction.estimatedCompletionTime
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.warn('Failed to create AI workflow tracking:', error);
     }
   }
@@ -562,7 +562,7 @@ export class EnhancedPublishingService extends PublishingService {
       }
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to apply conflict resolution:', error);
       return false;
     }

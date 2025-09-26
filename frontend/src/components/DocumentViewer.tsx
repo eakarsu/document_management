@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+console.log('DocumentViewer.tsx file loaded');
+
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -28,6 +30,7 @@ interface DocumentViewerProps {
     category: string;
     fileSize?: number;
     content?: string;
+    customFields?: any;
   };
   onDownload?: () => void;
 }
@@ -41,6 +44,74 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [content, setContent] = useState(document?.content || '');
+  const [headerHtml, setHeaderHtml] = useState('');
+  const [documentData, setDocumentData] = useState<any>(null);
+
+  // Debug log
+  console.log('DocumentViewer mounted:', {
+    documentId,
+    hasDocument: !!document,
+    hasCustomFields: !!document?.customFields,
+    headerHtmlInProps: document?.customFields?.headerHtml?.length || 0
+  });
+
+  // Load document data to get headerHtml
+  useEffect(() => {
+    // First check if headerHtml is already provided in props
+    if (document?.customFields?.headerHtml) {
+      console.log('DocumentViewer: headerHtml found in props:', document.customFields.headerHtml.length, 'chars');
+      setHeaderHtml(document.customFields.headerHtml);
+      const editableContent = document.customFields?.editableContent ||
+                              document.customFields?.content ||
+                              document?.content || '';
+      setContent(editableContent);
+      return;
+    }
+
+    const loadDocumentData = async () => {
+      try {
+        console.log('DocumentViewer: Fetching document data for:', documentId);
+        const response = await api.get(`/api/documents/${documentId}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('DocumentViewer: Response data:', {
+            hasDocument: !!data.document,
+            hasCustomFields: !!data.document?.customFields || !!data.customFields,
+            customFieldKeys: Object.keys(data.document?.customFields || data.customFields || {}),
+            headerHtmlLength: data.document?.customFields?.headerHtml?.length || data.customFields?.headerHtml?.length || 0
+          });
+
+          setDocumentData(data.document || data);
+
+          // Extract headerHtml and content from customFields
+          if (data.customFields?.headerHtml) {
+            console.log('DocumentViewer: Setting headerHtml from data.customFields');
+            setHeaderHtml(data.customFields.headerHtml);
+          } else if (data.document?.customFields?.headerHtml) {
+            console.log('DocumentViewer: Setting headerHtml from data.document.customFields');
+            setHeaderHtml(data.document.customFields.headerHtml);
+          } else {
+            console.log('DocumentViewer: No headerHtml found in response');
+          }
+
+          // Use editable content (without header) if available
+          const editableContent = data.customFields?.editableContent ||
+                                  data.document?.customFields?.editableContent ||
+                                  data.customFields?.content ||
+                                  data.document?.customFields?.content ||
+                                  data.content ||
+                                  document?.content || '';
+          setContent(editableContent);
+        }
+      } catch (error) {
+        console.error('Error loading document data:', error);
+      }
+    };
+
+    if (documentId) {
+      loadDocumentData();
+    }
+  }, [documentId, document?.customFields]);
 
   // Use content directly from state or props
   const htmlContent = content || document?.content || '';
@@ -148,7 +219,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       );
     }
 
-    if (!htmlContent) {
+    if (!htmlContent && !headerHtml) {
       return (
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <Typography color="text.secondary">
@@ -158,24 +229,85 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       );
     }
 
-    // Parse HTML to extract just the content
-    const extractContent = (html: string) => {
-      // Extract content between body tags or use full HTML
-      const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-      if (bodyMatch) {
-        return bodyMatch[1];
+    // Extract styles from headerHtml if present
+    let headerStyles = '';
+    let headerContent = headerHtml;
+
+    if (headerHtml) {
+      const styleMatch = headerHtml.match(/<style>([\s\S]*?)<\/style>/);
+      if (styleMatch) {
+        headerStyles = styleMatch[1];
+        // Keep the full headerHtml including styles for proper rendering
       }
-      return html;
-    };
+    }
 
-    // Keep the full content including header and TOC for Air Force documents
-    // This ensures the display matches exactly what was generated
-
-    // Render the HTML content directly
+    // Render the header and content separately for proper formatting
     return (
-      <Box 
-        sx={{ 
-          '& h1, & h2, & h3, & h4, & h5, & h6': {
+      <>
+        {/* Apply header styles globally if available */}
+        {headerStyles && (
+          <style dangerouslySetInnerHTML={{ __html: headerStyles }} />
+        )}
+
+        {/* Display formatted header if available */}
+        {headerHtml && (
+          <Box
+            sx={{
+              mb: 3,
+              backgroundColor: 'white',
+              padding: '20px',
+              '& .header-table': {
+                width: '100%',
+                marginBottom: '20px'
+              },
+              '& .header-table td': {
+                verticalAlign: 'top',
+                padding: '10px'
+              },
+              '& .left-column': {
+                width: '35%',
+                textAlign: 'center'
+              },
+              '& .right-column': {
+                width: '65%',
+                textAlign: 'right'
+              },
+              '& .seal-container img': {
+                width: '100px',
+                height: '100px',
+                display: 'block',
+                margin: '0 auto'
+              },
+              '& .compliance-section': {
+                textAlign: 'center',
+                fontWeight: 'bold',
+                fontSize: '10pt',
+                margin: '30px 0',
+                padding: '10px 0',
+                borderTop: '2px solid #000',
+                borderBottom: '2px solid #000'
+              },
+              '& .info-table': {
+                width: '100%',
+                borderCollapse: 'collapse',
+                marginTop: '20px'
+              },
+              '& .info-table td': {
+                padding: '8px',
+                borderTop: '1px solid #000',
+                fontSize: '10pt',
+                verticalAlign: 'top'
+              }
+            }}
+            dangerouslySetInnerHTML={{ __html: headerHtml }}
+          />
+        )}
+
+        {/* Display the document content */}
+        {htmlContent && (
+          <Box
+            sx={{
+            '& h1, & h2, & h3, & h4, & h5, & h6': {
             fontWeight: 'bold',
             marginTop: '1em',
             marginBottom: '0.5em'
@@ -248,10 +380,12 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
             whiteSpace: 'nowrap',
             paddingLeft: '10px'
           }
-        }}
-        dangerouslySetInnerHTML={{ __html: extractContent(htmlContent) }}
-      />
-    );
+          }}
+          dangerouslySetInnerHTML={{ __html: htmlContent }}
+        />
+      )}
+    </>
+  );
   };
 
 

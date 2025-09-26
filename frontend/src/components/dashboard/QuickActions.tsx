@@ -1,121 +1,151 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
 import {
-  CloudArrowUpIcon,
-  FolderPlusIcon,
-  MagnifyingGlassIcon,
-  DocumentDuplicateIcon,
-  UserPlusIcon,
-  CogIcon,
-} from '@heroicons/react/24/outline';
-import { useAuth } from '../providers/AuthProvider';
+  Paper,
+  Typography,
+  Button,
+  Stack
+} from '@mui/material';
+import {
+  Upload as UploadIcon,
+  Folder as FolderIcon,
+  Search as SearchIcon,
+  BarChart as AnalyticsIcon,
+  Publish as PublishIcon,
+  AutoFixHigh as SmartIcon,
+  AccountTree as WorkflowBuilderIcon,
+  AdminPanelSettings as AdminIcon
+} from '@mui/icons-material';
 
-interface QuickAction {
-  name: string;
-  description: string;
-  href?: string;
-  icon: React.ComponentType<any>;
-  color: string;
-  permission?: string;
-  onClick?: () => void;
+interface QuickActionsProps {
+  onUploadDocument: () => void;
+  onBrowseFolders: () => void;
+  onSearchDocuments: () => void;
+  onViewAnalytics: () => void;
+  onPublishing: () => void;
+  onAIDocumentGenerator: () => void;
+  onWorkflowBuilder: () => void;
+  onUsersManagement: () => void;
 }
 
-const QuickActions: React.FC = () => {
-  const router = useRouter();
-  const { hasPermission } = useAuth();
-
-  const quickActions: QuickAction[] = [
-    {
-      name: 'Upload Files',
-      description: 'Add new documents',
-      href: '/documents/upload',
-      icon: CloudArrowUpIcon,
-      color: 'text-blue-600 bg-blue-50 hover:bg-blue-100',
-    },
-    {
-      name: 'Create Folder',
-      description: 'Organize documents',
-      href: '/folders/new',
-      icon: FolderPlusIcon,
-      color: 'text-green-600 bg-green-50 hover:bg-green-100',
-    },
-    {
-      name: 'Advanced Search',
-      description: 'Find documents quickly',
-      href: '/search',
-      icon: MagnifyingGlassIcon,
-      color: 'text-purple-600 bg-purple-50 hover:bg-purple-100',
-    },
-    {
-      name: 'Bulk Operations',
-      description: 'Manage multiple files',
-      href: '/documents/bulk',
-      icon: DocumentDuplicateIcon,
-      color: 'text-orange-600 bg-orange-50 hover:bg-orange-100',
-    },
-    {
-      name: 'Invite Users',
-      description: 'Add team members',
-      href: '/users/invite',
-      icon: UserPlusIcon,
-      color: 'text-pink-600 bg-pink-50 hover:bg-pink-100',
-      permission: 'USER_MANAGEMENT',
-    },
-    {
-      name: 'Settings',
-      description: 'Configure system',
-      href: '/settings',
-      icon: CogIcon,
-      color: 'text-gray-600 bg-gray-50 hover:bg-gray-100',
-      permission: 'SYSTEM_SETTINGS',
-    },
-  ];
-
-  const filteredActions = quickActions.filter(action => 
-    !action.permission || hasPermission(action.permission) || hasPermission('*')
-  );
-
-  const handleActionClick = (action: QuickAction) => {
-    if (action.onClick) {
-      action.onClick();
-    } else if (action.href) {
-      router.push(action.href);
-    }
-  };
-
+export const QuickActions: React.FC<QuickActionsProps> = ({
+  onUploadDocument,
+  onBrowseFolders,
+  onSearchDocuments,
+  onViewAnalytics,
+  onPublishing,
+  onAIDocumentGenerator,
+  onWorkflowBuilder,
+  onUsersManagement
+}) => {
   return (
-    <div className="card">
-      <div className="card-header">
-        <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
-      </div>
-
-      <div className="card-content">
-        <div className="grid grid-cols-2 gap-4">
-          {filteredActions.map((action) => (
-            <button
-              key={action.name}
-              onClick={() => handleActionClick(action)}
-              className={`
-                p-4 rounded-lg border border-gray-200 hover:border-gray-300 
-                transition-all duration-200 text-left group hover:shadow-sm
-                ${action.color}
-              `}
-            >
-              <div className="flex items-center">
-                <action.icon className="h-6 w-6 flex-shrink-0" />
-                <div className="ml-3">
-                  <p className="text-sm font-medium">{action.name}</p>
-                  <p className="text-xs opacity-75">{action.description}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
+    <Paper sx={{ p: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        Quick Actions
+      </Typography>
+      <Stack spacing={2}>
+        <Button
+          fullWidth
+          variant="contained"
+          startIcon={<SmartIcon />}
+          size="large"
+          onClick={onAIDocumentGenerator}
+          sx={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+            }
+          }}
+        >
+          🤖 Create AI Document
+        </Button>
+        <Button
+          fullWidth
+          variant="contained"
+          startIcon={<WorkflowBuilderIcon />}
+          size="large"
+          onClick={onWorkflowBuilder}
+          sx={{
+            background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+            }
+          }}
+        >
+          📊 Workflow Builder
+        </Button>
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<UploadIcon />}
+          size="large"
+          onClick={onUploadDocument}
+        >
+          Upload Document
+        </Button>
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<FolderIcon />}
+          size="large"
+          onClick={onBrowseFolders}
+        >
+          Browse Folders
+        </Button>
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<SearchIcon />}
+          size="large"
+          onClick={onSearchDocuments}
+        >
+          Search Documents
+        </Button>
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<AnalyticsIcon />}
+          size="large"
+          onClick={onViewAnalytics}
+        >
+          View Analytics
+        </Button>
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<AdminIcon />}
+          size="large"
+          onClick={onUsersManagement}
+          sx={{
+            color: 'warning.main',
+            borderColor: 'warning.main',
+            '&:hover': {
+              borderColor: 'warning.dark',
+              backgroundColor: 'rgba(237, 108, 2, 0.04)'
+            }
+          }}
+        >
+          Users Management
+        </Button>
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<PublishIcon />}
+          size="large"
+          onClick={onPublishing}
+          sx={{
+            color: 'success.main',
+            borderColor: 'success.main',
+            '&:hover': {
+              borderColor: 'success.dark',
+              backgroundColor: 'success.light'
+            }
+          }}
+        >
+          Publishing Management
+        </Button>
+      </Stack>
+    </Paper>
   );
 };
-
-export default QuickActions;

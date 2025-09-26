@@ -88,7 +88,7 @@ export class StorageService {
         checksum
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Filesystem document upload failed:', error);
       return {
         success: false,
@@ -135,7 +135,7 @@ export class StorageService {
       
       return fileBuffer;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Filesystem document download failed:', error);
       return null;
     }
@@ -174,7 +174,7 @@ export class StorageService {
 
       return true;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Filesystem document deletion failed:', error);
       return false;
     }

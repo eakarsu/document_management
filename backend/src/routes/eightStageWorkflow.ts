@@ -45,7 +45,7 @@ router.post('/start/:documentId', async (req: AuthenticatedRequest, res: Respons
     });
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error starting workflow:', error);
     res.status(500).json({
       success: false,
@@ -160,7 +160,7 @@ router.post('/advance/:workflowId', async (req: AuthenticatedRequest, res: Respo
     }
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error advancing workflow:', error);
     res.status(500).json({
       success: false,
@@ -193,7 +193,7 @@ router.post('/icu/:workflowId/feedback', async (req: AuthenticatedRequest, res: 
     });
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error submitting ICU feedback:', error);
     res.status(500).json({
       success: false,
@@ -209,7 +209,7 @@ router.get('/status/:workflowId', async (req: AuthenticatedRequest, res: Respons
     const { workflowId } = req.params;
     const result = await workflowService.getWorkflowStatus(workflowId);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting workflow status:', error);
     res.status(500).json({
       success: false,
@@ -225,7 +225,7 @@ router.get('/document/:documentId', async (req: AuthenticatedRequest, res: Respo
     const { documentId } = req.params;
     const result = await workflowService.getWorkflowByDocumentId(documentId);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting workflow by document ID:', error);
     res.status(500).json({
       success: false,
@@ -266,7 +266,7 @@ router.post('/move-backward/:workflowId', async (req: AuthenticatedRequest, res:
     });
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error moving workflow backward:', error);
     res.status(500).json({
       success: false,
@@ -282,7 +282,7 @@ router.get('/history/:workflowId', async (req: AuthenticatedRequest, res: Respon
     
     const result = await workflowService.getWorkflowHistory(workflowId);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting workflow history:', error);
     res.status(500).json({
       success: false,
@@ -322,7 +322,7 @@ router.post('/advance-with-validation/:workflowId', async (req: AuthenticatedReq
     });
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error advancing workflow with role validation:', error);
     res.status(500).json({
       success: false,
@@ -357,7 +357,7 @@ router.post('/:workflowId/feedback', async (req: AuthenticatedRequest, res: Resp
     });
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error submitting generic feedback:', error);
     res.status(500).json({
       success: false,
@@ -382,7 +382,7 @@ router.get('/role-config/:stage', async (req: AuthenticatedRequest, res: Respons
 
     const config = await workflowService.getRoleSpecificConfig(stage, userRole);
     res.json(config);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting role config:', error);
     res.status(500).json({
       success: false,
@@ -408,7 +408,7 @@ router.get('/permissions/:workflowId', async (req: AuthenticatedRequest, res: Re
 
     const permissions = await workflowService.getUserPermissionsForWorkflow(workflowId, userId, userRole);
     res.json(permissions);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting user permissions:', error);
     res.status(500).json({
       success: false,
@@ -443,7 +443,7 @@ router.post('/reset/:workflowId', async (req: AuthenticatedRequest, res: Respons
 
     const result = await workflowService.resetWorkflow(workflowId, userId);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error resetting workflow:', error);
     res.status(500).json({
       success: false,

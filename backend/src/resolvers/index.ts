@@ -83,7 +83,7 @@ export const resolvers: any = {
         const userAgent = req?.get('User-Agent') || 'Unknown';
         const result = await services.auth.login(input.email, input.password, ipAddress, userAgent);
         return result;
-      } catch (error) {
+      } catch (error: any) {
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Login failed'
@@ -97,7 +97,7 @@ export const resolvers: any = {
         const result = await services.auth.register(input);
         console.log('✅ Registration result:', { success: result.success, hasUser: !!result.user, error: result.error });
         return result;
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Registration error in resolver:', error);
         return {
           success: false,
@@ -113,7 +113,7 @@ export const resolvers: any = {
         }
         // For simplicity, just return true - actual token invalidation would be handled by frontend
         return true;
-      } catch (error) {
+      } catch (error: any) {
         return false;
       }
     }

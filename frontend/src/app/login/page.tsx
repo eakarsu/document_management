@@ -284,10 +284,13 @@ const LoginPage: React.FC = () => {
           </Stack>
         </Box>
 
-        <Divider sx={{ my: 3 }} />
+        {/* Only show test users in development mode */}
+        {process.env.NEXT_PUBLIC_APP_MODE === 'development' && (
+          <>
+            <Divider sx={{ my: 3 }} />
 
-        {/* Hierarchical Distributed Workflow Test Users */}
-        <Card variant="outlined" sx={{ mt: 3 }}>
+            {/* Hierarchical Distributed Workflow Test Users */}
+            <Card variant="outlined" sx={{ mt: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom color="primary">
               🎯 Hierarchical Distributed Review Workflow (10 Stages)
@@ -406,53 +409,80 @@ const LoginPage: React.FC = () => {
               </Stack>
 
               <Typography variant="caption" fontWeight="bold" display="block" sx={{ mb: 0.5 }}>
-                Sub-Reviewers:
+                Sub-Reviewers (Password: reviewer123):
               </Typography>
               <Stack spacing={0.5}>
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => quickLogin('ops.reviewer1@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('john.doe.ops@airforce.mil', 'reviewer123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
                 >
-                  ops.reviewer1@airforce.mil
+                  🏢 john.doe.ops@airforce.mil (Operations)
                 </Button>
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => quickLogin('ops.reviewer2@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('david.brown.ops@airforce.mil', 'reviewer123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
                 >
-                  ops.reviewer2@airforce.mil
+                  🏢 david.brown.ops@airforce.mil (Operations)
                 </Button>
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => quickLogin('log.reviewer1@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('jane.smith.log@airforce.mil', 'reviewer123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
                 >
-                  log.reviewer1@airforce.mil
+                  📦 jane.smith.log@airforce.mil (Logistics)
                 </Button>
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => quickLogin('fin.reviewer1@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('lisa.davis.log@airforce.mil', 'reviewer123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
                 >
-                  fin.reviewer1@airforce.mil
+                  📦 lisa.davis.log@airforce.mil (Logistics)
                 </Button>
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => quickLogin('per.reviewer1@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('mike.johnson.fin@airforce.mil', 'reviewer123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
                 >
-                  per.reviewer1@airforce.mil
+                  💰 mike.johnson.fin@airforce.mil (Finance)
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => quickLogin('robert.miller.fin@airforce.mil', 'reviewer123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
+                >
+                  💰 robert.miller.fin@airforce.mil (Finance)
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => quickLogin('sarah.williams.per@airforce.mil', 'reviewer123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
+                >
+                  👥 sarah.williams.per@airforce.mil (Personnel)
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => quickLogin('emily.wilson.per@airforce.mil', 'reviewer123')}
+                  disabled={isLoading}
+                  sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5, justifyContent: 'flex-start' }}
+                >
+                  👥 emily.wilson.per@airforce.mil (Personnel)
                 </Button>
               </Stack>
             </Box>
@@ -583,6 +613,8 @@ const LoginPage: React.FC = () => {
             🗑️ Clear Session & Logout
           </Button>
         </Box>
+          </>
+        )}
 
         {/* Footer */}
         <Box sx={{ textAlign: 'center', mt: 3 }}>

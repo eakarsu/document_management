@@ -38,28 +38,30 @@ import { Comment } from '../../lib/tiptap-comments';
 interface CommentsPanelProps {
   editor: any;
   comments: Comment[];
-  currentUser: {
+  currentUser?: {
     id: string;
     name: string;
   };
-  onAddComment: (comment: Omit<Comment, 'id'>) => void;
-  onUpdateComment: (comment: Comment) => void;
-  onDeleteComment: (commentId: string) => void;
-  onReplyToComment: (commentId: string, reply: Omit<Comment, 'id'>) => void;
-  open: boolean;
-  onClose: () => void;
+  onAddComment?: (comment: Omit<Comment, 'id'>) => void;
+  onCommentAdd: (comment: any) => void;
+  onUpdateComment?: (comment: Comment) => void;
+  onDeleteComment?: (commentId: string) => void;
+  onReplyToComment?: (commentId: string, reply: Omit<Comment, 'id'>) => void;
+  open?: boolean;
+  onClose?: () => void;
 }
 
 export const CommentsPanel: React.FC<CommentsPanelProps> = ({
   editor,
   comments,
-  currentUser,
-  onAddComment,
-  onUpdateComment,
-  onDeleteComment,
-  onReplyToComment,
-  open,
-  onClose
+  currentUser = { id: 'default', name: 'User' },
+  onAddComment = () => {},
+  onCommentAdd,
+  onUpdateComment = () => {},
+  onDeleteComment = () => {},
+  onReplyToComment = () => {},
+  open = true,
+  onClose = () => {}
 }) => {
   const [newCommentText, setNewCommentText] = useState('');
   const [replyTexts, setReplyTexts] = useState<{ [key: string]: string }>({});

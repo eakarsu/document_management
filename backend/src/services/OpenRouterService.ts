@@ -110,7 +110,7 @@ export class OpenRouterService {
           confidence: this.calculateConfidence(originalSentence, improvedSentence, feedbackItems),
           reasoning: this.generateReasoning(feedbackItems)
         };
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Failed with model ${model}:`, error);
         lastError = error as Error;
         // Continue to next model
@@ -311,7 +311,7 @@ export class OpenRouterService {
       } else {
         throw new Error('Generated improvement did not adequately address feedback');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('OpenRouter API error:', error);
       throw error;
     }
@@ -623,7 +623,7 @@ Rules:
           documentContext
         );
         results.push(processed);
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Failed to process feedback for location ${location}:`, error);
       }
     }

@@ -128,7 +128,7 @@ export class LibreOfficeService {
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
 
-        } catch (error) {
+        } catch (error: any) {
           lastError = error instanceof Error ? error : new Error(String(error));
           this.logger.error(`Word conversion attempt ${attempt} threw error`, {
             error: lastError.message,
@@ -201,7 +201,7 @@ export class LibreOfficeService {
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
 
-        } catch (error) {
+        } catch (error: any) {
           lastError = error instanceof Error ? error : new Error(String(error));
           this.logger.error(`PDF conversion attempt ${attempt} threw error`, {
             error: lastError.message,
@@ -257,7 +257,7 @@ export class LibreOfficeService {
       if (!fs.existsSync(outputDir)) {
         try {
           fs.mkdirSync(outputDir, { recursive: true });
-        } catch (error) {
+        } catch (error: any) {
           return { 
             success: false, 
             error: `Failed to create output directory: ${error instanceof Error ? error.message : 'Unknown error'}` 
@@ -275,7 +275,7 @@ export class LibreOfficeService {
       if (fs.existsSync(expectedOutputPath)) {
         try {
           fs.unlinkSync(expectedOutputPath);
-        } catch (error) {
+        } catch (error: any) {
           this.logger.warn('Failed to remove existing output file', {
             outputPath: expectedOutputPath,
             error: error instanceof Error ? error.message : 'Unknown error'
@@ -365,7 +365,7 @@ export class LibreOfficeService {
         outputPath: expectedOutputPath
       };
 
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('LibreOffice conversion error', {
         inputPath,
@@ -411,7 +411,7 @@ export class LibreOfficeService {
             if (child.pid) {
               process.kill(-child.pid, 'SIGKILL');
             }
-          } catch (error) {
+          } catch (error: any) {
             this.logger.error('Failed to kill timed out process', {
               pid: child.pid,
               error: error instanceof Error ? error.message : 'Unknown error'
@@ -460,7 +460,7 @@ export class LibreOfficeService {
         }
       });
 
-      child.on('error', (error) => {
+      child.on('error', (error: any) => {
         if (!finished) {
           finished = true;
           clearTimeout(timeoutId);
@@ -498,10 +498,10 @@ export class LibreOfficeService {
           // Wait a moment for processes to die
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      } catch (error) {
+      } catch (error: any) {
         // No processes found or error checking - this is fine
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logger.warn('Failed to cleanup LibreOffice processes', {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -542,7 +542,7 @@ export class LibreOfficeService {
 
       return { success: true, text };
 
-    } catch (error) {
+    } catch (error: any) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -585,7 +585,7 @@ export class LibreOfficeService {
         text: text
       };
 
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('PDF text extraction failed', {
         pdfPath,

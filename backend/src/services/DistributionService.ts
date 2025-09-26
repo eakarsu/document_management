@@ -141,7 +141,7 @@ export class DistributionService {
 
       return distribution;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to create document distribution:', error);
       throw error;
     }
@@ -223,7 +223,7 @@ export class DistributionService {
         failed: results.failed
       });
 
-    } catch (error) {
+    } catch (error: any) {
       await this.prisma.documentDistribution.update({
         where: { id: distribution.id },
         data: { status: DistributionStatus.FAILED }
@@ -258,9 +258,7 @@ export class DistributionService {
 
     // Get document content
     const documentContent = await this.documentService.getDocumentContent(
-      publishing.documentId,
-      'system',
-      organizationId
+      publishing.documentId
     );
 
     if (!documentContent) {
@@ -308,7 +306,7 @@ export class DistributionService {
 
         stats.delivered++;
 
-      } catch (error) {
+      } catch (error: any) {
         stats.failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         stats.failureReasons[errorMessage] = (stats.failureReasons[errorMessage] || 0) + 1;
@@ -371,7 +369,7 @@ export class DistributionService {
           stats.failureReasons['Missing email address'] = (stats.failureReasons['Missing email address'] || 0) + 1;
         }
 
-      } catch (error) {
+      } catch (error: any) {
         stats.failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         stats.failureReasons[errorMessage] = (stats.failureReasons[errorMessage] || 0) + 1;
@@ -414,9 +412,7 @@ export class DistributionService {
 
     // Get document content
     const documentContent = await this.documentService.getDocumentContent(
-      publishing.documentId,
-      'system',
-      organizationId
+      publishing.documentId
     );
 
     if (!documentContent) {
@@ -443,7 +439,7 @@ export class DistributionService {
 
         stats.delivered++;
 
-      } catch (error) {
+      } catch (error: any) {
         stats.failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         stats.failureReasons[errorMessage] = (stats.failureReasons[errorMessage] || 0) + 1;
@@ -483,7 +479,7 @@ export class DistributionService {
 
         stats.delivered++;
 
-      } catch (error) {
+      } catch (error: any) {
         stats.failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         stats.failureReasons[errorMessage] = (stats.failureReasons[errorMessage] || 0) + 1;
@@ -594,7 +590,7 @@ export class DistributionService {
         failureAnalysis
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get distribution analytics:', error);
       throw error;
     }

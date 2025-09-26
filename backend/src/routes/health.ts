@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
       healthCheck.services.database = 'healthy';
-    } catch (error) {
+    } catch (error: any) {
       healthCheck.services.database = 'unhealthy';
       healthCheck.status = 'degraded';
     }
@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
       await redis.ping();
       await redis.disconnect();
       healthCheck.services.redis = 'healthy';
-    } catch (error) {
+    } catch (error: any) {
       healthCheck.services.redis = 'unhealthy';
       healthCheck.status = 'degraded';
     }
@@ -51,7 +51,7 @@ router.get('/', async (req, res) => {
     const statusCode = healthCheck.status === 'healthy' ? 200 : 503;
     res.status(statusCode).json(healthCheck);
 
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
@@ -93,7 +93,7 @@ router.get('/detailed', async (req, res) => {
         responseTime: Date.now() - start,
         error: undefined
       };
-    } catch (error) {
+    } catch (error: any) {
       detailed.services.database = {
         status: 'unhealthy',
         responseTime: 0,
@@ -116,7 +116,7 @@ router.get('/detailed', async (req, res) => {
         responseTime: Date.now() - start,
         error: undefined
       };
-    } catch (error) {
+    } catch (error: any) {
       detailed.services.redis = {
         status: 'unhealthy',
         responseTime: 0,
@@ -128,7 +128,7 @@ router.get('/detailed', async (req, res) => {
     const statusCode = detailed.status === 'healthy' ? 200 : 503;
     res.status(statusCode).json(detailed);
 
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
@@ -148,7 +148,7 @@ router.get('/ready', async (req, res) => {
       timestamp: new Date().toISOString()
     });
 
-  } catch (error) {
+  } catch (error: any) {
     res.status(503).json({
       status: 'not_ready',
       timestamp: new Date().toISOString(),

@@ -269,7 +269,7 @@ export class WorkflowEngine extends EventEmitter {
         data: result.data
       };
 
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
       // Log error

@@ -134,8 +134,8 @@ export class WorkflowAIService {
       // Get document content for analysis (optional for analysis)
       let content: Buffer | null = null;
       try {
-        content = await this.documentService.getDocumentContent(documentId, userId, organizationId);
-      } catch (error) {
+        content = await this.documentService.getDocumentContent(documentId);
+      } catch (error: any) {
         this.logger.warn('Could not get document content for analysis:', error);
       }
       
@@ -208,7 +208,7 @@ export class WorkflowAIService {
 
       return analysis;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to analyze document for workflow:', error);
       throw error;
     }
@@ -270,7 +270,7 @@ export class WorkflowAIService {
       this.logger.info('Reviewers auto-assigned', { documentId, assignedUsers });
       return assignedUsers;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to auto-assign reviewers:', error);
       throw error;
     }
@@ -342,7 +342,7 @@ export class WorkflowAIService {
       const cleanedResponse = this.cleanJsonResponse(response);
       return JSON.parse(cleanedResponse);
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to predict workflow outcome:', error);
       throw error;
     }
@@ -388,7 +388,7 @@ export class WorkflowAIService {
       const cleanedResponse = this.cleanJsonResponse(response);
       return JSON.parse(cleanedResponse);
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to generate approval checklist:', error);
       throw error;
     }
@@ -495,7 +495,7 @@ export class WorkflowAIService {
       const cleanedResponse = this.cleanJsonResponse(response);
       return JSON.parse(cleanedResponse);
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to analyze content quality:', error);
       throw error;
     }
@@ -605,7 +605,7 @@ export class WorkflowAIService {
 
       return workflow;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to generate workflow from natural language:', error);
       throw error;
     }
@@ -653,7 +653,7 @@ export class WorkflowAIService {
       const cleanedResponse = this.cleanJsonResponse(response);
       return JSON.parse(cleanedResponse);
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to generate meeting summary:', error);
       throw error;
     }
@@ -700,7 +700,7 @@ export class WorkflowAIService {
       const cleanedResponse = this.cleanJsonResponse(response);
       return JSON.parse(cleanedResponse);
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to suggest conflict resolution:', error);
       throw error;
     }
@@ -772,7 +772,7 @@ export class WorkflowAIService {
         return this.getFallbackWorkflowInsights();
       }
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to generate workflow performance insights:', error);
       // Return fallback data instead of throwing
       return this.getFallbackWorkflowInsights();
@@ -851,7 +851,7 @@ export class WorkflowAIService {
         
         return result;
 
-      } catch (error) {
+      } catch (error: any) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (attempt === retries || !errorMessage.includes('Rate limit')) {
           this.logger.error('OpenRouter API call failed:', error);
@@ -886,7 +886,7 @@ export class WorkflowAIService {
       }
       
       return cleaned.trim();
-    } catch (error) {
+    } catch (error: any) {
       this.logger.warn('Failed to clean JSON response, returning original:', error);
       return response;
     }

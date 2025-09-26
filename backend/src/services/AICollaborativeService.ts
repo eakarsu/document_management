@@ -146,7 +146,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
 
       return aiSession;
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to create AI collaborative session:', error);
       throw error;
     }
@@ -214,7 +214,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
         successPrediction
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to schedule AI meeting:', error);
       throw error;
     }
@@ -306,7 +306,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
         participantInsights
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to analyze collaboration in real-time:', error);
       throw error;
     }
@@ -364,7 +364,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
         timelineToResolution
       };
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to mediate conflict with AI:', error);
       throw error;
     }
@@ -409,7 +409,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
 
       return insights;
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to generate workflow insights:', error);
       throw error;
     }
@@ -498,7 +498,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
 
       return result;
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to build consensus with AI:', error);
       throw error;
     }
@@ -654,7 +654,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
       const recommendations = JSON.parse(cleanedResponse);
       
       return Array.isArray(recommendations) ? recommendations : [];
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.warn('Failed to generate AI recommendations, using fallback logic', { error });
       
       // Fallback to basic recommendations if AI call fails
@@ -814,7 +814,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
           'Implement better conflict resolution procedures'
         ]
       };
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to assess team collaboration:', error);
       // Fallback to static data if AI call fails
       return {
@@ -926,7 +926,7 @@ export class AICollaborativeService extends CollaborativeWorkflowService {
 
       return alerts;
 
-    } catch (error) {
+    } catch (error: any) {
       this.aiLogger.error('Failed to generate predictive alerts:', error);
       // Fallback to basic alerts if AI fails
       return [];

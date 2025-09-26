@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { authTokenService } from '../../../../../../lib/authTokenService';
+import { authTokenService } from '@/lib/authTokenService';
 
 const prisma = new PrismaClient();
 

@@ -861,34 +861,8 @@ export const criticalTemplates: Record<string, CriticalTemplate> = {
           vertical-align: super;
         }
       </style>
-      <div class="dafpd-template">
-        <!-- Header Section with AF Seal -->
-        <div style="text-align: center; margin-bottom: 20px;">
-          <img src="/af-seal.png" alt="Department of the Air Force" style="width: 80px; height: 80px; margin-bottom: 10px;">
-          <h1 style="font-size: 16px; margin: 5px 0;">DEPARTMENT OF THE AIR FORCE</h1>
-          <h1 style="font-size: 18px; margin: 5px 0;">AIR FORCE POLICY DIRECTIVE <span contenteditable="true" style="background-color: #ffffcc;">[##-##]</span></h1>
-          <p style="margin: 5px 0;"><span contenteditable="true" style="background-color: #ffffcc;">[Date]</span></p>
-        </div>
-
-        <!-- Title -->
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h2 style="font-size: 16px; text-transform: uppercase;">
-            <span contenteditable="true" style="background-color: #ffffcc;">[POLICY DIRECTIVE TITLE]</span>
-          </h2>
-        </div>
-
-        <!-- Compliance Statement -->
-        <div style="text-align: center; margin-bottom: 20px; border: 2px solid black; padding: 10px;">
-          <p style="font-weight: bold; margin: 0;">COMPLIANCE WITH THIS PUBLICATION IS MANDATORY</p>
-        </div>
-
-        <!-- Accessibility and Releasability -->
-        <div style="margin-bottom: 20px; font-size: 12px;">
-          <p><strong>ACCESSIBILITY:</strong> Publications and forms are available on the e-Publishing website at www.e-publishing.af.mil for downloading or ordering.</p>
-          <p><strong>RELEASABILITY:</strong> There are no releasability restrictions on this publication.</p>
-        </div>
-
-        <!-- OPR and Certified By -->
+      <div class="dafpd-template" style="margin-top: 2in;">
+        <!-- Content starts after header -->
         <table style="width: 100%; margin-bottom: 30px;">
           <tr>
             <td style="width: 50%;"><strong>OPR:</strong> <span contenteditable="true" style="background-color: #ffffcc;">[Office Symbol]</span></td>
@@ -925,15 +899,6 @@ export const criticalTemplates: Record<string, CriticalTemplate> = {
           <p data-paragraph="3.2.1" data-line="1" style="margin-left: 60px;"><strong>3.2.1.</strong> <span contenteditable="true">[Responsibility 1]</span></p>
           <p data-paragraph="3.2.2" data-line="1" style="margin-left: 60px;"><strong>3.2.2.</strong> <span contenteditable="true">[Responsibility 2]</span></p>
         </div>
-
-        <!-- Signature Block -->
-        <div style="margin-top: 50px; text-align: center;">
-          <p>BY ORDER OF THE SECRETARY OF THE AIR FORCE</p>
-          <div style="margin-top: 40px;">
-            <p contenteditable="true" style="font-weight: bold;">[NAME]</p>
-            <p contenteditable="true">[Title]</p>
-          </div>
-        </div>
       </div>
     `
   },
@@ -944,27 +909,8 @@ export const criticalTemplates: Record<string, CriticalTemplate> = {
     name: 'DAF Manual (DAFMAN)',
     type: 'document',
     content: `
-      <div class="dafman-template">
-        <!-- Header Section -->
-        <div style="text-align: center; margin-bottom: 20px;">
-          <img src="/af-seal.png" alt="Department of the Air Force" style="width: 80px; height: 80px; margin-bottom: 10px;">
-          <h1 style="font-size: 16px; margin: 5px 0;">DEPARTMENT OF THE AIR FORCE MANUAL</h1>
-          <h1 style="font-size: 18px; margin: 5px 0;">DAFMAN <span contenteditable="true" style="background-color: #ffffcc;">[##-####]</span></h1>
-          <p style="margin: 5px 0;"><span contenteditable="true" style="background-color: #ffffcc;">[Date]</span></p>
-        </div>
-
-        <!-- Title -->
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h2 style="font-size: 16px; text-transform: uppercase;">
-            <span contenteditable="true" style="background-color: #ffffcc;">[MANUAL TITLE]</span>
-          </h2>
-        </div>
-
-        <!-- Compliance Statement -->
-        <div style="text-align: center; margin-bottom: 20px; border: 2px solid black; padding: 10px;">
-          <p style="font-weight: bold; margin: 0;">COMPLIANCE WITH THIS PUBLICATION IS MANDATORY</p>
-        </div>
-
+      <div class="dafman-template" style="margin-top: 2in;">
+        <!-- Content starts after header -->
         <!-- Summary of Changes -->
         <div style="margin-bottom: 30px; padding: 10px; background-color: #f0f0f0;">
           <h3>SUMMARY OF CHANGES</h3>

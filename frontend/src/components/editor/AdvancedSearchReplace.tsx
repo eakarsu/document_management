@@ -33,7 +33,8 @@ import {
 
 interface AdvancedSearchReplaceProps {
   editor: any;
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   onClose: () => void;
 }
 
@@ -46,6 +47,7 @@ interface SearchMatch {
 export const AdvancedSearchReplace: React.FC<AdvancedSearchReplaceProps> = ({
   editor,
   open,
+  isOpen,
   onClose
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -243,7 +245,7 @@ export const AdvancedSearchReplace: React.FC<AdvancedSearchReplaceProps> = ({
 
   return (
     <Dialog 
-      open={open} 
+      open={open || isOpen} 
       onClose={onClose}
       maxWidth="md"
       fullWidth

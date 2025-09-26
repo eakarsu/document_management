@@ -46,7 +46,7 @@ export class WorkflowRegistry {
       await this.persistPlugin(plugin);
       
       console.log(`✅ Workflow plugin '${plugin.name}' v${plugin.version} registered successfully`);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to register plugin ${plugin.id}:`, error);
       throw error;
     }
@@ -221,7 +221,7 @@ export class WorkflowRegistry {
       //     config = EXCLUDED.config,
       //     updated_at = NOW()
       // `;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to persist plugin:', error);
       // Continue even if persistence fails (memory-only operation)
     }
@@ -234,7 +234,7 @@ export class WorkflowRegistry {
       // await this.prisma.$executeRaw`
       //   DELETE FROM workflow_plugins WHERE id = ${pluginId}
       // `;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to remove plugin from database:', error);
     }
   }
@@ -251,7 +251,7 @@ export class WorkflowRegistry {
       //     plugin_id = EXCLUDED.plugin_id,
       //     activated_at = NOW()
       // `;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to persist activation:', error);
     }
   }
@@ -263,7 +263,7 @@ export class WorkflowRegistry {
       // await this.prisma.$executeRaw`
       //   DELETE FROM workflow_activations WHERE document_type = ${documentType}
       // `;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to remove activation:', error);
     }
   }
@@ -274,7 +274,7 @@ export class WorkflowRegistry {
       // This would load persisted plugin configurations
       // For now, we'll load pre-built plugins
       console.log('Loading workflow plugins from database...');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load plugins from database:', error);
     }
   }

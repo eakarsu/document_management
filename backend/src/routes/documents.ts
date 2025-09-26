@@ -75,9 +75,9 @@ router.get('/',
         'LEGAL_REVIEWER': ['7', '8', '9', '10', 'Legal Review & Approval'],
         'LEADERSHIP': ['9'],
         'LEADER': ['9'],
-        'AFDPO': ['10', 'AFDPO Publication & Distribution'],
-        'PUBLISHER': ['10', 'AFDPO Publication & Distribution'],
-        'AFDPO_PUBLISHER': ['10', 'AFDPO Publication & Distribution'],
+        'AFDPO': ['11', 'AFDPO Publication & Distribution'],
+        'PUBLISHER': ['11', 'AFDPO Publication & Distribution'],
+        'AFDPO_PUBLISHER': ['11', 'AFDPO Publication & Distribution'],
         'ADMIN': ['1', '2', '3', '3.5', '4', '5', '5.5', '6', '7', '8', '9', '10']
       };
 
@@ -167,7 +167,7 @@ router.get('/',
         }
       });
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to list documents:', error);
       res.status(500).json({
         success: false,
@@ -187,20 +187,66 @@ router.post('/create-with-template',
         category,
         description,
         tags,
-        folderId
+        folderId,
+        headerContent
       } = req.body;
 
       // Get template content
-      const templateContent = getTemplateContent(templateId || 'blank');
+      let templateContent = getTemplateContent(templateId || 'blank');
       const templateName = getTemplateName(templateId || 'blank');
+
+      // Extract header and styles from template content
+      let headerHtml = '';
+      let contentWithoutHeader = templateContent;
+      let styles = '';
+
+      // Check if template content already has a header section
+      const styleMatch = templateContent.match(/<style>([\s\S]*?)<\/style>/);
+      const headerTableMatch = templateContent.match(/<table class="header-table">[\s\S]*?<\/table>/);
+      const complianceMatch = templateContent.match(/<div class="compliance-section">[\s\S]*?<\/div>/);
+      const infoTableMatch = templateContent.match(/<table class="info-table">[\s\S]*?<\/table>/);
+      const bottomTableMatch = templateContent.match(/<table style="width: 100%; margin-top: 20px; border-top: 1px solid #000;">[\s\S]*?<\/table>/);
+
+      if (styleMatch || headerTableMatch) {
+        // Extract complete header including styles
+        if (styleMatch) {
+          styles = styleMatch[0];
+        }
+
+        // Build header HTML from all header components
+        const headerParts = [];
+        if (headerTableMatch) headerParts.push(headerTableMatch[0]);
+        if (complianceMatch) headerParts.push(complianceMatch[0]);
+        if (infoTableMatch) headerParts.push(infoTableMatch[0]);
+        if (bottomTableMatch) headerParts.push(bottomTableMatch[0]);
+
+        if (headerParts.length > 0) {
+          headerHtml = styles + '\n' + headerParts.join('\n');
+
+          // Remove header components from content
+          contentWithoutHeader = templateContent;
+          if (styles) contentWithoutHeader = contentWithoutHeader.replace(styles, '');
+          headerParts.forEach(part => {
+            contentWithoutHeader = contentWithoutHeader.replace(part, '');
+          });
+
+          // Also remove the page break div that comes after header
+          contentWithoutHeader = contentWithoutHeader.replace(/<div style="page-break-before: always; margin-top: 2in;">/, '<div>');
+        }
+      }
+
+      // If header content is provided from frontend, use it
+      if (headerContent) {
+        headerHtml = headerContent;
+      }
 
       // Create document with template content in customFields
       const prisma = new PrismaClient();
-      
+
       // Generate a unique file name for the document
       const fileName = `${title || templateName}_${Date.now()}.html`;
       const storagePath = `documents/${req.user.organizationId}/${fileName}`;
-      
+
       // Create a unique checksum for the content with timestamp to avoid conflicts
       const crypto = require('crypto');
       const uniqueContent = `${templateContent}-${Date.now()}-${Math.random()}`;
@@ -225,7 +271,11 @@ router.post('/create-with-template',
           customFields: {
             templateId: templateId,
             createdFrom: 'template',
-            content: templateContent // Store HTML content in customFields
+            content: contentWithoutHeader || templateContent, // Store content without header
+            htmlContent: templateContent, // Store full template with header
+            editableContent: contentWithoutHeader || templateContent, // Store editable content without header
+            headerHtml: headerHtml, // Store header HTML separately for proper formatting
+            hasHeader: !!headerHtml
           }
         },
         include: {
@@ -267,7 +317,7 @@ router.post('/create-with-template',
         document
       });
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Document creation from template failed:', error);
       res.status(500).json({
         success: false,
@@ -343,7 +393,7 @@ router.post('/upload',
         document
       });
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Document upload failed:', error);
       res.status(500).json({
         success: false,
@@ -415,7 +465,7 @@ router.post('/upload/batch',
             filename: file.originalname
           });
 
-        } catch (error) {
+        } catch (error: any) {
           results.push({
             success: false,
             error: error instanceof Error ? error.message : 'Upload failed',
@@ -442,7 +492,7 @@ router.post('/upload/batch',
         }
       });
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Batch upload failed:', error);
       res.status(500).json({
         success: false,
@@ -474,9 +524,7 @@ router.get('/:id/download',
 
       // Get file content
       const fileContent = await documentService.getDocumentContent(
-        documentId,
-        req.user.id,
-        req.user.organizationId
+        documentId
       );
 
       if (!fileContent) {
@@ -495,7 +543,7 @@ router.get('/:id/download',
       // Send file
       res.send(fileContent);
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Document download failed:', error);
       res.status(500).json({
         success: false,
@@ -527,9 +575,7 @@ router.get('/:id/preview',
 
       // Get file content
       const fileContent = await documentService.getDocumentContent(
-        documentId,
-        req.user.id,
-        req.user.organizationId
+        documentId
       );
 
       if (!fileContent) {
@@ -548,7 +594,7 @@ router.get('/:id/preview',
       // Send file
       res.send(fileContent);
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Document preview failed:', error);
       res.status(500).json({
         success: false,
@@ -591,7 +637,7 @@ router.get('/:id/thumbnail',
       // Redirect to thumbnail URL (for MinIO presigned URLs)
       res.redirect(thumbnailUrl);
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Thumbnail fetch failed:', error);
       res.status(500).json({
         success: false,
@@ -657,7 +703,7 @@ router.get('/search',
               });
               return doc;
             })
-          ).then(docs => docs.filter(doc => doc !== null));
+          ).then(docs => docs.filter((doc: any) => doc !== null));
 
           return res.json({
             success: true,
@@ -697,9 +743,9 @@ router.get('/search',
         'LEGAL_REVIEWER': ['7', '8', '9', '10', 'Legal Review & Approval'],
         'LEADERSHIP': ['9'],
         'LEADER': ['9'],
-        'AFDPO': ['10', 'AFDPO Publication & Distribution'],
-        'PUBLISHER': ['10', 'AFDPO Publication & Distribution'],
-        'AFDPO_PUBLISHER': ['10', 'AFDPO Publication & Distribution'],
+        'AFDPO': ['11', 'AFDPO Publication & Distribution'],
+        'PUBLISHER': ['11', 'AFDPO Publication & Distribution'],
+        'AFDPO_PUBLISHER': ['11', 'AFDPO Publication & Distribution'],
         'ADMIN': ['1', '2', '3', '3.5', '4', '5', '5.5', '6', '7', '8', '9', '10']
       };
 
@@ -796,7 +842,7 @@ router.get('/search',
         limit: parseInt(limit as string) || 20
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Document search error:', error);
       logger.error('Document search failed:', error);
       res.status(500).json({
@@ -842,7 +888,8 @@ router.get('/:id',
         '7': ['LEGAL', 'LEGAL_REVIEWER', 'ADMIN'],
         '8': ['ACTION_OFFICER', 'OPR', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // Allow legal users to see documents even after their stage
         '9': ['LEADERSHIP', 'LEADER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // Legal can view in later stages
-        '10': ['AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // Legal can view published docs
+        '10': ['PCM', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // PCM Final Validation
+        '11': ['AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // AFDPO Publication
         // Also map stage names
         'Legal Review & Approval': ['LEGAL', 'LEGAL_REVIEWER', 'ADMIN'],
         'AFDPO Publication & Distribution': ['AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER']
@@ -905,7 +952,7 @@ router.get('/:id',
               select: { name: true }
             },
             versions: {
-              orderBy: { versionNumber: 'desc' },
+              orderBy: { versionNumber: "desc" as any },
               take: 10
             }
           }
@@ -955,7 +1002,7 @@ router.get('/:id',
         document: document
       });
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to get document:', error);
       res.status(500).json({
         success: false,
@@ -970,11 +1017,11 @@ router.put('/:id',
   async (req: any, res) => {
     try {
       const documentId = req.params.id;
-      const updateData = req.body;
+      const { content, ...documentUpdateData } = req.body;
 
       const document = await documentService.updateDocument(
         documentId,
-        updateData,
+        documentUpdateData,
         req.user.id,
         req.user.organizationId
       );
@@ -984,7 +1031,7 @@ router.put('/:id',
         document
       });
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Document update failed:', error);
       res.status(500).json({
         success: false,
@@ -1000,16 +1047,141 @@ router.patch('/:id',
     try {
       const documentId = req.params.id;
       const updateData = req.body;
+      const userRole = req.user.role?.name?.toUpperCase() || '';
+
+      // Remove content field if present - it should be stored separately
+      const { content, ...documentUpdateData } = updateData;
 
       logger.info('PATCH document request:', {
         documentId,
         userId: req.user.id,
-        updateData: Object.keys(updateData)
+        userRole,
+        updateData: Object.keys(documentUpdateData)
       });
 
+      // Special handling for OPR - they should have full access to their documents
+      if (userRole === 'OPR') {
+        logger.info('OPR updating document:', {
+          documentId,
+          userId: req.user.id,
+          userRole
+        });
+
+        // OPR has full access to update any document fields
+        const existingDoc = await prisma.document.findFirst({
+          where: {
+            id: documentId
+          }
+        });
+
+        if (!existingDoc) {
+          logger.error('Document not found for OPR update:', { documentId });
+          return res.status(404).json({
+            success: false,
+            error: 'Document not found'
+          });
+        }
+
+        // Update the document with all provided fields (except content)
+        const updatedDoc = await prisma.document.update({
+          where: { id: documentId },
+          data: documentUpdateData
+        });
+
+        logger.info('Document updated successfully by OPR:', {
+          documentId: updatedDoc.id,
+          title: updatedDoc.title
+        });
+
+        return res.json({
+          success: true,
+          document: updatedDoc
+        });
+      }
+
+      // Special handling for reviewers updating feedback
+      if (documentUpdateData.customFields &&
+          (documentUpdateData.customFields.crmFeedback || documentUpdateData.customFields.draftFeedback ||
+           documentUpdateData.customFields.commentMatrix || documentUpdateData.customFields.lastCommentUpdate) &&
+          (userRole === 'REVIEWER' || userRole === 'SUB_REVIEWER' || userRole === 'COORDINATOR' ||
+           userRole === 'PCM' || userRole === 'PCM_REVIEWER' ||
+           userRole === 'ACTION_OFFICER' || userRole === 'LEGAL' || userRole === 'LEGAL_REVIEWER')) {
+
+        logger.info('Reviewer updating feedback for document:', {
+          documentId,
+          userId: req.user.id,
+          userRole,
+          feedbackCount: documentUpdateData.customFields.crmFeedback?.length || documentUpdateData.customFields.draftFeedback?.length || 0
+        });
+
+        // Check if document exists (without organization filter for reviewers)
+        const existingDoc = await prisma.document.findFirst({
+          where: {
+            id: documentId
+          }
+        });
+
+        if (!existingDoc) {
+          throw new Error('Document not found');
+        }
+
+        // Check if workflow is in a review stage
+        const workflowInstance = await prisma.jsonWorkflowInstance.findFirst({
+          where: { documentId },
+          select: { currentStageId: true, isActive: true }
+        });
+
+        const reviewStages = ['3', '3.5', '5', '5.5', '7'];
+        const isInReviewStage = workflowInstance && reviewStages.includes(workflowInstance.currentStageId || '');
+
+        if (!isInReviewStage && userRole !== 'ADMIN') {
+          logger.warn('Attempt to update feedback outside of review stage:', {
+            documentId,
+            currentStage: workflowInstance?.currentStageId,
+            userRole
+          });
+        }
+
+        // Update only the customFields for feedback
+        const updatedDoc = await prisma.document.update({
+          where: { id: documentId },
+          data: {
+            customFields: {
+              ...(existingDoc.customFields as any || {}),
+              ...documentUpdateData.customFields,
+              lastFeedbackAt: new Date().toISOString(),
+              lastFeedbackBy: req.user.email
+            },
+            updatedAt: new Date()
+          },
+          include: {
+            createdBy: true,
+            organization: true,
+            folder: true,
+            attachments: true,
+            versions: {
+              orderBy: { versionNumber: 'desc' },
+              take: 1
+            }
+          }
+        });
+
+        logger.info('Feedback updated successfully:', {
+          documentId,
+          userId: req.user.id
+        });
+
+        res.json({
+          success: true,
+          document: updatedDoc
+        });
+        return;
+      }
+
+      // Regular update for non-feedback changes or admin users
       const document = await documentService.updateDocument(
         documentId,
-        updateData,
+        documentUpdateData,
         req.user.id,
         req.user.organizationId
       );
@@ -1019,7 +1191,7 @@ router.patch('/:id',
         document
       });
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Document PATCH failed:', error);
       res.status(500).json({
         success: false,
@@ -1048,7 +1220,7 @@ router.delete('/:id',
         message: permanent ? 'Document permanently deleted' : 'Document moved to trash'
       });
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Document deletion failed:', error);
       res.status(500).json({
         success: false,

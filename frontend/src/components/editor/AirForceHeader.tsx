@@ -2,8 +2,11 @@ import React from 'react';
 import { Box, Paper } from '@mui/material';
 
 interface AirForceHeaderProps {
-  headerHtml: string;
+  headerHtml?: string;
   documentStyles?: string;
+  title?: string;
+  organization?: string;
+  classification?: string;
 }
 
 const AirForceHeader: React.FC<AirForceHeaderProps> = ({ headerHtml, documentStyles }) => {

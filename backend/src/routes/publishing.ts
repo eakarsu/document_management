@@ -39,7 +39,7 @@ router.post('/workflows', async (req: any, res) => {
       success: true,
       workflow
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to create publishing workflow:', error);
     res.status(500).json({
       success: false,
@@ -61,7 +61,7 @@ router.post('/submit', async (req: any, res) => {
       success: true,
       publishing
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to submit for publishing:', error);
     res.status(500).json({
       success: false,
@@ -83,7 +83,7 @@ router.post('/approvals', async (req: any, res) => {
       success: true,
       approval
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to process approval:', error);
     res.status(500).json({
       success: false,
@@ -105,7 +105,7 @@ router.post('/:publishingId/publish', async (req: any, res) => {
       success,
       message: success ? 'Document published successfully' : 'Failed to publish document'
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to publish document:', error);
     res.status(500).json({
       success: false,
@@ -126,7 +126,7 @@ router.get('/dashboard', async (req: any, res) => {
       success: true,
       dashboard
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to get publishing dashboard:', error);
     res.status(500).json({
       success: false,
@@ -150,7 +150,7 @@ router.post('/templates', async (req: any, res) => {
       success: true,
       template
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to create template:', error);
     res.status(500).json({
       success: false,
@@ -173,7 +173,7 @@ router.get('/templates', async (req: any, res) => {
       success: true,
       templates
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to get templates:', error);
     res.status(500).json({
       success: false,
@@ -195,7 +195,7 @@ router.post('/templates/apply', async (req: any, res) => {
       success: true,
       result
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to apply template:', error);
     res.status(500).json({
       success: false,
@@ -216,7 +216,7 @@ router.get('/templates/:templateId/preview', async (req: any, res) => {
     res.setHeader('Content-Disposition', 'inline; filename="template-preview.pdf"');
     res.send(previewBuffer);
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to preview template:', error);
     res.status(500).json({
       success: false,
@@ -240,7 +240,7 @@ router.post('/collaborative/review', async (req: any, res) => {
       success: true,
       publishing
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to create collaborative review:', error);
     res.status(500).json({
       success: false,
@@ -264,7 +264,7 @@ router.post('/collaborative/editing-session', async (req: any, res) => {
       success: true,
       session
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to create editing session:', error);
     res.status(500).json({
       success: false,
@@ -290,7 +290,7 @@ router.post('/collaborative/changes', async (req: any, res) => {
       success,
       message: success ? 'Change recorded successfully' : 'Failed to record change'
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to record collaborative change:', error);
     res.status(500).json({
       success: false,
@@ -314,7 +314,7 @@ router.post('/collaborative/lock', async (req: any, res) => {
       success,
       message: success ? 'Document lock acquired' : 'Failed to acquire lock'
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to acquire document lock:', error);
     res.status(500).json({
       success: false,
@@ -335,7 +335,7 @@ router.delete('/collaborative/lock/:sessionId', async (req: any, res) => {
       success,
       message: success ? 'Document lock released' : 'Failed to release lock'
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to release document lock:', error);
     res.status(500).json({
       success: false,
@@ -362,7 +362,7 @@ router.post('/collaborative/approvals', async (req: any, res) => {
       success: true,
       result
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to process collaborative approval:', error);
     res.status(500).json({
       success: false,
@@ -385,7 +385,7 @@ router.post('/collaborative/resolve-conflict', async (req: any, res) => {
       success,
       message: success ? 'Conflict resolved successfully' : 'Failed to resolve conflict'
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to resolve conflict:', error);
     res.status(500).json({
       success: false,
@@ -406,7 +406,7 @@ router.get('/collaborative/:publishingId/status', async (req: any, res) => {
       success: true,
       status
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to get workflow status:', error);
     res.status(500).json({
       success: false,
@@ -430,7 +430,7 @@ router.post('/distribution', async (req: any, res) => {
       success: true,
       distribution
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to create distribution:', error);
     res.status(500).json({
       success: false,
@@ -461,7 +461,7 @@ router.get('/distribution/analytics', async (req: any, res) => {
       success: true,
       analytics
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to get distribution analytics:', error);
     res.status(500).json({
       success: false,
@@ -493,7 +493,7 @@ router.get('/notifications', async (req: any, res) => {
       success: true,
       ...result
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to get notifications:', error);
     res.status(500).json({
       success: false,
@@ -514,7 +514,7 @@ router.put('/notifications/:notificationId/read', async (req: any, res) => {
       success,
       message: success ? 'Notification marked as read' : 'Notification not found or already read'
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to mark notification as read:', error);
     res.status(500).json({
       success: false,
@@ -533,7 +533,7 @@ router.put('/notifications/read-all', async (req: any, res) => {
       count,
       message: `${count} notifications marked as read`
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to mark all notifications as read:', error);
     res.status(500).json({
       success: false,
@@ -556,7 +556,7 @@ router.post('/notifications/digest', async (req: any, res) => {
       success,
       message: success ? 'Digest sent successfully' : 'Failed to send digest'
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to send notification digest:', error);
     res.status(500).json({
       success: false,

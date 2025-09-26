@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authTokenService } from '../../../../../../lib/authTokenService';
+import { authTokenService } from '@/lib/authTokenService';
 
 export async function POST(
   request: NextRequest,

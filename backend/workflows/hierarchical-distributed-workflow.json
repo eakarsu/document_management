@@ -275,7 +275,7 @@
       "order": 10,
       "name": "Post-Legal OPR Update",
       "description": "Action Officer addresses any legal concerns",
-      "assignedRole": "ACTION_OFFICER",
+      "roles": ["ACTION_OFFICER", "OPR", "LEADERSHIP"],
       "actions": [
         {
           "id": "address_legal",

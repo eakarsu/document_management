@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
 
     // Get auth token from cookies
     const token = request.cookies.get('accessToken')?.value;
-    
+
     if (!token) {
       return NextResponse.json(
         { success: false, error: 'Authentication required' },
@@ -15,7 +15,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Forward request to backend
+    // Don't fetch headers - they're already included in the templates
+    // This was causing duplicate headers
+    let headerContent = '';
+
+    // Forward request to backend with header content
     const backendResponse = await fetch(`${process.env.BACKEND_URL || 'http://localhost:4000'}/api/documents/create-with-template`, {
       method: 'POST',
       headers: {
@@ -27,7 +31,8 @@ export async function POST(request: NextRequest) {
         templateId,
         category,
         description,
-        tags
+        tags,
+        headerContent
       }),
     });
 

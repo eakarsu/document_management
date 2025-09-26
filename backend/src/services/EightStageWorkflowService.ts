@@ -108,7 +108,7 @@ export class EightStageWorkflowService {
           users: document.createdBy
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error creating 8-stage workflow instance:', error);
       throw error;
     }
@@ -224,7 +224,7 @@ export class EightStageWorkflowService {
         message: 'ICU feedback submitted successfully',
         feedback: currentFeedback[params.userId]
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error submitting ICU feedback:', error);
       throw error;
     }
@@ -284,7 +284,7 @@ export class EightStageWorkflowService {
           stage_transitions: workflow.stageHistory || []
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting workflow status:', error);
       throw error;
     }
@@ -351,7 +351,7 @@ export class EightStageWorkflowService {
           stage_transitions: workflow.stageHistory || []
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting workflow by document ID:', error);
       throw error;
     }
@@ -446,7 +446,7 @@ export class EightStageWorkflowService {
           stage_history: stageHistory
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error moving workflow backward:', error);
       throw error;
     }
@@ -588,7 +588,7 @@ export class EightStageWorkflowService {
         message: `Advanced to ${params.toStage} stage`,
         workflowInstance: updatedInstance
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error in role-validated stage transition:', error);
       throw error;
     }
@@ -645,7 +645,7 @@ export class EightStageWorkflowService {
           lastTransition: workflow.lastTransition
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting workflow history:', error);
       throw error;
     }
@@ -711,7 +711,7 @@ export class EightStageWorkflowService {
           opr_user_id: currentWorkflow.oprUserId
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error transitioning workflow stage:', error);
       throw error;
     }
@@ -794,7 +794,7 @@ export class EightStageWorkflowService {
         message: 'Feedback submitted successfully',
         feedback: updatedWorkflow.feedback[feedbackKey]
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error submitting generic feedback:', error);
       throw error;
     }
@@ -864,7 +864,7 @@ export class EightStageWorkflowService {
         userRole,
         config
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting role-specific config:', error);
       throw error;
     }
@@ -930,7 +930,7 @@ export class EightStageWorkflowService {
           allowedActions: this.getAllowedActionsForRole(currentStage, userRole)
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error getting user permissions:', error);
       throw error;
     }
@@ -985,7 +985,7 @@ export class EightStageWorkflowService {
           resetBy: userId
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error resetting workflow:', error);
       throw error;
     }

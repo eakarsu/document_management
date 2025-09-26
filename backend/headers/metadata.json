@@ -1,0 +1,194 @@
+{
+  "generated": "2025-09-26T01:42:59.282Z",
+  "templates": [
+    {
+      "id": "af-manual",
+      "name": "AIR FORCE MANUAL",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE INSTRUCTION 36-2903",
+      "category": "PERSONNEL"
+    },
+    {
+      "id": "afi",
+      "name": "AIR FORCE INSTRUCTION",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE INSTRUCTION",
+      "category": "ADMINISTRATION"
+    },
+    {
+      "id": "afpd",
+      "name": "AIR FORCE POLICY DIRECTIVE",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE POLICY DIRECTIVE",
+      "category": "POLICY"
+    },
+    {
+      "id": "afman",
+      "name": "AIR FORCE MANUAL (AFMAN)",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE MANUAL",
+      "category": "PROCEDURES"
+    },
+    {
+      "id": "afjqs",
+      "name": "AIR FORCE JOB QUALIFICATION STANDARD",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE JOB QUALIFICATION STANDARD",
+      "category": "TRAINING"
+    },
+    {
+      "id": "afto",
+      "name": "AIR FORCE TECHNICAL ORDER",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE TECHNICAL ORDER",
+      "category": "TECHNICAL"
+    },
+    {
+      "id": "afva",
+      "name": "AIR FORCE VISUAL AID",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE VISUAL AID",
+      "category": "TRAINING AIDS"
+    },
+    {
+      "id": "afh",
+      "name": "AIR FORCE HANDBOOK",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE HANDBOOK",
+      "category": "REFERENCE"
+    },
+    {
+      "id": "afgm",
+      "name": "AIR FORCE GUIDANCE MEMORANDUM",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE GUIDANCE MEMORANDUM",
+      "category": "GUIDANCE"
+    },
+    {
+      "id": "afmd",
+      "name": "AIR FORCE MISSION DIRECTIVE",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "AIR FORCE MISSION DIRECTIVE",
+      "category": "MISSION"
+    },
+    {
+      "id": "dafi",
+      "name": "DEPARTMENT OF THE AIR FORCE INSTRUCTION",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "DEPARTMENT OF THE AIR FORCE INSTRUCTION",
+      "category": "INSTRUCTION"
+    },
+    {
+      "id": "dafman",
+      "name": "DEPARTMENT OF THE AIR FORCE MANUAL",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "DEPARTMENT OF THE AIR FORCE MANUAL",
+      "category": "MANUAL"
+    },
+    {
+      "id": "dafpd",
+      "name": "DEPARTMENT OF THE AIR FORCE POLICY DIRECTIVE",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "DEPARTMENT OF THE AIR FORCE POLICY DIRECTIVE",
+      "category": "POLICY"
+    },
+    {
+      "id": "dodd",
+      "name": "DEPARTMENT OF DEFENSE DIRECTIVE",
+      "organization": "DEPARTMENT OF DEFENSE",
+      "documentType": "DEPARTMENT OF DEFENSE DIRECTIVE",
+      "category": "DIRECTIVE"
+    },
+    {
+      "id": "dodi",
+      "name": "DEPARTMENT OF DEFENSE INSTRUCTION",
+      "organization": "DEPARTMENT OF DEFENSE",
+      "documentType": "DEPARTMENT OF DEFENSE INSTRUCTION",
+      "category": "INSTRUCTION"
+    },
+    {
+      "id": "cjcs",
+      "name": "CHAIRMAN JOINT CHIEFS OF STAFF INSTRUCTION",
+      "organization": "JOINT CHIEFS OF STAFF",
+      "documentType": "CJCS INSTRUCTION",
+      "category": "JOINT OPS"
+    },
+    {
+      "id": "army",
+      "name": "ARMY REGULATION",
+      "organization": "DEPARTMENT OF THE ARMY",
+      "documentType": "ARMY REGULATION",
+      "category": "REGULATION"
+    },
+    {
+      "id": "navy",
+      "name": "NAVY INSTRUCTION (OPNAVINST)",
+      "organization": "DEPARTMENT OF THE NAVY",
+      "documentType": "OPNAVINST",
+      "category": "INSTRUCTION"
+    },
+    {
+      "id": "marine",
+      "name": "MARINE CORPS ORDER",
+      "organization": "UNITED STATES MARINE CORPS",
+      "documentType": "MARINE CORPS ORDER",
+      "category": "ORDER"
+    },
+    {
+      "id": "spaceforce",
+      "name": "SPACE FORCE INSTRUCTION",
+      "organization": "UNITED STATES SPACE FORCE",
+      "documentType": "SPACE FORCE INSTRUCTION",
+      "category": "SPACE OPS"
+    },
+    {
+      "id": "oplan",
+      "name": "OPERATION PLAN",
+      "organization": "DEPARTMENT OF DEFENSE",
+      "documentType": "OPERATION PLAN",
+      "category": "OPERATIONS"
+    },
+    {
+      "id": "opord",
+      "name": "OPERATION ORDER",
+      "organization": "DEPARTMENT OF DEFENSE",
+      "documentType": "OPERATION ORDER",
+      "category": "OPERATIONS"
+    },
+    {
+      "id": "conops",
+      "name": "CONCEPT OF OPERATIONS",
+      "organization": "DEPARTMENT OF DEFENSE",
+      "documentType": "CONCEPT OF OPERATIONS",
+      "category": "PLANNING"
+    },
+    {
+      "id": "technical",
+      "name": "TECHNICAL MANUAL",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "TECHNICAL MANUAL",
+      "category": "TECHNICAL"
+    },
+    {
+      "id": "policy",
+      "name": "POLICY DOCUMENT",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "POLICY DOCUMENT",
+      "category": "POLICY"
+    },
+    {
+      "id": "training",
+      "name": "TRAINING MANUAL",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "TRAINING MANUAL",
+      "category": "TRAINING"
+    },
+    {
+      "id": "sop",
+      "name": "STANDARD OPERATING PROCEDURE",
+      "organization": "DEPARTMENT OF THE AIR FORCE",
+      "documentType": "STANDARD OPERATING PROCEDURE",
+      "category": "PROCEDURES"
+    }
+  ]
+}

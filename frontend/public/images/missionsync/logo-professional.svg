@@ -1,0 +1,86 @@
+<svg width="200" height="50" viewBox="0 0 200 50" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7c7ff0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="logoGradient2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Modern logo mark -->
+  <g transform="translate(5, 10)">
+    <!-- Outer hexagon -->
+    <polygon points="15,5 27,11 27,24 15,30 3,24 3,11"
+             fill="none"
+             stroke="url(#logoGradient)"
+             stroke-width="2"/>
+
+    <!-- Inner elements representing sync/AI -->
+    <g transform="translate(15, 17.5)">
+      <!-- Central core -->
+      <circle cx="0" cy="0" r="3" fill="url(#logoGradient)"/>
+
+      <!-- Orbit paths -->
+      <ellipse cx="0" cy="0" rx="8" ry="5"
+               fill="none"
+               stroke="url(#logoGradient)"
+               stroke-width="1.5"
+               opacity="0.7"
+               transform="rotate(45)"/>
+      <ellipse cx="0" cy="0" rx="8" ry="5"
+               fill="none"
+               stroke="url(#logoGradient)"
+               stroke-width="1.5"
+               opacity="0.7"
+               transform="rotate(-45)"/>
+    </g>
+  </g>
+
+  <!-- Professional typography -->
+  <g transform="translate(40, 25)">
+    <!-- MISSION -->
+    <text x="0" y="0"
+          font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
+          font-size="20"
+          font-weight="700"
+          fill="#1a202c"
+          letter-spacing="-0.5">
+      MISSION
+    </text>
+
+    <!-- SYNC -->
+    <text x="82" y="0"
+          font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
+          font-size="20"
+          font-weight="400"
+          fill="url(#logoGradient2)"
+          letter-spacing="-0.5">
+      SYNC
+    </text>
+
+    <!-- AI -->
+    <text x="132" y="0"
+          font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
+          font-size="20"
+          font-weight="700"
+          fill="url(#logoGradient2)"
+          letter-spacing="0">
+      AI
+    </text>
+
+    <!-- Tagline (optional - can be removed if too busy) -->
+    <text x="0" y="15"
+          font-family="'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
+          font-size="8"
+          font-weight="400"
+          fill="#718096"
+          letter-spacing="0.5"
+          text-transform="uppercase">
+      INTELLIGENT WORKFLOW AUTOMATION
+    </text>
+  </g>
+</svg>
