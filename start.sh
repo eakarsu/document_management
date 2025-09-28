@@ -286,9 +286,12 @@ main() {
     # Root dependencies
     if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
         print_info "Installing root dependencies..."
-        npm install --silent || {
-            print_warning "Root npm install failed, trying without --silent"
-            npm install
+        npm install --legacy-peer-deps --silent || {
+            print_warning "Root npm install failed, trying with legacy-peer-deps"
+            npm install --legacy-peer-deps || {
+                print_warning "Still failing, trying with force"
+                npm install --force
+            }
         }
         print_status "Root dependencies installed"
     else
