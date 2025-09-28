@@ -1,0 +1,97 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+pnpm-debug.log
+lerna-debug.log
+
+# Build outputs
+dist
+build
+.next
+out
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+coverage
+.nyc_output
+jest.config.js
+*.test.js
+*.spec.js
+
+# Documentation
+*.md
+docs
+README.md
+CHANGELOG.md
+LICENSE
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github
+.gitlab
+.circleci
+.travis.yml
+azure-pipelines.yml
+
+# Logs
+logs
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+tmp
+temp
+*.tmp
+*.temp
+
+# Screenshots and media files (keep production assets)
+Screenshot*.png
+*.mp4
+!frontend/public/videos/hero-background.mp4
+
+# Development files
+*.sql
+*.dump
+backup/
+scripts/
+test-*.js
+check-*.js
+generate-*.js
+setup*.js
+update*.js
+add-*.js
+refactor*.sh
+
+# Keep necessary configuration
+!next.config.js
+!tsconfig.json
+!package.json
+!package-lock.json
+!prisma/schema.prisma
