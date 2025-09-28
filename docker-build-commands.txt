@@ -1,0 +1,11 @@
+# FOR MAC (APPLE SILICON M1/M2/M3):
+docker buildx build --platform linux/arm64 -f Dockerfile.working -t dms-app:latest .
+
+# FOR LINUX:
+docker build -f Dockerfile.working -t dms-app:latest .
+
+# FOR BOTH MAC AND LINUX:
+docker buildx build --platform linux/arm64,linux/amd64 -f Dockerfile.working -t dms-app:latest .
+
+# TO RUN:
+docker run -d -p 3000:3000 -p 4000:4000 --env-file .env dms-app:latest

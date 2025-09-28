@@ -1,134 +1,67 @@
-# Unified Multi-Service Dockerfile for Document Management System
-# This Dockerfile builds both backend and frontend services
+# Simple Dockerfile that uses the working start.sh script
+FROM node:18-alpine
 
-# ============================================
-# Backend Dependencies Stage
-# ============================================
-FROM node:18-alpine AS backend-deps
-RUN apk add --no-cache libc6-compat python3 make g++
-WORKDIR /app/backend
-COPY backend/package*.json ./
-RUN npm ci --only=production || npm install --only=production
-
-# ============================================
-# Backend Builder Stage
-# ============================================
-FROM node:18-alpine AS backend-builder
-RUN apk add --no-cache libc6-compat python3 make g++
-WORKDIR /app/backend
-COPY backend/package*.json ./
-RUN npm ci || npm install
-COPY backend/ .
-# Generate Prisma Client
-RUN npx prisma generate
-# Build TypeScript
-RUN npm run build
-
-# ============================================
-# Frontend Dependencies Stage
-# ============================================
-FROM node:18-alpine AS frontend-deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app/frontend
-COPY frontend/package.json ./
-RUN npm install --only=production --legacy-peer-deps
-
-# ============================================
-# Frontend Builder Stage
-# ============================================
-FROM node:18-alpine AS frontend-builder
-RUN apk add --no-cache python3 make g++ linux-headers
-WORKDIR /app/frontend
-COPY frontend/package.json ./
-RUN npm install --legacy-peer-deps --ignore-scripts && \
-    npm rebuild @swc/core --build-from-source
-COPY frontend/ .
-# Set production environment variables
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
-# Build the application
-RUN npm run build
-
-# ============================================
-# Final Production Stage
-# ============================================
-FROM node:18-alpine AS production
-RUN apk add --no-cache libc6-compat supervisor
+# Install required dependencies
+RUN apk add --no-cache python3 make g++ openssl openssl-dev postgresql-client bash
 
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+# Copy everything
+COPY . .
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 appuser
-
-# ============================================
-# Backend Setup
-# ============================================
-# Copy backend production dependencies
-COPY --from=backend-deps /app/backend/node_modules ./backend/node_modules
-# Copy backend built application
-COPY --from=backend-builder /app/backend/dist ./backend/dist
-COPY --from=backend-builder /app/backend/prisma ./backend/prisma
-COPY --from=backend-builder /app/backend/package*.json ./backend/
-# Generate Prisma Client in production
+# Install backend dependencies
 WORKDIR /app/backend
+RUN npm install --force
+
+# Generate Prisma client
 RUN npx prisma generate
-# Create necessary backend directories
-RUN mkdir -p uploads logs && chown -R appuser:nodejs uploads logs
 
-# ============================================
-# Frontend Setup
-# ============================================
+# Build backend
+RUN npm run build
+
+# Install frontend dependencies
 WORKDIR /app/frontend
-# Copy frontend built application
-COPY --from=frontend-builder /app/frontend/public ./public
-COPY --from=frontend-builder --chown=appuser:nodejs /app/frontend/.next/standalone ./
-COPY --from=frontend-builder --chown=appuser:nodejs /app/frontend/.next/static ./.next/static
+RUN npm install --force --legacy-peer-deps
+RUN npm install date-fns@2.30.0 --save --force
 
-# ============================================
-# Supervisor Configuration
-# ============================================
+# Build frontend in development mode to avoid authentication issues
+RUN echo "NEXT_PUBLIC_API_URL=http://localhost:4000" > .env.local && \
+    echo "BACKEND_URL=http://localhost:4000" >> .env.local && \
+    echo "NEXT_PUBLIC_APP_MODE=development" >> .env.local && \
+    echo "NEXT_PUBLIC_ENABLE_LOGIN=true" >> .env.local
+
 WORKDIR /app
-RUN mkdir -p /var/log/supervisor
 
-# Create supervisor configuration
-RUN cat > /etc/supervisor/supervisord.conf << EOF
-[supervisord]
-nodaemon=true
-user=root
-logfile=/var/log/supervisor/supervisord.log
-pidfile=/var/run/supervisord.pid
+# Create a Docker-specific startup script
+RUN cat > /app/docker-start.sh << 'EOF'
+#!/bin/bash
+cd /app
 
-[program:backend]
-command=sh -c "cd /app/backend && npx prisma migrate deploy && node dist/server.js"
-directory=/app/backend
-user=appuser
-autostart=true
-autorestart=true
-stdout_logfile=/var/log/supervisor/backend.log
-stderr_logfile=/var/log/supervisor/backend-error.log
-environment=NODE_ENV="production"
+# Skip PostgreSQL check in Docker - use host.docker.internal
+export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:5432/dms_dev}"
 
-[program:frontend]
-command=node server.js
-directory=/app/frontend
-user=appuser
-autostart=true
-autorestart=true
-stdout_logfile=/var/log/supervisor/frontend.log
-stderr_logfile=/var/log/supervisor/frontend-error.log
-environment=NODE_ENV="production",PORT="3000"
+# Start backend
+echo "🚀 Starting backend server..."
+cd /app/backend
+npm start &
+
+# Wait for backend to start
+sleep 10
+
+# Start frontend in dev mode for proper cookie handling
+echo "🚀 Starting frontend server (this will take 1-2 minutes first time)..."
+cd /app/frontend
+# Set higher timeout for dev server
+export NODE_OPTIONS="--max-old-space-size=2048"
+timeout 600 npm run dev &
+
+# Keep container running
+echo "✅ Services started. Access at http://localhost:3000"
+wait
 EOF
 
-# Expose ports
-EXPOSE 3000 4000 5000
+RUN chmod +x /app/docker-start.sh
 
-# Change ownership
-RUN chown -R appuser:nodejs /app
-RUN chown -R appuser:nodejs /var/log/supervisor
+EXPOSE 3000 4000
 
-# Start supervisor
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+CMD ["/app/docker-start.sh"]
