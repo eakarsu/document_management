@@ -207,11 +207,15 @@ async function importDatabase() {
 
     console.log('📦 Importing system settings...');
     for (const setting of data.systemSettings) {
+      // Check for valid dates
+      const createdDate = new Date(setting.createdAt);
+      const updatedDate = new Date(setting.updatedAt);
+
       await prisma.systemSetting.create({
         data: {
           ...setting,
-          createdAt: new Date(setting.createdAt),
-          updatedAt: new Date(setting.updatedAt),
+          createdAt: isNaN(createdDate.getTime()) ? new Date() : createdDate,
+          updatedAt: isNaN(updatedDate.getTime()) ? new Date() : updatedDate,
         }
       });
     }
