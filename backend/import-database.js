@@ -112,14 +112,17 @@ async function importDatabase() {
 
     console.log('📦 Importing documents...');
     for (const doc of data.documents) {
+      // Remove fields that don't exist in the schema
+      const { publishedAt, archivedAt, deletedAt, ...docData } = doc;
+
       await prisma.document.create({
         data: {
-          ...doc,
-          publishedAt: doc.publishedAt ? new Date(doc.publishedAt) : null,
-          archivedAt: doc.archivedAt ? new Date(doc.archivedAt) : null,
-          deletedAt: doc.deletedAt ? new Date(doc.deletedAt) : null,
+          ...docData,
           createdAt: new Date(doc.createdAt),
           updatedAt: new Date(doc.updatedAt),
+          lastAccessedAt: doc.lastAccessedAt ? new Date(doc.lastAccessedAt) : null,
+          effectiveDate: doc.effectiveDate ? new Date(doc.effectiveDate) : null,
+          expirationDate: doc.expirationDate ? new Date(doc.expirationDate) : null,
         }
       });
     }
