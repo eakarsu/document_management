@@ -1,0 +1,14 @@
+{
+  "exportDate": "2025-09-28T22:21:20.189Z",
+  "exportType": "LITE",
+  "counts": {
+    "organizations": 13,
+    "roles": 57,
+    "users": 131,
+    "documents": "10 (limited to 10)",
+    "folders": "50 (limited to 50)",
+    "workflows": "0 (limited to 20)",
+    "workflowInstances": "0 (limited to 10)"
+  },
+  "fileSizeMB": "0.24"
+}
