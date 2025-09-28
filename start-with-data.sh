@@ -516,9 +516,16 @@ main() {
     print_info "Updating backend environment configuration..."
     cp .env backend/.env
 
-    # Ensure correct ports in backend .env
-    sed -i '' 's/^PORT=.*/PORT=4000/' backend/.env || echo "PORT=4000" >> backend/.env
-    sed -i '' 's|^FRONTEND_URL=.*|FRONTEND_URL=http://localhost:3000|' backend/.env || echo "FRONTEND_URL=http://localhost:3000" >> backend/.env
+    # Ensure correct ports in backend .env (handle both macOS and Linux)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        sed -i '' 's/^PORT=.*/PORT=4000/' backend/.env 2>/dev/null || echo "PORT=4000" >> backend/.env
+        sed -i '' 's|^FRONTEND_URL=.*|FRONTEND_URL=http://localhost:3000|' backend/.env 2>/dev/null || echo "FRONTEND_URL=http://localhost:3000" >> backend/.env
+    else
+        # Linux
+        sed -i 's/^PORT=.*/PORT=4000/' backend/.env 2>/dev/null || echo "PORT=4000" >> backend/.env
+        sed -i 's|^FRONTEND_URL=.*|FRONTEND_URL=http://localhost:3000|' backend/.env 2>/dev/null || echo "FRONTEND_URL=http://localhost:3000" >> backend/.env
+    fi
 
     # Start the backend
     cd backend
