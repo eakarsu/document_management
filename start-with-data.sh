@@ -367,23 +367,36 @@ main() {
     # Ensure backend environment is properly configured
     cd backend
 
+    # Clean Prisma cache for fresh start
+    print_info "Cleaning Prisma cache..."
+    rm -rf node_modules/.prisma
+    rm -rf node_modules/@prisma/client
+
     # Generate Prisma client first
     print_info "Generating Prisma client..."
-    npx prisma generate >/dev/null 2>&1 || {
-        print_warning "Prisma generate failed, trying with output"
+    npx prisma generate || {
+        print_warning "Prisma generate failed, reinstalling dependencies..."
+        npm install @prisma/client prisma --save-exact
         npx prisma generate
     }
 
     # Run database migrations
-    print_info "Running database migrations..."
-    # Use migrate deploy for non-interactive environments, fallback to db push
-    npx prisma migrate deploy >/dev/null 2>&1 || {
-        print_warning "Deploy migration failed, trying db push..."
-        npx prisma db push >/dev/null 2>&1 || {
-            print_warning "DB push failed, showing output"
-            npx prisma db push
+    print_info "Creating database schema..."
+    # First try db push which is more reliable for initial setup
+    npx prisma db push --accept-data-loss >/dev/null 2>&1 || {
+        print_warning "Initial db push failed, trying with output..."
+        npx prisma db push --accept-data-loss || {
+            print_error "DB push failed. Attempting force reset..."
+            npx prisma db push --force-reset || {
+                print_error "Force reset failed. Check database connection."
+                exit 1
+            }
         }
     }
+
+    # Regenerate client after schema is created
+    print_info "Regenerating Prisma client after schema creation..."
+    npx prisma generate
 
     cd ..
     print_status "Database schema ready"
