@@ -393,9 +393,18 @@ main() {
     # =====================================
     print_header "📦 Database Data Restore"
 
-    # Check if backup exists
-    if [ -f "backend/database-backup/database-export.json" ]; then
-        print_info "Found database backup, importing..."
+    # Check if backup exists (try lite first, then full)
+    if [ -f "backend/database-backup-lite/database-export-lite.json" ]; then
+        print_info "Found lite database backup, importing..."
+        export BACKUP_FILE="database-backup-lite/database-export-lite.json"
+    elif [ -f "backend/database-backup/database-export.json" ]; then
+        print_info "Found full database backup, importing..."
+        export BACKUP_FILE="database-backup/database-export.json"
+    else
+        export BACKUP_FILE=""
+    fi
+
+    if [ -n "$BACKUP_FILE" ]; then
         cd backend
 
         # Run the import script

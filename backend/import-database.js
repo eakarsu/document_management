@@ -10,9 +10,17 @@ async function importDatabase() {
   console.log('📥 Importing database data...');
 
   try {
-    const backupDir = path.join(__dirname, 'database-backup');
-    const dataFile = path.join(backupDir, 'database-export.json');
-    const passwordFile = path.join(backupDir, 'user-passwords.json');
+    // Try lite backup first, then full backup
+    let backupDir = path.join(__dirname, 'database-backup-lite');
+    let dataFile = path.join(backupDir, 'database-export-lite.json');
+    let passwordFile = path.join(backupDir, 'user-passwords.json');
+
+    // If lite doesn't exist, try full backup
+    if (!fs.existsSync(dataFile)) {
+      backupDir = path.join(__dirname, 'database-backup');
+      dataFile = path.join(backupDir, 'database-export.json');
+      passwordFile = path.join(backupDir, 'user-passwords.json');
+    }
 
     if (!fs.existsSync(dataFile)) {
       console.error('❌ Database export file not found:', dataFile);

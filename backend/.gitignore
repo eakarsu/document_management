@@ -1,0 +1,31 @@
+node_modules
+dist
+*.log
+.env
+.env.local
+*.pid
+uploads/
+temp/
+coverage/
+.nyc_output/
+
+# Database backups - too large for Git
+database-backup/
+*.sql
+*.dump
+
+# Prisma
+prisma/migrations/dev/
+
+# Test files
+*.test.js
+*.spec.js
+test-results/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
