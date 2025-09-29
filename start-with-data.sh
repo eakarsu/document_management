@@ -635,7 +635,7 @@ EOF
     # Clear previous log
     > ../frontend.log
 
-    PORT=3000 nohup npm run dev > ../frontend.log 2>&1 &
+    PORT=3000 nohup npx next dev -H 0.0.0.0 > ../frontend.log 2>&1 &
     FRONTEND_PID=$!
     echo $FRONTEND_PID > ../.frontend.pid
     cd ..
