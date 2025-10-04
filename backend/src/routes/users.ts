@@ -36,6 +36,46 @@ const isAdmin = async (req: AuthenticatedRequest, res: Response, next: Function)
   next();
 };
 
+// GET /api/users/me - Get current user info (no admin required)
+router.get('/users/me', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Return current user's information
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: {
+          select: {
+            id: true,
+            name: true,
+            permissions: true
+          }
+        },
+        department: true,
+        createdAt: true,
+        lastLogin: true,
+        organizationId: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error: any) {
+    console.error('Error fetching current user:', error);
+    res.status(500).json({ error: 'Failed to fetch user info' });
+  }
+});
+
 // GET /api/users - Get all users with pagination and search
 router.get('/users', authMiddleware, isAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {

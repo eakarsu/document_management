@@ -25,7 +25,7 @@ async function startServer() {
           scriptSrc: ["'self'"],
           imgSrc: ["'self'", "data:", "https:"],
           frameSrc: ["'self'", "http://localhost:4000", "https://localhost:4000"],
-          frameAncestors: ["'self'", "http://localhost:3000", "https://localhost:3000"],
+          frameAncestors: ["'self'", "http://localhost:3000", "https://localhost:3000", "http://localhost:3001", "https://localhost:3001", "http://localhost:3002", "https://localhost:3002"],
         },
       },
     }));
@@ -34,9 +34,15 @@ async function startServer() {
     const limiter = rateLimit(RATE_LIMIT_CONFIG);
     app.use('/graphql', limiter);
 
-    // CORS
+    // CORS - Allow both Next.js (3000) and Vite (3001, 3002, 3003) frontends
     app.use(cors({
-      origin: FRONTEND_URL,
+      origin: [
+        'http://localhost:3000', // Next.js frontend
+        'http://localhost:3001', // Vite frontend
+        'http://localhost:3002', // Vite frontend (alternative port)
+        'http://localhost:3003', // Vite frontend (alternative port)
+        FRONTEND_URL // Environment variable override
+      ],
       credentials: true,
     }));
 

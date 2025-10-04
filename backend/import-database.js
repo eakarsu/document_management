@@ -41,22 +41,29 @@ async function importDatabase() {
 
     console.log('🧹 Clearing existing data...');
 
-    // Delete in reverse dependency order
-    await prisma.workflowTask.deleteMany();
-    await prisma.jsonWorkflowHistory.deleteMany();
-    await prisma.jsonWorkflowInstance.deleteMany();
-    await prisma.documentWorkflow.deleteMany();
-    await prisma.workflow.deleteMany();
-    await prisma.auditLog.deleteMany();
-    await prisma.comment.deleteMany();
-    await prisma.attachment.deleteMany();
-    await prisma.documentVersion.deleteMany();
-    await prisma.document.deleteMany();
-    await prisma.folder.deleteMany();
-    await prisma.user.deleteMany();
-    await prisma.role.deleteMany();
-    await prisma.organization.deleteMany();
-    await prisma.systemSetting.deleteMany();
+    // Delete all tables using raw SQL to avoid foreign key issues
+    try {
+      // Delete in reverse dependency order using raw SQL
+      await prisma.$executeRaw`DELETE FROM "workflow_tasks"`;
+      await prisma.$executeRaw`DELETE FROM "json_workflow_histories"`;
+      await prisma.$executeRaw`DELETE FROM "json_workflow_instances"`;
+      await prisma.$executeRaw`DELETE FROM "document_workflows"`;
+      await prisma.$executeRaw`DELETE FROM "workflows"`;
+      await prisma.$executeRaw`DELETE FROM "audit_logs"`;
+      await prisma.$executeRaw`DELETE FROM "comments"`;
+      await prisma.$executeRaw`DELETE FROM "attachments"`;
+      await prisma.$executeRaw`DELETE FROM "document_versions"`;
+      await prisma.$executeRaw`DELETE FROM "document_publishing"`;
+      await prisma.$executeRaw`DELETE FROM "publishing_workflows"`;
+      await prisma.$executeRaw`DELETE FROM "documents"`;
+      await prisma.$executeRaw`DELETE FROM "folders"`;
+      await prisma.$executeRaw`DELETE FROM "users"`;
+      await prisma.$executeRaw`DELETE FROM "roles"`;
+      await prisma.$executeRaw`DELETE FROM "organizations"`;
+      await prisma.$executeRaw`DELETE FROM "system_settings"`;
+    } catch (e) {
+      console.log('⚠️ Some tables might not exist, continuing...');
+    }
 
     console.log('✅ Existing data cleared');
 
@@ -74,9 +81,11 @@ async function importDatabase() {
 
     console.log('📦 Importing roles...');
     for (const role of data.roles) {
+      // Remove roleType field that doesn't exist in current schema
+      const { roleType, ...roleData } = role;
       await prisma.role.create({
         data: {
-          ...role,
+          ...roleData,
           createdAt: new Date(role.createdAt),
           updatedAt: new Date(role.updatedAt),
         }

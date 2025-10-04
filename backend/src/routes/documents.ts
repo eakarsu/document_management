@@ -1042,7 +1042,7 @@ router.put('/:id',
 );
 
 // Patch document (partial update)
-router.patch('/:id',
+router.patch('/:id', authMiddleware,
   async (req: any, res) => {
     try {
       const documentId = req.params.id;
