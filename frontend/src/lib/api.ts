@@ -1,6 +1,17 @@
 // API utility for making authenticated requests to the backend
-// Use same-origin API calls (proxied by Next.js) to avoid CSP issues
-export const API_BASE_URL = '';
+// Use environment variable or detect based on window location
+const getApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    // Browser: use same host as frontend but port 4000
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:4000`;
+  }
+  // Server-side: use localhost
+  return 'http://localhost:4000';
+};
+
+export const API_BASE_URL = getApiUrl();
 
 export class ApiClient {
   private baseUrl: string;

@@ -442,7 +442,7 @@ export const useWorkflowBuilder = (): UseWorkflowBuilderReturn => {
 
     // Save to backend
     try {
-      const response = await fetch('http://localhost:4000/api/workflow/save', {
+      const response = await fetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(workflow)

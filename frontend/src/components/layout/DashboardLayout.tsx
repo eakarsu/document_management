@@ -43,11 +43,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      logout();
+      await logout();
       success('Logged out successfully', 'See you next time!');
     } catch (error) {
-      logout(); // Force logout even on error
+      console.error('Logout error:', error);
+      // Force logout even on error
+      logout();
     }
   };
 

@@ -84,14 +84,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      // Call logout API to clear cookies
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (error) {
+      console.error('Logout API error:', error);
+    }
+
     // Clear tokens
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    
+
     // Clear user state
     setUser(null);
-    
+
     // Redirect to login
     router.push('/login');
   }, [router]);

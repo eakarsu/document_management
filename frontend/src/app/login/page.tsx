@@ -296,7 +296,7 @@ const LoginPage: React.FC = () => {
               🎯 Hierarchical Distributed Review Workflow (10 Stages)
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              All test accounts use password: <strong>password123</strong>
+              All test accounts use password: <strong>testpass123</strong>
             </Typography>
 
             {/* Stage 1: Action Officers */}
@@ -310,7 +310,7 @@ const LoginPage: React.FC = () => {
                     size="small"
                     variant="outlined"
                     color="primary"
-                    onClick={() => quickLogin('ao1@airforce.mil', 'password123')}
+                    onClick={() => quickLogin('ao1@airforce.mil', 'testpass123')}
                     disabled={isLoading}
                     sx={{ fontSize: '0.70rem', py: 0.3, px: 1, mr: 1 }}
                   >
@@ -320,7 +320,7 @@ const LoginPage: React.FC = () => {
                     size="small"
                     variant="outlined"
                     color="primary"
-                    onClick={() => quickLogin('ao2@airforce.mil', 'password123')}
+                    onClick={() => quickLogin('ao2@airforce.mil', 'testpass123')}
                     disabled={isLoading}
                     sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
                   >
@@ -338,7 +338,7 @@ const LoginPage: React.FC = () => {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => quickLogin('pcm@airforce.mil', 'password123')}
+                onClick={() => quickLogin('pcm@airforce.mil', 'testpass123')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >
@@ -359,7 +359,7 @@ const LoginPage: React.FC = () => {
                 size="small"
                 variant="outlined"
                 color="secondary"
-                onClick={() => quickLogin('coordinator1@airforce.mil', 'password123')}
+                onClick={() => quickLogin('coordinator1@airforce.mil', 'testpass123')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1, mb: 2 }}
               >
@@ -373,7 +373,7 @@ const LoginPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => quickLogin('ops.frontoffice@airforce.mil', 'password123')}
+                  onClick={() => quickLogin('ops.frontoffice@airforce.mil', 'testpass123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
                 >
@@ -382,7 +382,7 @@ const LoginPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => quickLogin('log.frontoffice@airforce.mil', 'password123')}
+                  onClick={() => quickLogin('log.frontoffice@airforce.mil', 'testpass123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
                 >
@@ -391,7 +391,7 @@ const LoginPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => quickLogin('fin.frontoffice@airforce.mil', 'password123')}
+                  onClick={() => quickLogin('fin.frontoffice@airforce.mil', 'testpass123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
                 >
@@ -400,7 +400,7 @@ const LoginPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => quickLogin('per.frontoffice@airforce.mil', 'password123')}
+                  onClick={() => quickLogin('per.frontoffice@airforce.mil', 'testpass123')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
                 >
@@ -495,7 +495,7 @@ const LoginPage: React.FC = () => {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => quickLogin('legal.reviewer@airforce.mil', 'password123')}
+                onClick={() => quickLogin('legal.reviewer@airforce.mil', 'testpass123')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >
@@ -511,7 +511,7 @@ const LoginPage: React.FC = () => {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => quickLogin('opr.leadership@airforce.mil', 'password123')}
+                onClick={() => quickLogin('opr.leadership@airforce.mil', 'testpass123')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >
@@ -527,7 +527,7 @@ const LoginPage: React.FC = () => {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => quickLogin('afdpo.publisher@airforce.mil', 'password123')}
+                onClick={() => quickLogin('afdpo.publisher@airforce.mil', 'testpass123')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >
@@ -544,7 +544,7 @@ const LoginPage: React.FC = () => {
                 size="small"
                 variant="outlined"
                 color="error"
-                onClick={() => quickLogin('admin@airforce.mil', 'password123')}
+                onClick={() => quickLogin('admin@airforce.mil', 'testpass123')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >

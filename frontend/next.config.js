@@ -67,7 +67,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; connect-src 'self' http://localhost:4000 ws://localhost:* wss://localhost:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:*; font-src 'self' data:; frame-src 'self' http://localhost:4000 https://localhost:4000 blob:;",
+            value: "default-src 'self'; connect-src 'self' http://*:4000 https://*:4000 ws://*:* wss://*:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://*:*; font-src 'self' data:; frame-src 'self' http://*:4000 https://*:4000 blob:;",
           },
         ],
       },
@@ -115,9 +115,14 @@ const nextConfig = {
         source: '/api/ai-document-generator',
         destination: '/api/ai-document-generator',
       },
-      // Don't proxy documents PATCH route - handle feedback locally
+      // Proxy create-with-template to backend (must come before the :id pattern)
       {
-        source: '/api/documents/:id',
+        source: '/api/documents/create-with-template',
+        destination: 'http://localhost:4000/api/documents/create-with-template',
+      },
+      // Don't proxy documents PATCH route - handle feedback locally (only for actual document IDs)
+      {
+        source: '/api/documents/:id((?!create-with-template$).*)',
         destination: '/api/documents/:id',
       },
       // Proxy all other API calls to backend

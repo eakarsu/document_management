@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
         storageProvider: 'local',
         status: 'DRAFT',
         category: template.toUpperCase(),
+        tags: ['ai-generated', template, 'military', 'instruction'], // Required field
         ocrText: content, // Store the generated content here
         ocrProcessed: true,
         aiClassification: template,
@@ -126,6 +127,7 @@ export async function POST(request: NextRequest) {
         aiConfidence: 0.95,
         createdById: userId,
         organizationId: decoded.organizationId,
+        documentNumber: `AI-${Date.now()}`, // Generate unique document number
         customFields: {
           headerData,
           template,

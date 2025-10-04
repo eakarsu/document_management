@@ -42,6 +42,7 @@ interface RegisterData {
 export class AuthService {
   private prisma: PrismaClient;
   private redis: any;
+  private redisConnected: boolean = false;
   private logger: winston.Logger;
   private jwtSecret: string;
   private jwtRefreshSecret: string;
@@ -49,7 +50,11 @@ export class AuthService {
   constructor() {
     this.prisma = new PrismaClient();
     this.redis = createClient({
-      url: process.env.REDIS_URL || 'redis://localhost:6379'
+      url: process.env.REDIS_URL || 'redis://localhost:6379',
+      socket: {
+        connectTimeout: 5000,
+        reconnectStrategy: false // Don't auto-reconnect to avoid hanging
+      }
     });
     this.logger = winston.createLogger({
       level: 'info',
@@ -60,16 +65,18 @@ export class AuthService {
     });
     this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
     this.jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
-    
+
     // Connect to Redis - with proper error handling
     this.initRedis();
   }
-  
+
   private async initRedis() {
     try {
       await this.redis.connect();
+      this.redisConnected = true;
       this.logger.info('Redis connected successfully');
     } catch (error: any) {
+      this.redisConnected = false;
       this.logger.error('Redis connection failed:', error);
       // Continue without Redis for now
     }
@@ -367,13 +374,15 @@ export class AuthService {
     try {
       const decoded = jwt.verify(token, this.jwtSecret) as any;
       
-      // Check if token is blacklisted
+      // Check if token is blacklisted (only if Redis is connected)
       let isBlacklisted = false;
-      try {
-        const result = await this.redis.get(`blacklist:${token}`);
-        isBlacklisted = !!result;
-      } catch (redisError) {
-        this.logger.warn('Redis get failed:', redisError);
+      if (this.redisConnected) {
+        try {
+          const result = await this.redis.get(`blacklist:${token}`);
+          isBlacklisted = !!result;
+        } catch (redisError) {
+          this.logger.warn('Redis get failed:', redisError);
+        }
       }
       if (isBlacklisted) {
         return null;

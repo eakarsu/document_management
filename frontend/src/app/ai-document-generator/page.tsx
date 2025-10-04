@@ -289,9 +289,9 @@ const AIDocumentGenerator: React.FC = () => {
         byOrderOf: documentInfo.byOrderText
       };
 
-      // Call our backend API
+      // Call our Next.js API route
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/ai-document-generator`, {
+      const response = await fetch('/api/ai-document-generator', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
