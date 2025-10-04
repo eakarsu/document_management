@@ -1,0 +1,57 @@
+# Docker Compose for Local Development
+# Uses host PostgreSQL on port 5432 (NO PostgreSQL container)
+# Run with: docker-compose -f docker-compose.local.yml up
+
+version: '3.8'
+
+services:
+  # App connecting to host PostgreSQL
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    container_name: dms_app_local
+    environment:
+      NODE_ENV: development
+      # Backend settings - connects to HOST PostgreSQL
+      BACKEND_PORT: 4000
+      DATABASE_URL: postgresql://postgres@host.docker.internal:5432/dms_dev
+      POSTGRES_HOST: host.docker.internal
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      # Redis (optional for local)
+      REDIS_URL: redis://localhost:6379
+      # JWT Secrets
+      JWT_SECRET: local_dev_secret_key
+      JWT_REFRESH_SECRET: local_dev_refresh_secret
+      # Frontend settings
+      FRONTEND_PORT: 3000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_WS_URL: ws://localhost:4000
+      # Application Mode
+      NEXT_PUBLIC_APP_MODE: development
+      NEXT_PUBLIC_ENABLE_LOGIN: true
+      # Company Info
+      NEXT_PUBLIC_COMPANY_NAME: Richmond DMS
+      NEXT_PUBLIC_COMPANY_LOCATION: Richmond, VA
+    ports:
+      - "3000:3000"  # Frontend
+      - "4000:4000"  # Backend API
+    volumes:
+      - ./uploads:/app/backend/uploads
+      - ./logs:/app/logs
+    networks:
+      - dms_network
+
+  # Optional: Redis for caching (lightweight)
+  redis:
+    image: redis:7.2-alpine
+    container_name: dms_redis_local
+    ports:
+      - "6379:6379"
+    networks:
+      - dms_network
+
+networks:
+  dms_network:
+    driver: bridge

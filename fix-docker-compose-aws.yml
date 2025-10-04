@@ -55,7 +55,7 @@ services:
       # Redis Configuration
       REDIS_URL: redis://redis:6379
 
-      # JWT Secrets (CHANGE THESE IN PRODUCTION!)
+      # JWT Secrets
       JWT_SECRET: ${JWT_SECRET:-your_secret_key_change_in_production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your_refresh_secret_change_in_production}
 
@@ -63,16 +63,6 @@ services:
       NODE_ENV: production
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       BACKEND_URL: ${BACKEND_URL:-http://localhost:4000}
-
-      # AWS Configuration (optional)
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-
-      # Storage Configuration
-      STORAGE_TYPE: ${STORAGE_TYPE:-filesystem}
-      # For S3: set STORAGE_TYPE=s3 and provide S3_BUCKET_NAME
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
 
     ports:
       - "3000:3000"

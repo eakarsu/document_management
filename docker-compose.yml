@@ -1,21 +1,26 @@
 version: '3.8'
 
 services:
-  # PostgreSQL for metadata
+  # PostgreSQL for metadata (AWS/Production - Port 5433 to avoid local conflict)
   postgres:
     image: postgres:15-alpine
     container_name: dms_postgres
     environment:
-      POSTGRES_DB: dms_metadata
+      POSTGRES_DB: dms_prod
       POSTGRES_USER: dms_user
       POSTGRES_PASSWORD: dms_password
     ports:
-      - "5432:5432"
+      - "5433:5432"  # External port 5433 to avoid conflict with local PostgreSQL on 5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/postgres/init:/docker-entrypoint-initdb.d
     networks:
       - dms_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dms_user -d dms_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # MongoDB for document storage
   mongodb:
@@ -96,13 +101,13 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.simple
     container_name: dms_app
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       # Backend settings
       BACKEND_PORT: 4000
-      DATABASE_URL: postgresql://dms_user:dms_password@postgres:5432/dms_metadata
+      DATABASE_URL: postgresql://dms_user:dms_password@postgres:5432/dms_prod
       MONGODB_URL: mongodb://dms_user:dms_password@mongodb:27017/dms_documents
       REDIS_URL: redis://redis:6379
       ELASTICSEARCH_URL: http://elasticsearch:9200
