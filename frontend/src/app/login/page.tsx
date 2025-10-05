@@ -177,9 +177,12 @@ const LoginPage: React.FC = () => {
         localStorage.setItem('userEmail', data.user.email || formData.email);
         localStorage.setItem('username', data.user.username || data.user.email || formData.email);
 
-        // Redirect to dashboard
+        // Wait a bit for localStorage to sync, then do a hard redirect
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Use window.location for hard redirect to ensure AuthProvider loads fresh state
         const redirect = new URLSearchParams(window.location.search).get('redirect') || '/dashboard';
-        router.push(redirect);
+        window.location.href = redirect;
       } else {
         const errorData = await response.json();
         setError(errorData.message || 'Login failed');

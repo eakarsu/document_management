@@ -140,12 +140,23 @@ export class DocumentCRUD {
         throw new Error('Document not found');
       }
 
+      // Merge customFields to preserve existing data
+      const updateData: any = {
+        ...input,
+        updatedAt: new Date()
+      };
+
+      // If customFields are being updated, merge with existing customFields
+      if (input.customFields) {
+        updateData.customFields = {
+          ...(document.customFields as any || {}),
+          ...input.customFields
+        };
+      }
+
       const updated = await this.prisma.document.update({
         where: { id: documentId },
-        data: {
-          ...input,
-          updatedAt: new Date()
-        },
+        data: updateData,
         include: buildDocumentInclude()
       });
 

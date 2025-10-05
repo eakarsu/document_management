@@ -272,7 +272,8 @@ export class SearchService {
 
     } catch (error: any) {
       this.logger.error('Failed to update document in index:', error);
-      throw error;
+      // Don't throw error - Elasticsearch is optional, allow update to succeed even if search index fails
+      this.logger.warn('Continuing without search index update - Elasticsearch may not be running');
     }
   }
 

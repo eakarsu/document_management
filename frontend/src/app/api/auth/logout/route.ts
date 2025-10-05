@@ -31,22 +31,49 @@ export async function POST(request: NextRequest) {
       message: 'Logged out successfully',
     });
 
-    response.cookies.delete('accessToken');
-    response.cookies.delete('refreshToken');
+    // Delete cookies with explicit options to ensure they're cleared on production
+    response.cookies.set('accessToken', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
+
+    response.cookies.set('refreshToken', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
 
     return response;
 
   } catch (error) {
     console.error('Logout API error:', error);
-    
+
     // Still clear cookies and return success even on error
     const response = NextResponse.json({
       success: true,
       message: 'Logged out successfully',
     });
 
-    response.cookies.delete('accessToken');
-    response.cookies.delete('refreshToken');
+    response.cookies.set('accessToken', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
+
+    response.cookies.set('refreshToken', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
 
     return response;
   }
