@@ -97,16 +97,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Logout API error:', error);
     }
 
-    // Clear tokens
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    // Clear ALL storage
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // Clear cookies from client side as backup
+    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; domain=' + window.location.hostname;
+    document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; domain=' + window.location.hostname;
+    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
     // Clear user state
     setUser(null);
 
-    // Redirect to login
-    router.push('/login');
-  }, [router]);
+    // Hard redirect to login page to ensure clean state
+    window.location.href = '/login';
+  }, []);
 
   const refreshToken = async (): Promise<boolean> => {
     try {

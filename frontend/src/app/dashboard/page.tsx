@@ -101,6 +101,15 @@ const DashboardPage: React.FC = () => {
   const [userRole, setUserRole] = useState<string>('');
   const router = useRouter();
 
+  // Check authentication on mount
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+  }, []);
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -126,7 +135,7 @@ const DashboardPage: React.FC = () => {
             recentDocuments = docsData.documents || [];
           } else if (docsResponse.status === 401) {
             // If documents API also returns 401, redirect to login
-            router.push('/login');
+            window.location.href = '/login';
             return;
           }
 
@@ -137,7 +146,7 @@ const DashboardPage: React.FC = () => {
           });
         } else if (statsResponse.status === 401) {
           // If authentication fails, redirect to login
-          router.push('/login');
+          window.location.href = '/login';
         } else {
           console.error('Failed to fetch dashboard stats:', statsResponse.status);
         }
@@ -169,18 +178,18 @@ const DashboardPage: React.FC = () => {
         localStorage.removeItem('user');
         
         // Redirect to login
-        router.push('/login');
+        window.location.href = '/login';
       } else {
         console.error('Logout failed');
         // Still redirect to login even if logout API fails
         localStorage.removeItem('user');
-        router.push('/login');
+        window.location.href = '/login';
       }
     } catch (error) {
       console.error('Logout error:', error);
       // Still redirect to login even on error
       localStorage.removeItem('user');
-      router.push('/login');
+      window.location.href = '/login';
     }
   };
 
