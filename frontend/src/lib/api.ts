@@ -1,28 +1,9 @@
 // API utility for making authenticated requests to the backend
-// Use environment variable or detect based on window location
-const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    // Browser: use same host as frontend but port 4000
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    return `${protocol}//${hostname}:4000`;
-  }
-  // Server-side: use localhost
-  return 'http://localhost:4000';
-};
-
-export const API_BASE_URL = getApiUrl();
-
 export class ApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
-  }
-
   async fetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-    const url = `${this.baseUrl}${endpoint}`;
-    
+    // Use relative paths that go through Next.js proxy
+    const url = endpoint;
+
     // Get token from localStorage for Bearer authentication
     let token: string | null = null;
     if (typeof window !== 'undefined') {

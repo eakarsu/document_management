@@ -463,8 +463,6 @@ const CollectedFeedbackView: React.FC<CollectedFeedbackViewProps> = ({
                   console.log(`Processing feedback and advancing workflow from stage ${fromStage} to ${targetStageId}`);
                   console.log('Current user role:', userRole);
 
-                  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-
                   // Use the proper workflow advance endpoint
                   const advanceResponse = await authTokenService.authenticatedFetch(
                     `/api/workflow-instances/${documentId}/advance`,
