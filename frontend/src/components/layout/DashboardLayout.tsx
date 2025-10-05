@@ -41,15 +41,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      success('Logged out successfully', 'See you next time!');
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Force logout even on error
-      logout();
-    }
+  const handleLogout = () => {
+    // Don't await or show toast - just logout immediately
+    // The logout function will handle everything including redirect
+    logout();
   };
 
   const filteredNavigation = navigation.filter(item => {

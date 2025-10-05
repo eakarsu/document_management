@@ -58,19 +58,21 @@ const AIWorkflowPage: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      const response = await api.post('/api/auth/logout');
-      if (response.ok) {
-        localStorage.removeItem('user');
-        router.push('/login');
-      } else {
-        localStorage.removeItem('user');
-        router.push('/login');
-      }
+      await api.post('/api/auth/logout');
     } catch (error) {
       console.error('Logout error:', error);
-      localStorage.removeItem('user');
-      router.push('/login');
     }
+
+    // Clear ALL storage
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // Clear cookies
+    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+    // Hard redirect
+    window.location.href = '/login';
   };
 
   const handleBackToDashboard = () => {

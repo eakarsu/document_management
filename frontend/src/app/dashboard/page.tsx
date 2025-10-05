@@ -170,27 +170,22 @@ const DashboardPage: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      // Call logout API to clear cookies and notify backend
-      const response = await api.post('/api/auth/logout');
-
-      if (response.ok) {
-        // Clear any localStorage data as well
-        localStorage.removeItem('user');
-        
-        // Redirect to login
-        window.location.href = '/login';
-      } else {
-        console.error('Logout failed');
-        // Still redirect to login even if logout API fails
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-      }
+      // Call logout API to clear cookies
+      await api.post('/api/auth/logout');
     } catch (error) {
       console.error('Logout error:', error);
-      // Still redirect to login even on error
-      localStorage.removeItem('user');
-      window.location.href = '/login';
     }
+
+    // Clear ALL storage regardless of API response
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // Clear cookies from client side
+    document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+    // Hard redirect to login
+    window.location.href = '/login';
   };
 
   const handleUploadDocument = () => {
