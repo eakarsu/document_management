@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
     const refreshToken = cookieStore.get('refreshToken')?.value;
 
     if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      console.error('[workflow/tasks] No access token found in cookies');
+      return NextResponse.json({ error: 'Unauthorized - No token' }, { status: 401 });
     }
 
     // Forward the request to the backend server

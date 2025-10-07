@@ -128,7 +128,8 @@ export const useDocumentView = (documentId: string) => {
     } catch (error) {
       if (error instanceof Error && error.message.includes('authentication')) {
         console.error('Authentication error:', error.message);
-        router.push('/login');
+        // Use hard redirect for authentication failures
+        window.location.href = '/login';
       } else {
         console.error('Error fetching user info:', error);
         setUserRole({
@@ -158,7 +159,7 @@ export const useDocumentView = (documentId: string) => {
       }
     } catch (error) {
       if (error instanceof Error && error.message.includes('authentication')) {
-        router.push('/login');
+        window.location.href = '/login';
       } else {
         console.error('Error fetching document data:', error);
         setUIState(prev => ({ ...prev, error: 'Failed to load document data' }));
@@ -169,11 +170,15 @@ export const useDocumentView = (documentId: string) => {
   // Fetch workflow feedback
   const fetchWorkflowFeedback = useCallback(async () => {
     try {
+      // Call backend 12-stage workflow directly (nginx routes /api/ to backend)
       const response = await fetch(
-        `/api/workflow-status?documentId=${documentId}&action=get_status`,
+        `/api/workflow/documents/${documentId}/workflow/status`,
         {
           method: 'GET',
-          credentials: 'include'
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${authTokenService.getAccessToken()}`,
+          }
         }
       );
 
@@ -214,14 +219,14 @@ export const useDocumentView = (documentId: string) => {
         }
       } else if (response.status === 401) {
         console.error('Authentication failed - redirecting to login');
-        router.push('/login');
+        window.location.href = '/login';
         return null;
       }
     } catch (error) {
       if (error instanceof Error && error.message.includes('authentication')) {
         console.error('Authentication error:', error.message);
         alert(error.message);
-        router.push('/login');
+        window.location.href = '/login';
       } else {
         console.error('Error fetching feedback:', error);
       }
@@ -251,7 +256,7 @@ export const useDocumentView = (documentId: string) => {
     } catch (error) {
       if (error instanceof Error && error.message.includes('authentication')) {
         console.error('Authentication error, redirecting to login');
-        router.push('/login');
+        window.location.href = '/login';
       } else {
         console.error('Error fetching workflow status:', error);
       }
@@ -375,7 +380,7 @@ export const useDocumentView = (documentId: string) => {
       if (error instanceof Error && error.message.includes('authentication')) {
         console.error('Authentication error:', error.message);
         alert(error.message);
-        router.push('/login');
+        window.location.href = '/login';
       } else {
         console.error('Error saving feedback:', error);
         alert('Failed to save feedback. Please try again.');
@@ -391,7 +396,7 @@ export const useDocumentView = (documentId: string) => {
         const tokenInfo = authTokenService.getTokenInfo();
         if (!tokenInfo.accessToken || !tokenInfo.isValid) {
           console.log('No valid token found, redirecting to login');
-          router.push('/login');
+          window.location.href = '/login';
           return;
         }
 

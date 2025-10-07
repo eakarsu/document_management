@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { createServer } from 'http';
 import expressWinston from 'express-winston';
 import { config } from './config/database';
@@ -58,6 +59,9 @@ async function startServer() {
     // Body parsing
     app.use(express.json({ limit: '50mb' }));
     app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+    // Cookie parsing - required for reading cookies in auth middleware
+    app.use(cookieParser());
 
     // Setup all routes
     setupRoutes(app);

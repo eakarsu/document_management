@@ -85,6 +85,64 @@ const OPRReviewPage = () => {
     setDocumentData,
   });
 
+  // Helper function to renumber paragraphs after deletion
+  const renumberParagraphs = (content: string, deletedParagraphNum: string): string => {
+    console.log('=== RENUMBERING PARAGRAPHS ===');
+    console.log('Deleted paragraph number:', deletedParagraphNum);
+
+    const deletedParts = deletedParagraphNum.split('.').map(n => parseInt(n));
+    const level = deletedParts.length;
+    const parentSection = deletedParts.slice(0, -1).join('.');
+
+    console.log('Deleted:', deletedParagraphNum, 'Parent section:', parentSection);
+
+    // Find all paragraph numbers (simple regex matching any number pattern)
+    const allNumbersRegex = /(\d+(?:\.\d+)+)/g;
+    let updatedContent = content;
+    const matches: Array<{number: string, parts: number[]}> = [];
+
+    let match;
+    while ((match = allNumbersRegex.exec(content)) !== null) {
+      const numberStr = match[1];
+      const parts = numberStr.split('.').map(n => parseInt(n));
+      matches.push({ number: numberStr, parts });
+    }
+
+    console.log('All paragraph numbers found:', matches.map(m => m.number));
+
+    // Find paragraphs in the same parent section at same level
+    const siblingsInSection = matches.filter(m => {
+      if (m.parts.length !== level) return false;
+      const mParent = m.parts.slice(0, -1).join('.');
+      return mParent === parentSection;
+    });
+
+    console.log('Siblings in section', parentSection + ':', siblingsInSection.map(s => s.number));
+
+    // Renumber all paragraphs that come AFTER the deleted one
+    const renumberMap = new Map<string, string>();
+    for (const m of siblingsInSection) {
+      if (m.parts[level - 1] > deletedParts[level - 1]) {
+        const newParts = [...m.parts];
+        newParts[level - 1]--;
+        const newNumber = newParts.join('.');
+        renumberMap.set(m.number, newNumber);
+        console.log(`✓ Renumbering: ${m.number} → ${newNumber}`);
+      }
+    }
+
+    // Apply renumbering - match the number followed by whitespace or end tag
+    Array.from(renumberMap.entries()).forEach(([oldNum, newNum]) => {
+      const escapedOld = oldNum.replace(/\./g, '\\.');
+      // Match the number in various contexts: after tag, with whitespace, etc.
+      const replaceRegex = new RegExp(`\\b${escapedOld}\\b`, 'g');
+      updatedContent = updatedContent.replace(replaceRegex, newNum);
+    });
+
+    console.log('Renumbering complete. Changed:', renumberMap.size, 'paragraphs');
+    return updatedContent;
+  };
+
   // Local state
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [showPageNumbers, setShowPageNumbers] = useState(false);
@@ -457,41 +515,33 @@ const OPRReviewPage = () => {
                 />
               </Box>
 
-              {/* Meaningful fields only */}
-              {selectedFeedback.component && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Section:</strong> {selectedFeedback.component}
-                </Typography>
-              )}
+              {/* Show all fields */}
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Section:</strong> {selectedFeedback.component || ''}
+              </Typography>
 
-              {(selectedFeedback.coordinatorComment || selectedFeedback.comment) && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Comment:</strong> {selectedFeedback.coordinatorComment || selectedFeedback.comment}
-                </Typography>
-              )}
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Comment:</strong> {selectedFeedback.coordinatorComment || selectedFeedback.comment || ''}
+              </Typography>
 
-              {/* Reviewer Info - Name and Email only */}
-              {selectedFeedback.pocName && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Reviewer:</strong> {selectedFeedback.pocName}
-                  {selectedFeedback.pocEmail && ` (${selectedFeedback.pocEmail})`}
-                </Typography>
-              )}
+              {/* Reviewer Info */}
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Reviewer:</strong> {selectedFeedback.pocName || ''}
+                {selectedFeedback.pocEmail ? ` (${selectedFeedback.pocEmail})` : ''}
+              </Typography>
 
               {/* Location - Combined */}
-              {selectedFeedback.page && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Location:</strong> Page {selectedFeedback.page}
-                  {selectedFeedback.paragraphNumber && `, Paragraph ${selectedFeedback.paragraphNumber}`}
-                  {selectedFeedback.lineNumber && `, Line ${selectedFeedback.lineNumber}`}
-                </Typography>
-              )}
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Location:</strong> Page {selectedFeedback.page || '?'}
+                {selectedFeedback.paragraphNumber ? `, Paragraph ${selectedFeedback.paragraphNumber}` : ''}
+                {selectedFeedback.lineNumber ? `, Line ${selectedFeedback.lineNumber}` : ''}
+              </Typography>
 
-              {/* Professional Text Change Display with colored backgrounds */}
+              {/* Professional Text Change Display with colored backgrounds - Always show */}
               {(() => {
-                const fromText = selectedFeedback.originalText || selectedFeedback.changeFrom;
-                const toText = selectedFeedback.recommendedText || selectedFeedback.replacementText || selectedFeedback.changeTo;
-                return fromText && toText ? (
+                const fromText = selectedFeedback.originalText || selectedFeedback.changeFrom || '';
+                const toText = selectedFeedback.recommendedText || selectedFeedback.replacementText || selectedFeedback.changeTo || '';
+                return (
                   <Box sx={{ mb: 1 }}>
                     <Box sx={{ mb: 1 }}>
                       <Typography variant="body2" sx={{ mb: 0.5 }}>
@@ -524,24 +574,20 @@ const OPRReviewPage = () => {
                       </Typography>
                     </Box>
                   </Box>
-                ) : null;
+                );
               })()}
 
-              {selectedFeedback.changeType && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Change Type:</strong> {selectedFeedback.changeType}
-                </Typography>
-              )}
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Change Type:</strong> {selectedFeedback.changeType || ''}
+              </Typography>
 
-              {selectedFeedback.rationale && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Rationale:</strong> {selectedFeedback.rationale}
-                </Typography>
-              )}
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Rationale:</strong> {selectedFeedback.rationale || ''}
+              </Typography>
 
-              {selectedFeedback.status && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Status:</strong>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Status:</strong>
+                {selectedFeedback.status ? (
                   <Chip
                     label={selectedFeedback.status}
                     size="small"
@@ -549,14 +595,12 @@ const OPRReviewPage = () => {
                     color={selectedFeedback.status === 'merged' ? 'success' :
                            selectedFeedback.status === 'rejected' ? 'error' : 'default'}
                   />
-                </Typography>
-              )}
+                ) : ''}
+              </Typography>
 
-              {selectedFeedback.resolution && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Resolution:</strong> {selectedFeedback.resolution}
-                </Typography>
-              )}
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Resolution:</strong> {selectedFeedback.resolution || ''}
+              </Typography>
 
               {/* Only show Created date if present */}
               {selectedFeedback.createdAt && (
@@ -568,7 +612,26 @@ const OPRReviewPage = () => {
 
               {/* Fixed Apply Button Section */}
               {(() => {
-                const hasChanges = !!(selectedFeedback.changeFrom && selectedFeedback.changeTo);
+                const fromText = selectedFeedback.originalText || selectedFeedback.changeFrom;
+                const toText = selectedFeedback.recommendedText || selectedFeedback.replacementText || selectedFeedback.changeTo;
+                // Show buttons if there's fromText (even if toText is empty - it's a comment-only review)
+                const hasChanges = !!(fromText && fromText.trim());
+                const hasReplacementText = !!(fromText && toText && toText.trim());
+
+                // Debug logging
+                console.log('Button visibility check:', {
+                  originalText: selectedFeedback.originalText,
+                  changeFrom: selectedFeedback.changeFrom,
+                  recommendedText: selectedFeedback.recommendedText,
+                  replacementText: selectedFeedback.replacementText,
+                  changeTo: selectedFeedback.changeTo,
+                  fromText,
+                  toText,
+                  hasChanges,
+                  hasReplacementText,
+                  allFields: Object.keys(selectedFeedback)
+                });
+
                 return hasChanges ? (
                 <Box sx={{
                   display: 'flex',
@@ -583,15 +646,20 @@ const OPRReviewPage = () => {
                     color="primary"
                     size="small"
                     onClick={() => {
-                      // Apply this specific feedback change
-                      if (selectedFeedback.changeFrom && selectedFeedback.changeTo) {
+                      // Apply this specific feedback change - support multiple field names
+                      const changeFromText = selectedFeedback.originalText || selectedFeedback.changeFrom;
+                      const changeToText = selectedFeedback.recommendedText || selectedFeedback.replacementText || selectedFeedback.changeTo || '';
+
+                      // changeToText can be empty for deletions
+                      if (changeFromText) {
                         // Get the current content - use the rendered content
                         const currentContent = editableContent || documentContent || '';
 
                         console.log('Applying feedback:', {
-                          changeFrom: selectedFeedback.changeFrom,
-                          changeTo: selectedFeedback.changeTo,
-                          contentLength: currentContent.length
+                          changeFrom: changeFromText,
+                          changeTo: changeToText,
+                          contentLength: currentContent.length,
+                          isDeletion: !changeToText || !changeToText.trim()
                         });
 
                         // Function to escape special regex characters
@@ -603,30 +671,79 @@ const OPRReviewPage = () => {
                         let updatedContent = currentContent;
                         let replacementMade = false;
 
-                        // Method 1: Try exact match
-                        if (currentContent.includes(selectedFeedback.changeFrom)) {
-                          // Find where the text appears
-                          const index = currentContent.indexOf(selectedFeedback.changeFrom);
-                          console.log('Found text at position:', index);
-                          console.log('Text before:', currentContent.substring(Math.max(0, index - 20), index));
-                          console.log('Text after:', currentContent.substring(index + selectedFeedback.changeFrom.length, Math.min(currentContent.length, index + selectedFeedback.changeFrom.length + 20)));
+                        // Special handling for paragraph deletion
+                        const isDeletion = !changeToText || !changeToText.trim();
+                        if (isDeletion && selectedFeedback.paragraphNumber) {
+                          console.log('Attempting paragraph deletion with renumbering:', selectedFeedback.paragraphNumber);
 
-                          updatedContent = currentContent.replace(
-                            selectedFeedback.changeFrom,
-                            selectedFeedback.changeTo
-                          );
-                          replacementMade = true;
-                          console.log('Replaced using exact match');
+                          // Try to find and remove the entire paragraph including number
+                          // Match pattern like: <p>1.1.2.1.1.1 Communication systems...</p>
+                          const paragraphNum = selectedFeedback.paragraphNumber;
+                          const escapedNum = escapeRegex(paragraphNum);
+
+                          // Try multiple patterns to match the paragraph
+                          const patterns = [
+                            // Pattern 1: <p>number text</p>
+                            new RegExp(`<p[^>]*>\\s*${escapedNum}\\s+${escapeRegex(changeFromText.trim())}\\s*</p>`, 'i'),
+                            // Pattern 2: <p>number</p><p>text</p>
+                            new RegExp(`<p[^>]*>\\s*${escapedNum}\\s*</p>\\s*<p[^>]*>\\s*${escapeRegex(changeFromText.trim())}\\s*</p>`, 'i'),
+                            // Pattern 3: Just the paragraph with number at start
+                            new RegExp(`<p[^>]*>\\s*${escapedNum}[^<]*${escapeRegex(changeFromText.substring(0, 50))}[\\s\\S]*?</p>`, 'i'),
+                          ];
+
+                          for (const pattern of patterns) {
+                            if (pattern.test(currentContent)) {
+                              updatedContent = currentContent.replace(pattern, '');
+                              replacementMade = true;
+                              console.log('Removed paragraph with pattern match');
+                              break;
+                            }
+                          }
+
+                          // Fallback: Try to find just the text without paragraph tags
+                          if (!replacementMade) {
+                            const textPattern = new RegExp(`${escapedNum}\\s+${escapeRegex(changeFromText.trim())}`, 'i');
+                            if (textPattern.test(currentContent)) {
+                              updatedContent = currentContent.replace(textPattern, '');
+                              replacementMade = true;
+                              console.log('Removed paragraph text with number');
+                            }
+                          }
+
+                          // If paragraph was removed, renumber subsequent paragraphs
+                          if (replacementMade) {
+                            console.log('Paragraph removed, starting renumbering process...');
+                            updatedContent = renumberParagraphs(updatedContent, paragraphNum);
+                          }
+                        }
+
+                        // Standard replacement/deletion (no paragraph renumbering)
+                        if (!replacementMade) {
+                          // Method 1: Try exact match
+                          if (currentContent.includes(changeFromText)) {
+                            // Find where the text appears
+                            const index = currentContent.indexOf(changeFromText);
+                            console.log('Found text at position:', index);
+                            console.log('Text before:', currentContent.substring(Math.max(0, index - 20), index));
+                            console.log('Text after:', currentContent.substring(index + changeFromText.length, Math.min(currentContent.length, index + changeFromText.length + 20)));
+
+                            updatedContent = currentContent.replace(
+                              changeFromText,
+                              changeToText
+                            );
+                            replacementMade = true;
+                            console.log('Replaced using exact match');
+                          }
                         }
                         // Method 2: Try with regex to ignore HTML tags
-                        else {
+                        if (!replacementMade) {
                           // Create a regex that matches the text even if it spans across HTML tags
-                          const textToFind = escapeRegex(selectedFeedback.changeFrom);
+                          const textToFind = escapeRegex(changeFromText);
                           // This regex will match the text even if there are HTML tags in between
                           const regex = new RegExp(textToFind.split(/\s+/).join('(?:\\s|<[^>]*>)*'), 'i');
 
                           if (regex.test(currentContent)) {
-                            updatedContent = currentContent.replace(regex, selectedFeedback.changeTo);
+                            updatedContent = currentContent.replace(regex, changeToText);
                             replacementMade = true;
                             console.log('Replaced using regex (ignoring HTML tags)');
                           }
@@ -637,15 +754,15 @@ const OPRReviewPage = () => {
                             tempDiv.innerHTML = currentContent;
                             const textContent = tempDiv.textContent || '';
 
-                            if (textContent.includes(selectedFeedback.changeFrom)) {
+                            if (textContent.includes(changeFromText)) {
                               // Find position in text
-                              const textIndex = textContent.indexOf(selectedFeedback.changeFrom);
+                              const textIndex = textContent.indexOf(changeFromText);
                               console.log(`Found text at position ${textIndex} in stripped content`);
 
                               // Simple replacement - just replace first occurrence
                               updatedContent = currentContent.replace(
-                                selectedFeedback.changeFrom,
-                                selectedFeedback.changeTo
+                                changeFromText,
+                                changeToText
                               );
                               replacementMade = true;
                             }
@@ -661,8 +778,11 @@ const OPRReviewPage = () => {
                           setEditableContent(updatedContent);
                           setDocumentContent(updatedContent);
 
-                          // Stay in view mode to see rendered HTML
-                          setIsEditingDocument(false);
+                          // Force re-render of the document viewer by toggling edit mode
+                          setIsEditingDocument(true);
+                          setTimeout(() => {
+                            setIsEditingDocument(false);
+                          }, 10);
 
                           // Update feedback status to 'merged'
                           const updatedFeedback = feedback.map(f =>
@@ -672,7 +792,7 @@ const OPRReviewPage = () => {
                           );
                           setFeedback(updatedFeedback);
 
-                          console.log(`Successfully replaced: "${selectedFeedback.changeFrom}" with "${selectedFeedback.changeTo}"`);
+                          console.log(`Successfully replaced: "${changeFromText}" with "${changeToText}"`);
 
                           // Save everything to database
                           const saveToDatabase = async () => {
@@ -718,14 +838,25 @@ const OPRReviewPage = () => {
                           // Clear selection
                           setSelectedFeedback(null);
                         } else {
-                          // Show more detailed error
-                          alert(`Could not find the text to replace.\n\nSearching for: "${selectedFeedback.changeFrom}"\n\nThe text may have already been changed or may not match exactly due to HTML formatting.`);
+                          // Show more detailed error with document preview
+                          const tempDiv = document.createElement('div');
+                          tempDiv.innerHTML = currentContent;
+                          const textContent = tempDiv.textContent || '';
+                          const preview = textContent.substring(0, 500);
+
+                          console.error('Text not found in document');
+                          console.error('Searching for:', changeFromText);
+                          console.error('Document starts with:', preview);
+
+                          alert(`Could not find the text to delete/replace.\n\nSearching for:\n"${changeFromText.substring(0, 200)}..."\n\nThis text may:\n- Include formatting/paragraph numbers that aren't in the original\n- Have already been changed\n- Be wrapped in HTML tags\n\nCheck the browser console for more details.`);
                         }
                       }
                     }}
                     disabled={selectedFeedback.status === 'merged'}
                   >
-                    {selectedFeedback.status === 'merged' ? 'Already Applied' : 'Apply This Change'}
+                    {selectedFeedback.status === 'merged' ? 'Already Applied' :
+                     !hasReplacementText ? 'Delete Text' :
+                     'Apply This Change'}
                   </Button>
 
                   <Button

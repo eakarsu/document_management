@@ -101,14 +101,7 @@ const DashboardPage: React.FC = () => {
   const [userRole, setUserRole] = useState<string>('');
   const router = useRouter();
 
-  // Check authentication on mount
-  useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      window.location.href = '/login';
-      return;
-    }
-  }, []);
+  // Authentication is handled by middleware - no need to check here
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -133,10 +126,6 @@ const DashboardPage: React.FC = () => {
           if (docsResponse.ok) {
             const docsData = await docsResponse.json();
             recentDocuments = docsData.documents || [];
-          } else if (docsResponse.status === 401) {
-            // If documents API also returns 401, redirect to login
-            window.location.href = '/login';
-            return;
           }
 
           setDashboardData({
@@ -144,9 +133,6 @@ const DashboardPage: React.FC = () => {
             totalUsers: statsData.stats?.totalUsers || 0,
             recentDocuments: recentDocuments.slice(0, 5)
           });
-        } else if (statsResponse.status === 401) {
-          // If authentication fails, redirect to login
-          window.location.href = '/login';
         } else {
           console.error('Failed to fetch dashboard stats:', statsResponse.status);
         }
@@ -395,6 +381,10 @@ const DashboardPage: React.FC = () => {
             open={Boolean(anchorEl)}
             onClose={handleMenuClose}
           >
+            <MenuItem onClick={() => { handleMenuClose(); router.push('/profile'); }}>
+              <AccountCircle sx={{ mr: 1 }} />
+              Profile
+            </MenuItem>
             <MenuItem onClick={handleLogout}>
               <LogoutIcon sx={{ mr: 1 }} />
               Logout

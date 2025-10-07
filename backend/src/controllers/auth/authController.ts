@@ -81,6 +81,26 @@ export class AuthController {
         organizationId: user.organizationId
       };
 
+      // Set cookies for authentication
+      // Check if request is HTTPS (via X-Forwarded-Proto from nginx)
+      const isSecure = req.headers['x-forwarded-proto'] === 'https';
+
+      res.cookie('accessToken', accessToken, {
+        httpOnly: false, // Allow JavaScript to read it for client-side API calls
+        secure: isSecure,
+        sameSite: 'lax',
+        maxAge: 15 * 60 * 1000, // 15 minutes in milliseconds
+        path: '/'
+      });
+
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: false,
+        secure: isSecure,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+        path: '/'
+      });
+
       res.json({
         success: true,
         user: userData,
@@ -307,6 +327,7 @@ export class AuthController {
           role: {
             select: {
               name: true,
+              roleType: true,
               permissions: true
             }
           },
@@ -323,8 +344,8 @@ export class AuthController {
         return res.status(401).json({ error: 'User not found or inactive' });
       }
 
-      // Add roleType based on role name
-      const roleType = user.role?.name?.toUpperCase() || 'USER';
+      // Use roleType from database, fallback to name uppercased if roleType not set
+      const roleType = user.role?.roleType || user.role?.name?.toUpperCase() || 'USER';
 
       res.json({
         success: true,

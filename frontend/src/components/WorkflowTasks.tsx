@@ -89,7 +89,7 @@ const WorkflowTasks: React.FC<WorkflowTasksProps> = ({
         setTasks(taskList);
         setError(null);
       } else if (response.status === 401) {
-        router.push('/login');
+        window.location.href = '/login';
       } else {
         throw new Error('Failed to fetch tasks');
       }

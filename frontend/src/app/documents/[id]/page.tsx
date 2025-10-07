@@ -159,8 +159,8 @@ const DocumentViewPage: React.FC = () => {
             Document Details
           </Typography>
           <Chip
-            label={userRole?.role || 'Loading...'}
-            sx={{ bgcolor: 'white', color: 'primary.main' }}
+            label={userRole?.roleType || userRole?.role || 'Loading...'}
+            sx={{ bgcolor: 'white', color: 'primary.main', fontWeight: 'bold' }}
             icon={<PersonIcon />}
           />
         </Toolbar>
@@ -229,7 +229,11 @@ const DocumentViewPage: React.FC = () => {
                   Review & CRM
                 </Button>
 
-                {(userRole?.role === 'OPR' || userRole?.role === 'ADMIN' || userRole?.role === 'Admin') && (
+                {(workflowState.stage?.includes('OPR') ||
+                  workflowState.stage?.includes('Draft') ||
+                  workflowState.stage?.includes('Feedback') ||
+                  userRole?.role === 'ADMIN' ||
+                  userRole?.role === 'Admin') && (
                   <Button
                     variant="contained"
                     color="primary"
@@ -466,7 +470,11 @@ const DocumentViewPage: React.FC = () => {
             </Paper>
 
             {/* OPR Feedback Processor */}
-            {(userRole?.role === 'OPR' || userRole?.role === 'ADMIN') && (
+            {(workflowState.stage?.includes('OPR') ||
+              workflowState.stage?.includes('Draft') ||
+              workflowState.stage?.includes('Feedback') ||
+              userRole?.role === 'ADMIN' ||
+              userRole?.role === 'Admin') && (
               <Paper sx={{ p: 2, mt: 3 }}>
                 <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
                   🤖 AI-Powered Feedback Processing

@@ -158,7 +158,10 @@ async function main() {
     // ========================================
     const adminUser = await prisma.user.upsert({
       where: { email: 'admin@richmond-dms.com' },
-      update: {},
+      update: {
+        roleId: adminRole.id,
+        isActive: true
+      },
       create: {
         email: 'admin@richmond-dms.com',
         passwordHash: adminPassword,
@@ -175,7 +178,10 @@ async function main() {
 
     const managerUser = await prisma.user.upsert({
       where: { email: 'manager@richmond-dms.com' },
-      update: {},
+      update: {
+        roleId: managerRole.id,
+        isActive: true
+      },
       create: {
         email: 'manager@richmond-dms.com',
         passwordHash: managerPassword,
@@ -192,7 +198,10 @@ async function main() {
 
     const regularUser = await prisma.user.upsert({
       where: { email: 'user@richmond-dms.com' },
-      update: {},
+      update: {
+        roleId: userRole.id,
+        isActive: true
+      },
       create: {
         email: 'user@richmond-dms.com',
         passwordHash: userPassword,
@@ -212,10 +221,11 @@ async function main() {
     // ========================================
     // AIR FORCE WORKFLOW USERS (testpass123)
     // ========================================
+    // Create Air Force roles with proper roleType for workflow permissions
     const airforceAdminRole = await prisma.role.upsert({
       where: {
-        name_organizationId: {
-          name: 'Admin',
+        roleType_organizationId: {
+          roleType: 'ADMIN',
           organizationId: airforceOrg.id
         }
       },
@@ -226,73 +236,188 @@ async function main() {
         permissions: ['*'],
         isSystem: true,
         organizationId: airforceOrg.id,
+        roleType: 'ADMIN'
       },
     });
 
-    const airforceUserRole = await prisma.role.upsert({
+    const actionOfficerRole = await prisma.role.upsert({
       where: {
-        name_organizationId: {
-          name: 'User',
+        roleType_organizationId: {
+          roleType: 'ACTION_OFFICER',
           organizationId: airforceOrg.id
         }
       },
       update: {},
       create: {
-        name: 'User',
-        description: 'Air Force User',
-        permissions: ['DOCUMENT_READ', 'DOCUMENT_WRITE'],
+        name: 'Action Officer',
+        description: 'Office of Primary Responsibility Action Officer',
+        permissions: ['DOCUMENT_READ', 'DOCUMENT_WRITE', 'DOCUMENT_CREATE', 'WORKFLOW_START', 'WORKFLOW_SUBMIT'],
         isSystem: true,
         organizationId: airforceOrg.id,
+        roleType: 'ACTION_OFFICER'
+      },
+    });
+
+    const pcmRole = await prisma.role.upsert({
+      where: {
+        roleType_organizationId: {
+          roleType: 'PCM',
+          organizationId: airforceOrg.id
+        }
+      },
+      update: {},
+      create: {
+        name: 'PCM',
+        description: 'Program Control Manager',
+        permissions: ['DOCUMENT_READ', 'DOCUMENT_WRITE', 'WORKFLOW_REVIEW', 'WORKFLOW_APPROVE'],
+        isSystem: true,
+        organizationId: airforceOrg.id,
+        roleType: 'PCM'
+      },
+    });
+
+    const coordinatorRole = await prisma.role.upsert({
+      where: {
+        roleType_organizationId: {
+          roleType: 'COORDINATOR',
+          organizationId: airforceOrg.id
+        }
+      },
+      update: {},
+      create: {
+        name: 'Coordinator',
+        description: 'Coordination Workflow Manager',
+        permissions: ['DOCUMENT_READ', 'DOCUMENT_DISTRIBUTE', 'WORKFLOW_COORDINATE'],
+        isSystem: true,
+        organizationId: airforceOrg.id,
+        roleType: 'COORDINATOR'
+      },
+    });
+
+    const subReviewerRole = await prisma.role.upsert({
+      where: {
+        roleType_organizationId: {
+          roleType: 'SUB_REVIEWER',
+          organizationId: airforceOrg.id
+        }
+      },
+      update: {},
+      create: {
+        name: 'Sub-Reviewer',
+        description: 'Subject Matter Expert Reviewer',
+        permissions: ['DOCUMENT_READ', 'DOCUMENT_COMMENT', 'WORKFLOW_REVIEW'],
+        isSystem: true,
+        organizationId: airforceOrg.id,
+        roleType: 'SUB_REVIEWER'
+      },
+    });
+
+    const legalRole = await prisma.role.upsert({
+      where: {
+        roleType_organizationId: {
+          roleType: 'LEGAL',
+          organizationId: airforceOrg.id
+        }
+      },
+      update: {},
+      create: {
+        name: 'Legal Reviewer',
+        description: 'Legal Compliance Officer',
+        permissions: ['DOCUMENT_READ', 'DOCUMENT_COMMENT', 'WORKFLOW_LEGAL_REVIEW'],
+        isSystem: true,
+        organizationId: airforceOrg.id,
+        roleType: 'LEGAL'
+      },
+    });
+
+    const leadershipRole = await prisma.role.upsert({
+      where: {
+        roleType_organizationId: {
+          roleType: 'LEADERSHIP',
+          organizationId: airforceOrg.id
+        }
+      },
+      update: {},
+      create: {
+        name: 'Leadership',
+        description: 'OPR Leadership',
+        permissions: ['DOCUMENT_READ', 'WORKFLOW_APPROVE', 'WORKFLOW_SIGN'],
+        isSystem: true,
+        organizationId: airforceOrg.id,
+        roleType: 'LEADERSHIP'
+      },
+    });
+
+    const publisherRole = await prisma.role.upsert({
+      where: {
+        roleType_organizationId: {
+          roleType: 'PUBLISHER',
+          organizationId: airforceOrg.id
+        }
+      },
+      update: {},
+      create: {
+        name: 'Publisher',
+        description: 'AFDPO Publications Office',
+        permissions: ['DOCUMENT_READ', 'DOCUMENT_PUBLISH', 'WORKFLOW_COMPLETE'],
+        isSystem: true,
+        organizationId: airforceOrg.id,
+        roleType: 'PUBLISHER'
       },
     });
 
     const airforceUsers = [
       // Stage 1: Action Officers
-      { email: 'ao1@airforce.mil', firstName: 'Primary', lastName: 'Action Officer', role: airforceUserRole },
-      { email: 'ao2@airforce.mil', firstName: 'Secondary', lastName: 'Action Officer', role: airforceUserRole },
+      { email: 'ao1@airforce.mil', firstName: 'Primary', lastName: 'Action Officer', role: actionOfficerRole },
+      { email: 'ao2@airforce.mil', firstName: 'Secondary', lastName: 'Action Officer', role: actionOfficerRole },
 
       // Stage 2: PCM
-      { email: 'pcm@airforce.mil', firstName: 'Program', lastName: 'Control Manager', role: airforceAdminRole },
+      { email: 'pcm@airforce.mil', firstName: 'Program', lastName: 'Control Manager', role: pcmRole },
 
       // Coordinator
-      { email: 'coordinator1@airforce.mil', firstName: 'Workflow', lastName: 'Coordinator', role: airforceAdminRole },
+      { email: 'coordinator1@airforce.mil', firstName: 'Workflow', lastName: 'Coordinator', role: coordinatorRole },
 
-      // Front Office Gatekeepers
-      { email: 'ops.frontoffice@airforce.mil', firstName: 'Operations', lastName: 'Front Office', role: airforceUserRole },
-      { email: 'log.frontoffice@airforce.mil', firstName: 'Logistics', lastName: 'Front Office', role: airforceUserRole },
-      { email: 'fin.frontoffice@airforce.mil', firstName: 'Finance', lastName: 'Front Office', role: airforceUserRole },
-      { email: 'per.frontoffice@airforce.mil', firstName: 'Personnel', lastName: 'Front Office', role: airforceUserRole },
+      // Front Office Gatekeepers (Sub-Reviewers)
+      { email: 'ops.frontoffice@airforce.mil', firstName: 'Operations', lastName: 'Front Office', role: subReviewerRole },
+      { email: 'log.frontoffice@airforce.mil', firstName: 'Logistics', lastName: 'Front Office', role: subReviewerRole },
+      { email: 'fin.frontoffice@airforce.mil', firstName: 'Finance', lastName: 'Front Office', role: subReviewerRole },
+      { email: 'per.frontoffice@airforce.mil', firstName: 'Personnel', lastName: 'Front Office', role: subReviewerRole },
 
       // Squadron Leadership
-      { email: 'sq.cc@airforce.mil', firstName: 'Squadron', lastName: 'Commander', role: airforceAdminRole },
-      { email: 'sq.do@airforce.mil', firstName: 'Squadron', lastName: 'Director Ops', role: airforceAdminRole },
+      { email: 'sq.cc@airforce.mil', firstName: 'Squadron', lastName: 'Commander', role: leadershipRole },
+      { email: 'sq.do@airforce.mil', firstName: 'Squadron', lastName: 'Director Ops', role: leadershipRole },
 
       // Group Leadership
-      { email: 'gp.cc@airforce.mil', firstName: 'Group', lastName: 'Commander', role: airforceAdminRole },
-      { email: 'gp.cd@airforce.mil', firstName: 'Group', lastName: 'Deputy Commander', role: airforceAdminRole },
+      { email: 'gp.cc@airforce.mil', firstName: 'Group', lastName: 'Commander', role: leadershipRole },
+      { email: 'gp.cd@airforce.mil', firstName: 'Group', lastName: 'Deputy Commander', role: leadershipRole },
 
       // Wing Leadership
-      { email: 'wg.cc@airforce.mil', firstName: 'Wing', lastName: 'Commander', role: airforceAdminRole },
-      { email: 'wg.cv@airforce.mil', firstName: 'Wing', lastName: 'Vice Commander', role: airforceAdminRole },
+      { email: 'wg.cc@airforce.mil', firstName: 'Wing', lastName: 'Commander', role: leadershipRole },
+      { email: 'wg.cv@airforce.mil', firstName: 'Wing', lastName: 'Vice Commander', role: leadershipRole },
 
       // Executive Review
-      { email: 'exec.reviewer1@airforce.mil', firstName: 'Executive', lastName: 'Reviewer One', role: airforceAdminRole },
-      { email: 'exec.reviewer2@airforce.mil', firstName: 'Executive', lastName: 'Reviewer Two', role: airforceAdminRole },
+      { email: 'exec.reviewer1@airforce.mil', firstName: 'Executive', lastName: 'Reviewer One', role: leadershipRole },
+      { email: 'exec.reviewer2@airforce.mil', firstName: 'Executive', lastName: 'Reviewer Two', role: leadershipRole },
 
       // Final Approval
-      { email: 'final.approver@airforce.mil', firstName: 'Final', lastName: 'Approver', role: airforceAdminRole },
+      { email: 'final.approver@airforce.mil', firstName: 'Final', lastName: 'Approver', role: leadershipRole },
 
       // Additional Key Roles
-      { email: 'legal.reviewer@airforce.mil', firstName: 'Legal', lastName: 'Compliance Officer', role: airforceAdminRole },
-      { email: 'opr.leadership@airforce.mil', firstName: 'OPR', lastName: 'Commander', role: airforceAdminRole },
-      { email: 'afdpo.publisher@airforce.mil', firstName: 'AFDPO', lastName: 'Publisher', role: airforceAdminRole },
+      { email: 'legal.reviewer@airforce.mil', firstName: 'Legal', lastName: 'Compliance Officer', role: legalRole },
+      { email: 'opr.leadership@airforce.mil', firstName: 'OPR', lastName: 'Commander', role: leadershipRole },
+      { email: 'afdpo.publisher@airforce.mil', firstName: 'AFDPO', lastName: 'Publisher', role: publisherRole },
       { email: 'admin@airforce.mil', firstName: 'Workflow', lastName: 'Administrator', role: airforceAdminRole },
     ];
 
     for (const userData of airforceUsers) {
       await prisma.user.upsert({
         where: { email: userData.email },
-        update: {},
+        update: {
+          roleId: userData.role.id,  // Update role for existing users
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          isActive: true
+        },
         create: {
           email: userData.email,
           passwordHash: testPassword,
@@ -328,7 +453,10 @@ async function main() {
     for (const reviewer of subReviewers) {
       await prisma.user.upsert({
         where: { email: reviewer.email },
-        update: {},
+        update: {
+          roleId: subReviewerRole.id,  // Update role for existing users
+          isActive: true
+        },
         create: {
           email: reviewer.email,
           passwordHash: reviewerPassword,

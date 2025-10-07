@@ -30,12 +30,16 @@ export const authMiddleware = async (
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
-      console.log('Received Bearer token:', token.substring(0, 20) + '...');
-    } else {
-      console.log('No Authorization header or invalid format. Headers:', JSON.stringify(req.headers, null, 2));
+      console.log('Token found, proceeding with verification...');
     }
 
-    // If no header token, try query parameter for iframe/image requests
+    // If no header token, try cookies (for browser requests)
+    if (!token && req.cookies && req.cookies.accessToken) {
+      token = req.cookies.accessToken;
+      console.log('Using cookie token');
+    }
+
+    // If no cookie token, try query parameter for iframe/image requests
     if (!token && req.query.token) {
       token = req.query.token as string;
       console.log('Using query parameter token for document view:', token.substring(0, 20) + '...');

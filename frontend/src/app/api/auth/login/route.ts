@@ -36,7 +36,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create response with user data
+    // Check X-Forwarded-Proto header to determine if connection is secure (for reverse proxy)
+    const isSecure = request.headers.get('x-forwarded-proto') === 'https' ||
+                     process.env.NODE_ENV === 'production';
+
+    // Build Set-Cookie headers manually for better compatibility with nginx
+    const cookieOptions = isSecure
+      ? 'Secure; SameSite=Lax; Path=/'
+      : 'SameSite=Lax; Path=/';
+
+    const accessTokenCookie = `accessToken=${data.accessToken}; Max-Age=${15 * 60}; ${cookieOptions}`;
+    const refreshTokenCookie = `refreshToken=${data.refreshToken}; Max-Age=${7 * 24 * 60 * 60}; ${cookieOptions}`;
+
+    // Create response with user data and manually set cookies
     const response = NextResponse.json({
       success: true,
       user: data.user,
@@ -44,33 +56,17 @@ export async function POST(request: NextRequest) {
       refreshToken: data.refreshToken,
     });
 
-    // Set HTTP-only cookies for security
-    if (data.accessToken) {
-      response.cookies.set('accessToken', data.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 15 * 60 * 1000, // 15 minutes in milliseconds
-        path: '/',
-      });
-    }
-
-    if (data.refreshToken) {
-      response.cookies.set('refreshToken', data.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-        path: '/',
-      });
-    }
+    // Set cookies using headers (more reliable with reverse proxy)
+    response.headers.append('Set-Cookie', accessTokenCookie);
+    response.headers.append('Set-Cookie', refreshTokenCookie);
 
     return response;
 
   } catch (error) {
     console.error('Login API error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

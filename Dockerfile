@@ -1,6 +1,14 @@
 # Simplified Dockerfile for workspace-based monorepo
 FROM node:24-alpine3.21
 
+# Build arguments for Next.js public environment variables
+ARG NEXT_PUBLIC_APP_MODE=production
+ARG NEXT_PUBLIC_ENABLE_LOGIN=true
+
+# Set as environment variables so Next.js can access them during build
+ENV NEXT_PUBLIC_APP_MODE=$NEXT_PUBLIC_APP_MODE
+ENV NEXT_PUBLIC_ENABLE_LOGIN=$NEXT_PUBLIC_ENABLE_LOGIN
+
 # Install system dependencies
 RUN apk add --no-cache \
     python3 \

@@ -158,7 +158,8 @@ export const useDocumentData = ({ documentId, userRole }: UseDocumentDataProps) 
   const loadWorkflowStatus = useCallback(async () => {
     try {
       // Use POST with documentId in body to avoid Next.js route issues
-      const response = await api.post('/api/workflow-instances-get', { documentId });
+      // Call backend directly since nginx routes /api/ to backend
+      const response = await api.get(`/api/workflow-instances/${documentId}`);
       if (response.ok) {
         const data = await response.json();
         setWorkflowStatus(data);

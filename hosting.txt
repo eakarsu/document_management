@@ -1,0 +1,4 @@
+docker rm -f richmond-dms-app
+  docker rmi eakarsun4/richmond-dms:latest
+  docker pull eakarsun4/richmond-dms:latest
+  docker-compose -f docker-compose.aws.yml --env-file .env.aws up -d

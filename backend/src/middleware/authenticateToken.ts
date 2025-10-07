@@ -10,18 +10,24 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  // Try to get token from Authorization header first, then from query parameters
+  // Try to get token from Authorization header first
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.split(' ')[1];
 
-  // If no header token, try query parameter for iframe/image requests
+  // If no header token, try cookies (for browser requests)
+  if (!token && req.cookies && req.cookies.accessToken) {
+    token = req.cookies.accessToken;
+    console.log('Using cookie token');
+  }
+
+  // If no cookie token, try query parameter for iframe/image requests
   if (!token && req.query.token) {
     token = req.query.token as string;
     console.log('Using query parameter token:', token.substring(0, 20) + '...');
   }
 
   if (!token) {
-    console.log('No token found in headers or query parameters');
+    console.log('No token found in headers, cookies, or query parameters');
     return res.status(401).json({ error: 'Access token required' });
   }
 

@@ -9,7 +9,7 @@ const publicRoutes = ['/login', '/register', '/forgot-password', '/verify-email'
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   // Allow preview, draft, and export routes without authentication
   if (pathname.includes('/api/documents/') && (pathname.endsWith('/preview') || pathname.includes('/draft') || pathname.includes('/export'))) {
     const response = NextResponse.next();
@@ -20,13 +20,22 @@ export function middleware(request: NextRequest) {
     response.headers.set('Access-Control-Allow-Credentials', 'true');
     return response;
   }
-  
+
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
-  
+
   // Get authentication token from cookies
   const accessToken = request.cookies.get('accessToken')?.value;
   const hasValidToken = Boolean(accessToken);
+
+  // Debug logging
+  if (pathname === '/dashboard') {
+    console.log('[Middleware] Dashboard access:', {
+      hasToken: hasValidToken,
+      tokenPreview: accessToken ? accessToken.substring(0, 20) + '...' : 'none',
+      cookies: request.cookies.getAll().map(c => c.name)
+    });
+  }
 
   // Prevent redirect loops - don't redirect if already on login with redirect param
   const hasRedirectParam = request.nextUrl.searchParams.has('redirect');
@@ -43,7 +52,8 @@ export function middleware(request: NextRequest) {
     if (isAlreadyOnLogin) {
       return NextResponse.next();
     }
-    
+
+    console.log('[Middleware] Redirecting to login, no token found for:', pathname);
     const loginUrl = new URL('/login', request.url);
     // Add redirect parameter to return to original destination after login
     loginUrl.searchParams.set('redirect', pathname);
@@ -52,6 +62,7 @@ export function middleware(request: NextRequest) {
 
   // If accessing a public route with a valid token, redirect to dashboard
   if (isPublicRoute && hasValidToken) {
+    console.log('[Middleware] Redirecting to dashboard from public route:', pathname);
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
@@ -90,7 +101,7 @@ export function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: http: https:",
     "font-src 'self'",
-    "connect-src 'self' http://*:4000 https://*:4000 ws://*:* wss://*:*",
+    "connect-src 'self' http://*:4000 https://*:4000 ws://*:* wss://*:* https://api.ipify.org",
     "frame-src 'self' http://*:4000 https://*:4000 blob:",
     "media-src 'self'",
     "object-src 'none'",

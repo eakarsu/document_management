@@ -76,8 +76,8 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
       setLoading(true);
       setError(null);
 
-      // Use POST with documentId in body to avoid Next.js route issues
-      const response = await api.post('/api/workflow-instances-get', { documentId });
+      // Call backend directly since nginx routes /api/ to backend
+      const response = await api.get(`/api/workflow-instances/${documentId}`);
       if (!response.ok) {
         throw new Error('Failed to load workflow status');
       }
@@ -308,11 +308,11 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
           </Grid>
         )}
 
-        {/* Actions */}
-        {(filteredActions.length > 0 || userRole === 'Admin') && (
+        {/* Actions - Only show if workflow is not completed */}
+        {(filteredActions.length > 0 || userRole === 'Admin') && !workflowInstance?.completedAt && (
           <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
-              {filteredActions.length > 0 && (
+              {filteredActions.length > 0 && !workflowInstance?.completedAt && (
                 <>
                   <Typography variant="h6" gutterBottom>
                     Available Actions

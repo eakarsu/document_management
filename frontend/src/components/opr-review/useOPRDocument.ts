@@ -15,7 +15,7 @@ export const useOPRDocument = (documentId: string) => {
   const fetchDocumentAndFeedback = useCallback(async () => {
     console.log('fetchDocumentAndFeedback called for document:', documentId);
     try {
-      let hasFeedbackFromDoc = false;
+      let allFeedback: CRMComment[] = [];
 
       // Fetch document
       const docResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`);
@@ -43,40 +43,42 @@ export const useOPRDocument = (documentId: string) => {
         setDocumentContent(content);
         setEditableContent(content);
 
-        // Check for feedback stored with document
-        console.log('Checking for crmComments in document customFields:', doc.customFields);
+        // Collect feedback from all possible sources
+        console.log('Checking for feedback in document customFields:', doc.customFields);
+
+        // Check crmComments
         if (doc.customFields?.crmComments && Array.isArray(doc.customFields.crmComments)) {
-          const existingFeedback = doc.customFields.crmComments.filter((c: any) => c && c.id);
-          console.log('Found crmComments in document:', existingFeedback);
-          if (existingFeedback.length > 0) {
-            setFeedback(existingFeedback);
-            hasFeedbackFromDoc = true;
-          }
+          const crmComments = doc.customFields.crmComments.filter((c: any) => c && c.id);
+          console.log('Found crmComments in document:', crmComments.length);
+          allFeedback = [...allFeedback, ...crmComments];
         }
 
-        // Also check for crmFeedback field
-        if (!hasFeedbackFromDoc && doc.customFields?.crmFeedback && Array.isArray(doc.customFields.crmFeedback)) {
-          const crmFeedback = doc.customFields.crmFeedback;
-          console.log('Found crmFeedback in document:', crmFeedback);
-          if (crmFeedback.length > 0) {
-            setFeedback(crmFeedback);
-            hasFeedbackFromDoc = true;
-          }
+        // Check crmFeedback field
+        if (doc.customFields?.crmFeedback && Array.isArray(doc.customFields.crmFeedback)) {
+          const crmFeedback = doc.customFields.crmFeedback.filter((c: any) => c && c.id);
+          console.log('Found crmFeedback in document:', crmFeedback.length);
+          allFeedback = [...allFeedback, ...crmFeedback];
         }
 
-        // Also check for commentMatrix field (used by Submit Review)
-        if (!hasFeedbackFromDoc && doc.customFields?.commentMatrix && Array.isArray(doc.customFields.commentMatrix)) {
-          const commentMatrix = doc.customFields.commentMatrix;
-          console.log('Found commentMatrix in document:', commentMatrix);
-          if (commentMatrix.length > 0) {
-            setFeedback(commentMatrix);
-            hasFeedbackFromDoc = true;
-          }
+        // Check commentMatrix field (used by Submit Review)
+        if (doc.customFields?.commentMatrix && Array.isArray(doc.customFields.commentMatrix)) {
+          const commentMatrix = doc.customFields.commentMatrix.filter((c: any) => c && c.id);
+          console.log('Found commentMatrix in document:', commentMatrix.length);
+          allFeedback = [...allFeedback, ...commentMatrix];
+        }
+
+        // Deduplicate feedback by ID
+        if (allFeedback.length > 0) {
+          const uniqueFeedback = Array.from(
+            new Map(allFeedback.map(item => [item.id, item])).values()
+          );
+          console.log(`Total feedback items before deduplication: ${allFeedback.length}, after: ${uniqueFeedback.length}`);
+          setFeedback(uniqueFeedback);
         }
       }
 
-      // Fetch OPR feedback if not found in document
-      if (!hasFeedbackFromDoc) {
+      // Also fetch OPR feedback from API endpoint and merge
+      if (allFeedback.length === 0) {
         try {
           const feedbackResponse = await authTokenService.authenticatedFetch(
             `/api/documents/${documentId}/feedback`
@@ -84,7 +86,7 @@ export const useOPRDocument = (documentId: string) => {
 
           if (feedbackResponse.ok) {
             const feedbackData = await feedbackResponse.json();
-            console.log('Fetched feedback data:', feedbackData);
+            console.log('Fetched feedback data from API:', feedbackData);
 
             // Extract CRM comments from the feedback response
             if (feedbackData && feedbackData.feedback) {
@@ -97,13 +99,15 @@ export const useOPRDocument = (documentId: string) => {
               });
 
               if (extractedComments.length > 0) {
-                console.log('Setting feedback:', extractedComments);
-                // Log the actual structure of the first feedback item
-                console.log('First feedback item structure:', JSON.stringify(extractedComments[0], null, 2));
-                console.log('Does it have originalText?', extractedComments[0].originalText);
-                console.log('Does it have recommendedText?', extractedComments[0].recommendedText);
-                console.log('All keys in first feedback:', Object.keys(extractedComments[0]));
-                setFeedback(extractedComments);
+                console.log('Found feedback from API:', extractedComments.length);
+                allFeedback = [...allFeedback, ...extractedComments];
+
+                // Deduplicate again
+                const uniqueFeedback = Array.from(
+                  new Map(allFeedback.map(item => [item.id, item])).values()
+                );
+                console.log(`Total feedback after API merge: ${allFeedback.length}, unique: ${uniqueFeedback.length}`);
+                setFeedback(uniqueFeedback);
               }
             }
           }

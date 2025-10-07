@@ -107,27 +107,53 @@ CRITICAL PARAGRAPH NUMBERING RULE:
       }
     ];
 
+    const requestBody = {
+      model: 'openai/gpt-4o', // Use GPT-4o (ChatGPT 5) for best performance
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: Math.min(16000, pages * 2000)  // Dynamic based on pages, up to 16k tokens
+    };
+
+    console.log('Sending request to OpenRouter:', {
+      model: requestBody.model,
+      messageCount: messages.length,
+      promptLength: prompt.length,
+      maxTokens: requestBody.max_tokens
+    });
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost:3000',
-        'X-Title': 'Document Generator'
+        'HTTP-Referer': 'https://www.missionsyncai.com',
+        'X-Title': 'Richmond Document Generator'
       },
-      body: JSON.stringify({
-        model: 'openai/gpt-4o', // Use GPT-4o (ChatGPT 5) for best performance
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: Math.min(16000, pages * 2000)  // Dynamic based on pages, up to 16k tokens
-      })
+      body: JSON.stringify(requestBody),
+      timeout: 180000  // 3 minute timeout for large requests
     });
 
+    // Log response details for debugging
+    console.log('OpenRouter response status:', response.status);
+    console.log('OpenRouter response headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('OpenRouter API error response:', errorText);
+      throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
     }
 
-    const data = await response.json() as any;
+    const responseText = await response.text();
+    console.log('OpenRouter raw response (first 500 chars):', responseText.substring(0, 500));
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse OpenRouter response as JSON:', parseError);
+      console.error('Full response text:', responseText);
+      throw new Error(`Invalid JSON response from OpenRouter API. Response: ${responseText.substring(0, 200)}`);
+    }
     let content = data.choices[0]?.message?.content || '';
 
     // Log the AI response for debugging

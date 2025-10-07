@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
 
-    // Forward to backend workflow endpoint
-    const backendUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/workflow/8-stage/document/${documentId}`;
+    // Forward to backend workflow endpoint (12-stage pluggable workflow)
+    const backendUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/workflow/documents/${documentId}/workflow/status`;
 
     const backendResponse = await fetch(backendUrl, {
       method: 'GET',
@@ -83,11 +83,11 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'get_status':
-        backendUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/workflow/8-stage/document/${documentId}`;
+        backendUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/workflow/documents/${documentId}/workflow/status`;
         method = 'GET';
         break;
       case 'start_workflow':
-        backendUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/workflow/8-stage/start/${documentId}`;
+        backendUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/workflow/documents/${documentId}/workflow/initialize`;
         method = 'POST';
         requestBody = JSON.stringify({ documentId });
         break;

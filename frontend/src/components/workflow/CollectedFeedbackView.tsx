@@ -84,16 +84,15 @@ const CollectedFeedbackView: React.FC<CollectedFeedbackViewProps> = ({
       setLoading(true);
 
       // First fetch workflow instance to get current stage
-      // Use POST with documentId in body to avoid Next.js route issues
+      // Call backend directly since nginx routes /api/ to backend
       const workflowResponse = await authTokenService.authenticatedFetch(
-        `/api/workflow-instances-get`,
+        `/api/workflow-instances/${documentId}`,
         {
-          method: 'POST',
+          method: 'GET',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
-          },
-          body: JSON.stringify({ documentId })
+          }
         }
       );
 

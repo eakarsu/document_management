@@ -37,14 +37,7 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
-  // Check if already authenticated
-  React.useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      const redirect = new URLSearchParams(window.location.search).get('redirect') || '/dashboard';
-      router.push(redirect);
-    }
-  }, [router]);
+  // Middleware handles auth redirect - no need to check here
 
   const validateForm = () => {
     if (!formData.email) {
@@ -154,16 +147,17 @@ const LoginPage: React.FC = () => {
         body: JSON.stringify(formData),
       });
 
+      console.log('📡 Response received:', { status: response.status, ok: response.ok, statusText: response.statusText });
+
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Login successful, received data:', { user: data.user?.email, hasToken: !!data.accessToken, fullData: data });
 
-        // Store tokens in localStorage
+        // Store tokens in localStorage for client-side API calls
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
 
-        // Set cookies for middleware
-        document.cookie = `accessToken=${data.accessToken}; path=/; samesite=strict`;
-        document.cookie = `refreshToken=${data.refreshToken}; path=/; samesite=strict`;
+        // Cookies are already set by the API route - no need to set them here
 
         // Store user data
         const userData = {
@@ -177,19 +171,29 @@ const LoginPage: React.FC = () => {
         localStorage.setItem('userEmail', data.user.email || formData.email);
         localStorage.setItem('username', data.user.username || data.user.email || formData.email);
 
-        // Wait a bit for localStorage to sync, then do a hard redirect
-        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log('💾 Stored in localStorage');
+        console.log('🍪 Cookies should be set by API response');
 
-        // Use window.location for hard redirect to ensure AuthProvider loads fresh state
-        const redirect = new URLSearchParams(window.location.search).get('redirect') || '/dashboard';
-        window.location.href = redirect;
+        // Wait for cookies to be processed before redirecting
+        // This is critical - the Set-Cookie header needs time to be processed
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const redirectPath = new URLSearchParams(window.location.search).get('redirect') || '/dashboard';
+        console.log('🔄 Redirecting to:', redirectPath);
+
+        // Use router.push for client-side navigation that preserves cookies
+        router.push(redirectPath);
+        return;
       } else {
         const errorData = await response.json();
-        setError(errorData.message || 'Login failed');
+        console.error('❌ Login failed:', errorData);
+        setError(errorData.error || errorData.message || 'Login failed');
       }
     } catch (err) {
+      console.error('❌ Login exception:', err);
       setError('Network error. Please try again.');
     } finally {
+      console.log('🏁 Login process finished');
       setIsLoading(false);
       submitRef.current = false;
     }
