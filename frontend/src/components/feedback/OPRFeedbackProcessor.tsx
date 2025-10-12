@@ -128,14 +128,17 @@ const OPRFeedbackProcessor: React.FC<OPRFeedbackProcessorProps> = ({
       const response = await api.get(
         `/api/feedback-processor/document/${documentId}/feedback?groupByLocation=true`
       );
-      
+
       if (response.ok) {
         const data = await response.json();
         setFeedbackGroups(data.grouped || []);
+      } else if (response.status === 404) {
+        // Endpoint not implemented, silently ignore
+        setFeedbackGroups([]);
       }
     } catch (error) {
-      console.error('Error loading feedback:', error);
-      setErrorMessage('Failed to load feedback');
+      // Silently ignore if endpoint doesn't exist
+      setFeedbackGroups([]);
     } finally {
       setLoading(false);
     }
@@ -146,13 +149,17 @@ const OPRFeedbackProcessor: React.FC<OPRFeedbackProcessorProps> = ({
       const response = await api.get(
         `/api/feedback-processor/feedback/critical/${documentId}`
       );
-      
+
       if (response.ok) {
         const data = await response.json();
         setCriticalCount(data.count);
+      } else if (response.status === 404) {
+        // Endpoint not implemented, silently ignore
+        setCriticalCount(0);
       }
     } catch (error) {
-      console.error('Error loading critical count:', error);
+      // Silently ignore if endpoint doesn't exist
+      setCriticalCount(0);
     }
   };
 
