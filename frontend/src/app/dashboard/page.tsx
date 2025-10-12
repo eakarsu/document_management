@@ -883,31 +883,6 @@ const DashboardPage: React.FC = () => {
                 </Paper>
               </Grid>
             )}
-
-            {/* AI Workflow Section */}
-            <Grid item xs={12} md={6} lg={4}>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<AIIcon />}
-                    size="large"
-                    onClick={handleAIWorkflow}
-                    sx={{
-                      color: 'primary.main',
-                    borderColor: 'primary.main',
-                    '&:hover': {
-                      borderColor: 'primary.dark',
-                      backgroundColor: 'primary.light'
-                    }
-                  }}
-                >
-                  🤖 AI Workflow Assistant
-                </Button>
-                </Grid>
-              </Grid>
-            </Grid>
         </Grid>
 
           {/* Workflow Tasks - Pending Approvals */}
