@@ -32,6 +32,8 @@ import { useRouter } from 'next/navigation';
 import { Change } from '@/lib/tiptap-change-tracking';
 import { Comment } from '@/lib/tiptap-comments';
 import { ViewMode } from '@/types/editor';
+import { TableGridPicker } from './TableGridPicker';
+import { TableControls } from './TableControls';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -127,6 +129,12 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               <Redo fontSize="small" />
             </IconButton>
           </ButtonGroup>
+
+          {/* Table Grid Picker */}
+          <TableGridPicker editor={editor} />
+
+          {/* Table Controls - Only visible when cursor is in a table */}
+          <TableControls editor={editor} />
         </Box>
 
         <Divider orientation="vertical" flexItem />

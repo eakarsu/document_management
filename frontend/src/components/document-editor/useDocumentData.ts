@@ -27,6 +27,15 @@ export const useDocumentData = (documentId: string) => {
 
       const response = await api.get(`/api/documents/${documentId}`);
 
+      if (response.status === 401) {
+        // Unauthorized - redirect to login
+        console.error('Unauthorized access - redirecting to login');
+        if (typeof window !== 'undefined') {
+          window.location.href = `/login?redirect=/editor/${documentId}`;
+        }
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
         const document = data.document || data;
@@ -98,6 +107,8 @@ export const useDocumentData = (documentId: string) => {
     try {
       setEditorState(prev => ({ ...prev, saving: true, error: null }));
 
+      console.log('💾 Saving document - content length:', content.length, 'has table:', content.includes('<table'));
+
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
         method: 'PATCH',
         headers: {
@@ -107,7 +118,9 @@ export const useDocumentData = (documentId: string) => {
           content,
           customFields: {
             ...documentData?.customFields,
-            content, // Store content in customFields as well
+            content, // Store content in customFields
+            editableContent: content, // Also store in editableContent (this is what gets loaded first)
+            htmlContent: content, // And htmlContent for consistency
             lastEditedAt: new Date().toISOString(),
           },
         }),
@@ -176,19 +189,24 @@ export const useDocumentData = (documentId: string) => {
     setEditorState(prev => ({ ...prev, showChanges }));
   }, []);
 
+  // Load document only once on mount - never reload automatically to preserve user edits
   useEffect(() => {
     loadDocument();
-  }, [loadDocument]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId]); // Only reload if documentId changes, not on every loadDocument change
 
-  // Auto-save functionality - DISABLED to prevent save errors
+  // Auto-save functionality - DISABLED because documentData.content can be null
+  // Auto-save is handled in the editor page component instead where editor is available
   // useEffect(() => {
-  //   if (!editorState.hasUnsavedChanges || editorState.saving || !documentData) {
+  //   if (!editorState.hasUnsavedChanges || editorState.saving || !documentData || !documentData.content) {
   //     return;
   //   }
 
+  //   console.log('⏳ Auto-save scheduled in 3 seconds...');
   //   const autoSaveTimer = setTimeout(() => {
+  //     console.log('💾 Auto-saving document...');
   //     saveDocument(documentData.content, false);
-  //   }, 5000); // Auto-save after 5 seconds of inactivity
+  //   }, 3000); // Auto-save after 3 seconds of inactivity
 
   //   return () => clearTimeout(autoSaveTimer);
   // }, [editorState.hasUnsavedChanges, editorState.saving, documentData, saveDocument]);

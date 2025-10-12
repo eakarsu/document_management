@@ -80,6 +80,7 @@ export const createEditorConfig = (options: {
 
   return {
     immediatelyRender: false,
+    editable: true,  // Explicitly set editor as editable
     content,
     parseOptions: {
       preserveWhitespace: 'full' as 'full',
@@ -87,6 +88,7 @@ export const createEditorConfig = (options: {
     editorProps: {
       attributes: {
         class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none',
+        contenteditable: 'true',  // Ensure contenteditable attribute is set
       },
       transformPastedHTML(html) {
         return html;
@@ -175,5 +177,7 @@ export const createEditorConfig = (options: {
 };
 
 export const useDocumentEditor = (options: Parameters<typeof createEditorConfig>[0]) => {
-  return useEditor(createEditorConfig(options), [options.content]);
+  // Don't include options.content in dependencies to prevent editor recreation
+  // Content should be set via setContent command, not by recreating the editor
+  return useEditor(createEditorConfig(options));
 };

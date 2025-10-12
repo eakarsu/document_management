@@ -76,7 +76,9 @@ import AdvancedSearchReplace from '@/components/editor/AdvancedSearchReplace';
 import AirForceHeader from '@/components/editor/AirForceHeader';
 import { EditorToolbar } from '@/components/editor/EditorToolbar';
 import { AdvancedToolbar } from '@/components/editor/AdvancedToolbar';
+import { TableGridPicker } from '@/components/editor/TableGridPicker';
 import '@/styles/supplement-marks.css';
+import '@/styles/editor-document.css';
 
 const DocumentEditor: React.FC = () => {
   const router = useRouter();
@@ -142,6 +144,9 @@ const DocumentEditor: React.FC = () => {
   const calculatePageFromCursorRef = useRef<(() => void) | null>(null);
   const calculatePageFromScrollRef = useRef<(() => void) | null>(null);
 
+  // Track if content is being updated by user to prevent cursor jumps
+  const isUserEditingRef = useRef(false);
+
   // Get actual content to use - comprehensive content loading with full document content including TOC
   const getActualContent = () => {
     if (!documentData) return '';
@@ -158,23 +163,35 @@ const DocumentEditor: React.FC = () => {
     // Priority order for content loading
     let content = '';
 
-    // Priority: editableContent (without header) > htmlContent > content > document.content
-    if (customFields?.editableContent) {
+    console.log('🔍 getActualContent - Checking all content fields:', {
+      hasEditableContent: !!customFields?.editableContent,
+      editableContentHasTable: customFields?.editableContent?.includes('<table'),
+      hasHtmlContent: !!customFields?.htmlContent,
+      htmlContentHasTable: customFields?.htmlContent?.includes('<table'),
+      hasCustomFieldsContent: !!customFields?.content,
+      customFieldsContentHasTable: customFields?.content?.includes('<table'),
+      hasDocumentContent: !!documentData.content,
+      documentContentHasTable: documentData.content?.includes('<table')
+    });
+
+    // Priority: content (most recent edits) > editableContent > htmlContent > document.content
+    // Changed priority to use 'content' first since that's where table edits are saved
+    if (customFields?.content) {
+      content = customFields.content;
+      console.log('✅ Using customFields.content (latest edits)', { length: content.length, hasTable: content.includes('<table'), preview: content.substring(0, 200) });
+    } else if (customFields?.editableContent) {
       // Use editableContent which already has the header removed
       content = customFields.editableContent;
-      console.log('Using customFields.editableContent (without header)', { length: content.length });
+      console.log('✅ Using customFields.editableContent (without header)', { length: content.length, hasTable: content.includes('<table') });
     } else if (customFields?.htmlContent) {
       content = customFields.htmlContent;
-      console.log('Using customFields.htmlContent', { length: content.length, preview: content.substring(0, 200) });
-    } else if (customFields?.content) {
-      content = customFields.content;
-      console.log('Using customFields.content', { length: content.length, preview: content.substring(0, 200) });
+      console.log('✅ Using customFields.htmlContent', { length: content.length, hasTable: content.includes('<table'), preview: content.substring(0, 200) });
     } else if (documentData.content) {
       content = documentData.content;
-      console.log('Using documentData.content', { length: content.length, preview: content.substring(0, 200) });
+      console.log('✅ Using documentData.content', { length: content.length, hasTable: content.includes('<table'), preview: content.substring(0, 200) });
     } else if (documentData.description) {
       content = `<p>${documentData.description}</p>`;
-      console.log('Using documentData.description as fallback');
+      console.log('✅ Using documentData.description as fallback');
     }
 
     // Log if we found table of contents in the content
@@ -182,8 +199,9 @@ const DocumentEditor: React.FC = () => {
                   content.includes('table-of-contents') ||
                   /<h[1-6][^>]*>\s*(table\s+of\s+contents|contents|toc)\s*<\/h[1-6]>/i.test(content);
 
-    console.log('Content analysis:', {
+    console.log('📊 Final content analysis:', {
       hasTableOfContents: hasTOC,
+      hasTable: content.includes('<table'),
       totalLength: content.length,
       hasHeadings: /<h[1-6]/i.test(content)
     });
@@ -191,7 +209,10 @@ const DocumentEditor: React.FC = () => {
     return content;
   };
 
-  const actualContent = getActualContent();
+  // Memoize actualContent so it doesn't recalculate on every render
+  const actualContent = React.useMemo(() => {
+    return getActualContent();
+  }, [documentData?.id]); // Only recalculate when document ID changes
 
   // Check if content already has a header
   const contentHasHeader = () => {
@@ -218,10 +239,26 @@ const DocumentEditor: React.FC = () => {
     userId: user?.id || 'anonymous',
     userName: user?.name || 'Anonymous User',
     onUpdate: (content: string) => {
+      isUserEditingRef.current = true;
+      console.log('📝 Editor content updated, length:', content.length, 'Has table:', content.includes('<table'));
       if (documentData) {
-        setDocumentData({ ...documentData, content });
+        // Create a new object reference so React detects the change
+        const updatedData = {
+          ...documentData,
+          content,
+          customFields: {
+            ...documentData.customFields,
+            content, // Update content in customFields too
+            lastEditedAt: new Date().toISOString()
+          }
+        };
+        setDocumentData(updatedData);
         updateWordCount(content);
       }
+      // Reset flag after a short delay
+      setTimeout(() => {
+        isUserEditingRef.current = false;
+      }, 100);
     },
     onSelectionUpdate: () => {
       if (calculatePageFromCursorRef.current) {
@@ -250,13 +287,47 @@ const DocumentEditor: React.FC = () => {
     loadUser();
   }, []);
 
-  // Update editor content when document data changes
+  // Ensure editor is editable
   useEffect(() => {
-    if (editor && documentData) {
-      const content = getActualContent();
-      editor.commands.setContent(content);
+    if (editor) {
+      editor.setEditable(true);
+      console.log('Editor set to editable:', editor.isEditable);
     }
-  }, [editor, documentData]);
+  }, [editor]);
+
+  // Auto-save functionality - save 3 seconds after user stops typing
+  useEffect(() => {
+    if (!editor || !editorState.hasUnsavedChanges || editorState.saving) {
+      return;
+    }
+
+    console.log('⏳ Auto-save scheduled in 3 seconds...');
+    const autoSaveTimer = setTimeout(() => {
+      console.log('💾 Auto-saving document...');
+      handleSave(false); // Use handleSave which gets content from editor
+    }, 3000);
+
+    return () => clearTimeout(autoSaveTimer);
+  }, [editor, editorState.hasUnsavedChanges, editorState.saving]);
+
+  // Load initial content when editor is first created (ONLY ONCE)
+  // DO NOT reload content after initial load to preserve user edits (like tables)
+  const hasLoadedInitialContent = useRef(false);
+  useEffect(() => {
+    if (editor && documentData && !hasLoadedInitialContent.current) {
+      const content = getActualContent();
+      console.log('🔄 Setting editor content - length:', content.length, 'hasTable:', content.includes('<table'));
+      editor.commands.setContent(content);
+      hasLoadedInitialContent.current = true;
+      console.log('✅ Initial content loaded ONCE - Content will NOT reload automatically');
+
+      // Verify the content was actually set
+      setTimeout(() => {
+        const editorContent = editor.getHTML();
+        console.log('✔️ Verified editor content after set - length:', editorContent.length, 'hasTable:', editorContent.includes('<table'));
+      }, 100);
+    }
+  }, [editor, documentData]); // Depend on documentData so it loads when data is available
 
   // Page calculation functions
   const calculatePageFromCursor = useCallback(() => {
@@ -349,6 +420,8 @@ const DocumentEditor: React.FC = () => {
     if (!documentData || !editor) return;
 
     const content = editor.getHTML();
+    console.log('💾 Saving document with content length:', content.length);
+    console.log('💾 Content includes table:', content.includes('<table'));
     await saveDocument(content, showNotification);
   };
 
