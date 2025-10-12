@@ -76,7 +76,6 @@ import AdvancedSearchReplace from '@/components/editor/AdvancedSearchReplace';
 import AirForceHeader from '@/components/editor/AirForceHeader';
 import { EditorToolbar } from '@/components/editor/EditorToolbar';
 import { AdvancedToolbar } from '@/components/editor/AdvancedToolbar';
-import { TableGridPicker } from '@/components/editor/TableGridPicker';
 import '@/styles/supplement-marks.css';
 import '@/styles/editor-document.css';
 
