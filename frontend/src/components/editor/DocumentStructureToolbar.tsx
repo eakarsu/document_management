@@ -79,7 +79,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
   };
 
   // AUTO-NUMBER ALL PARAGRAPHS - Automatically renumber all paragraphs in document
-  const autoNumberAllParagraphs = () => {
+  const autoNumberAllParagraphs = (showAlert = true) => {
     const content = editor.getHTML();
 
     let chapterNum = 0;
@@ -91,64 +91,202 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     tempDiv.innerHTML = content;
 
     // Number chapters (h1)
-    tempDiv.querySelectorAll('h1').forEach((h1) => {
+    const h1Elements = tempDiv.querySelectorAll('h1');
+    h1Elements.forEach((h1) => {
       chapterNum++;
       sectionNum = 0;
-      const text = h1.textContent?.replace(/^CHAPTER\s+\d+\.?\s*/i, '') || '';
-      h1.textContent = `CHAPTER ${chapterNum}. ${text}`;
+      const text = h1.textContent?.replace(/^CHAPTER\s+\d+\.?\s*/i, '').replace(/^:\s*/, '') || '';
+      h1.textContent = `CHAPTER ${chapterNum}${text ? ': ' + text : ''}`;
     });
+
+    // If no H1 found, check if there are H3s with chapter numbers already and extract the chapter
+    if (chapterNum === 0) {
+      const firstH3 = tempDiv.querySelector('h3');
+      if (firstH3) {
+        const match = firstH3.textContent?.match(/^(\d+)\.\d+\./);
+        if (match) {
+          chapterNum = parseInt(match[1]);
+        } else {
+          chapterNum = 1; // Default to chapter 1 if no H1 and can't extract
+        }
+      } else {
+        chapterNum = 1; // Default to chapter 1
+      }
+    }
 
     // Number sections (h3)
     tempDiv.querySelectorAll('h3').forEach((h3) => {
       sectionNum++;
       paraNum = 0;
-      const text = h3.textContent?.replace(/^\d+\.\d+\.?\s*/, '') || '';
+      // Remove any existing numbering (handles both "1.1." and "1.1 " formats)
+      const text = h3.textContent?.replace(/^\d+\.\d+\.?\s*/, '').trim() || '';
       h3.textContent = `${chapterNum}.${sectionNum}. ${text}`;
     });
 
-    // Number paragraphs (p with strong at start)
+    // Number paragraphs with hierarchy support (1.1.1, 1.1.1.1, 1.1.1.1.1, etc.)
+    let currentParaPrefix = `${chapterNum}.${sectionNum}`;
+    let levelCounters: { [key: string]: number } = {};
+
     tempDiv.querySelectorAll('p').forEach((p) => {
       const strong = p.querySelector('strong');
       if (strong && p.firstChild === strong) {
-        paraNum++;
-        const text = p.textContent?.replace(/^\d+\.\d+\.\d+\.?\s*/, '') || '';
-        strong.textContent = `${chapterNum}.${sectionNum}.${paraNum}.`;
-        // Keep the rest of the text
+        // Determine indent level from margin-left style
+        const marginLeft = p.style.marginLeft || '0px';
+        const indentLevel = parseInt(marginLeft) / 40; // 0px=level0, 40px=level1, 80px=level2, etc.
+
+        // Build the number based on hierarchy
+        let levelKey = indentLevel.toString();
+        let numberParts = [chapterNum, sectionNum];
+
+        if (indentLevel === 0) {
+          // Top-level paragraph: 1.1.1, 1.1.2, etc.
+          paraNum++;
+          numberParts.push(paraNum);
+          levelCounters = {}; // Reset sub-levels
+        } else if (indentLevel === 1) {
+          // Sub-paragraph: 1.1.1.1, 1.1.1.2, etc.
+          levelCounters['1'] = (levelCounters['1'] || 0) + 1;
+          numberParts.push(paraNum, levelCounters['1']);
+          levelCounters['2'] = 0; // Reset deeper levels
+          levelCounters['3'] = 0;
+        } else if (indentLevel === 2) {
+          // Sub-sub-paragraph: 1.1.1.1.1, etc.
+          levelCounters['2'] = (levelCounters['2'] || 0) + 1;
+          numberParts.push(paraNum, levelCounters['1'] || 1, levelCounters['2']);
+          levelCounters['3'] = 0; // Reset deeper
+        } else if (indentLevel === 3) {
+          // Very deep: 1.1.1.1.1.1, etc.
+          levelCounters['3'] = (levelCounters['3'] || 0) + 1;
+          numberParts.push(paraNum, levelCounters['1'] || 1, levelCounters['2'] || 1, levelCounters['3']);
+        }
+
+        // Remove all existing numbers from text
+        const text = p.textContent?.replace(/^[\d.]+\s*/, '').trim() || '';
+        const newNumber = numberParts.join('.') + '.';
+        strong.textContent = newNumber;
+
+        // Rebuild paragraph preserving indentation
         const restText = Array.from(p.childNodes)
           .slice(1)
           .map(node => node.textContent)
           .join('');
-        p.innerHTML = `<strong>${chapterNum}.${sectionNum}.${paraNum}.</strong> ${restText}`;
+        p.innerHTML = `<strong>${newNumber}</strong> ${restText}`;
       }
     });
 
     editor.commands.setContent(tempDiv.innerHTML);
-    alert('All paragraphs have been automatically numbered!');
+    if (showAlert) {
+      alert('All paragraphs have been automatically numbered!');
+    }
   };
 
-  // SMART INSERT PARAGRAPH - Insert paragraph with auto-calculated next number
+  // SMART INSERT PARAGRAPH - Context-aware insert WITH auto-renumbering
   const insertSmartParagraph = () => {
     const content = editor.getHTML();
+    const { from } = editor.state.selection;
 
-    // Find all existing paragraph numbers
-    const paraMatches = content.match(/\d+\.\d+\.\d+\./g) || [];
+    // Parse document structure
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    const allElements = Array.from(tempDiv.querySelectorAll('h1, h3, p'));
 
-    if (paraMatches.length === 0) {
-      // No paragraphs yet, start with 1.1.1
-      editor.commands.insertContent('<p><strong>1.1.1.</strong> Type your content here</p>');
-    } else {
-      // Get the last paragraph number
-      const lastPara = paraMatches[paraMatches.length - 1];
-      const parts = lastPara.replace('.', '').split('.');
-      const ch = parseInt(parts[0]) || 1;
-      const sec = parseInt(parts[1]) || 1;
-      const para = parseInt(parts[2]) || 0;
+    // Find what element comes IMMEDIATELY BEFORE the cursor position
+    let beforeCursor = { chapter: 1, section: 0, paragraph: 0, type: 'none' };
 
-      // Increment paragraph number
-      const nextNum = `${ch}.${sec}.${para + 1}`;
+    // Get the DOM position of cursor
+    const cursorPos = editor.view.domAtPos(from);
+    const cursorNode = cursorPos.node;
 
-      editor.commands.insertContent(`<p><strong>${nextNum}.</strong> Type your content here</p>`);
+    // Walk backwards from cursor to find the nearest structural element
+    let currentNode = cursorNode;
+    let searchNode = currentNode.nodeType === 3 ? currentNode.parentElement : currentNode;
+
+    // Traverse up and find previous sibling or parent's previous sibling
+    while (searchNode) {
+      // Check this element itself
+      if (searchNode.tagName === 'H1') {
+        const match = searchNode.textContent?.match(/CHAPTER\s+(\d+)/i);
+        if (match) {
+          beforeCursor = { chapter: parseInt(match[1]), section: 0, paragraph: 0, type: 'chapter' };
+        }
+        break;
+      } else if (searchNode.tagName === 'H3') {
+        const match = searchNode.textContent?.match(/^(\d+)\.(\d+)\.?\s/);
+        if (match) {
+          beforeCursor = {
+            chapter: parseInt(match[1]),
+            section: parseInt(match[2]),
+            paragraph: 0,
+            type: 'section'
+          };
+        }
+        break;
+      } else if (searchNode.tagName === 'P') {
+        const strong = searchNode.querySelector('strong');
+        if (strong) {
+          const match = strong.textContent?.match(/^(\d+)\.(\d+)\.(\d+)\./);
+          if (match) {
+            beforeCursor = {
+              chapter: parseInt(match[1]),
+              section: parseInt(match[2]),
+              paragraph: parseInt(match[3]),
+              type: 'paragraph'
+            };
+            break;
+          }
+        }
+      }
+
+      // Try previous sibling
+      if (searchNode.previousElementSibling) {
+        searchNode = searchNode.previousElementSibling;
+      } else {
+        // Go up to parent
+        searchNode = searchNode.parentElement;
+      }
     }
+
+    // Determine what to insert based on what came before (ALWAYS GO DEEPER)
+    let newContent = '';
+
+    if (beforeCursor.type === 'chapter') {
+      // After chapter → insert section 1.1
+      newContent = `<h3>${beforeCursor.chapter}.1. Type section title here</h3>`;
+    } else if (beforeCursor.type === 'section') {
+      // After section → insert paragraph 1.1.1
+      newContent = `<p><strong>${beforeCursor.chapter}.${beforeCursor.section}.1.</strong> Type your content here</p>`;
+    } else if (beforeCursor.type === 'paragraph') {
+      // After paragraph → insert SUB-PARAGRAPH (go deeper)
+      // Check how deep we already are by counting dots in the strong tag
+      const strongEl = searchNode?.querySelector('strong');
+      const existingNumber = strongEl?.textContent || '';
+      const dotCount = (existingNumber.match(/\./g) || []).length;
+
+      if (dotCount === 3) {
+        // 1.1.1. → insert 1.1.1.1 (sub-paragraph, indent 40px)
+        newContent = `<p style="margin-left: 40px;"><strong>${beforeCursor.chapter}.${beforeCursor.section}.${beforeCursor.paragraph}.1.</strong> Type your content here</p>`;
+      } else if (dotCount === 4) {
+        // 1.1.1.1. → insert 1.1.1.1.1 (sub-sub-paragraph, indent 80px)
+        newContent = `<p style="margin-left: 80px;"><strong>${beforeCursor.chapter}.${beforeCursor.section}.${beforeCursor.paragraph}.1.1.</strong> Type your content here</p>`;
+      } else if (dotCount === 5) {
+        // 1.1.1.1.1. → insert 1.1.1.1.1.1 (very deep, indent 120px)
+        newContent = `<p style="margin-left: 120px;"><strong>${beforeCursor.chapter}.${beforeCursor.section}.${beforeCursor.paragraph}.1.1.1.</strong> Type your content here</p>`;
+      } else {
+        // Fallback - insert next paragraph at same level
+        newContent = `<p><strong>${beforeCursor.chapter}.${beforeCursor.section}.${beforeCursor.paragraph + 1}.</strong> Type your content here</p>`;
+      }
+    } else {
+      // Default
+      newContent = `<h3>1.1. Type section title here</h3>`;
+    }
+
+    // Insert at cursor position
+    editor.commands.insertContent(newContent);
+
+    // Auto-renumber everything after insertion to fix any conflicts (silent)
+    setTimeout(() => {
+      autoNumberAllParagraphs(false); // false = no alert popup
+    }, 100);
   };
 
   // Quick insert templates
@@ -285,7 +423,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
 
       {/* Auto-Numbering Tools */}
       <ButtonGroup variant="outlined" size="small">
-        <Tooltip title="Smart Insert Paragraph - Auto-calculates next number">
+        <Tooltip title="Smart Insert - Goes one level deeper (1.1→1.1.1→1.1.1.1)">
           <Button
             onClick={insertSmartParagraph}
             sx={{
