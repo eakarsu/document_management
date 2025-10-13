@@ -8,7 +8,7 @@ import expressWinston from 'express-winston';
 import { config } from './config/database';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './config/logger';
-import { BACKEND_PORT, FRONTEND_URL, RATE_LIMIT_CONFIG } from './config/constants';
+import { BACKEND_PORT, FRONTEND_URL, ALLOWED_ORIGINS, RATE_LIMIT_CONFIG } from './config/constants';
 import { setupRoutes } from './routes/setupRoutes';
 import { setupGraphQL } from './graphql/setupGraphQL';
 
@@ -35,15 +35,9 @@ async function startServer() {
     const limiter = rateLimit(RATE_LIMIT_CONFIG);
     app.use('/graphql', limiter);
 
-    // CORS - Allow both Next.js (3000) and Vite (3001, 3002, 3003) frontends
+    // CORS - Allow configured origins from environment variable
     app.use(cors({
-      origin: [
-        'http://localhost:3000', // Next.js frontend
-        'http://localhost:3001', // Vite frontend
-        'http://localhost:3002', // Vite frontend (alternative port)
-        'http://localhost:3003', // Vite frontend (alternative port)
-        FRONTEND_URL // Environment variable override
-      ],
+      origin: ALLOWED_ORIGINS.includes(FRONTEND_URL) ? ALLOWED_ORIGINS : [...ALLOWED_ORIGINS, FRONTEND_URL],
       credentials: true,
     }));
 
