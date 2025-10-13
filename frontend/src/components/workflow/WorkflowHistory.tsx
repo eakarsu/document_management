@@ -84,6 +84,8 @@ export const WorkflowHistory: React.FC<WorkflowHistoryProps> = ({
                   {getStageIcon(item.stageId, item.status)}
                 </ListItemIcon>
                 <ListItemText
+                  primaryTypographyProps={{ component: 'div' }}
+                  secondaryTypographyProps={{ component: 'div' }}
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                       <Typography variant="subtitle2">

@@ -747,7 +747,7 @@ const DashboardPage: React.FC = () => {
                   variant="contained"
                   startIcon={<CreateIcon />}
                   size="large"
-                  onClick={() => router.push('/documents/create')}
+                  onClick={() => router.push('/ai-document-generator?mode=manual')}
                   sx={{
                     background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                     '&:hover': {

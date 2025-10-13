@@ -117,16 +117,21 @@ export const checkActionPermission = (
         return true;
       }
 
-      // Action Officer / OPR matching
+      // Action Officer / OPR matching - EXPANDED
+      // ACTION_OFFICER stage role matches OPR, AO, Action Officer user roles
       if (roleLower === 'action_officer' &&
-          (userRoleLower === 'opr' || userRoleLower.includes('ao') || userRoleLower === 'ao1')) {
+          (userRoleLower === 'opr' || userRoleLower.includes('ao') || userRoleLower === 'ao1' ||
+           userRoleLower === 'action officer' || userRoleLower === 'action_officer' ||
+           userRoleLower.includes('opr'))) {
         return true;
       }
 
       // Direct OPR role matching - handle all variations
+      // OPR stage role matches OPR, Action Officer user roles
       if ((roleLower === 'opr' || roleLower === 'action_officer') &&
           (userRoleLower === 'opr' || userRoleLower === 'action officer' ||
-           userRoleLower === 'opr_user' || userRoleLower.includes('opr'))) {
+           userRoleLower === 'action_officer' || userRoleLower === 'opr_user' ||
+           userRoleLower.includes('opr') || userRoleLower.includes('action'))) {
         return true;
       }
 

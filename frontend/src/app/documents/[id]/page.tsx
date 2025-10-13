@@ -229,22 +229,33 @@ const DocumentViewPage: React.FC = () => {
                   Review & CRM
                 </Button>
 
-                {(workflowState.stage?.includes('OPR') ||
-                  workflowState.stage?.includes('Draft') ||
-                  workflowState.stage?.includes('Feedback') ||
-                  userRole?.role === 'ADMIN' ||
-                  userRole?.role === 'Admin') && (
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    size="large"
-                    startIcon={<AssignmentIcon />}
-                    onClick={() => router.push(`/documents/${documentId}/opr-review`)}
-                    sx={{ minWidth: 150 }}
-                  >
-                    OPR Review
-                  </Button>
-                )}
+                {(() => {
+                  // Show OPR Review button for OPR/Action Officer/Leadership roles
+                  const userRoleStr = userRole?.role || userRole?.roleType || '';
+                  const userEmail = userRole?.email || '';
+
+                  // Check if user is OPR, Action Officer, Leadership, or has OPR in email
+                  const canAccessOPRReview = userRoleStr.toLowerCase().includes('opr') ||
+                    userRoleStr.toLowerCase().includes('action') ||
+                    userRoleStr.toLowerCase().includes('ao') ||
+                    userRoleStr.toLowerCase().includes('leadership') ||
+                    userEmail.toLowerCase().includes('opr') ||
+                    userRoleStr === 'ADMIN' ||
+                    userRoleStr === 'Admin';
+
+                  return canAccessOPRReview && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="large"
+                      startIcon={<AssignmentIcon />}
+                      onClick={() => router.push(`/documents/${documentId}/opr-review`)}
+                      sx={{ minWidth: 150 }}
+                    >
+                      OPR Review
+                    </Button>
+                  );
+                })()}
 
                 <Button
                   variant="outlined"

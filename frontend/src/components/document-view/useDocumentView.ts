@@ -171,22 +171,15 @@ export const useDocumentView = (documentId: string) => {
   const fetchWorkflowFeedback = useCallback(async () => {
     try {
       // Call backend 12-stage workflow directly (nginx routes /api/ to backend)
-      const response = await fetch(
-        `/api/workflow/documents/${documentId}/workflow/status`,
-        {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Authorization': `Bearer ${authTokenService.getAccessToken()}`,
-          }
-        }
+      const response = await authTokenService.authenticatedFetch(
+        `/api/workflow-instances/${documentId}`
       );
 
       if (response.ok) {
         const data = await response.json();
 
-        if (data.success && data.workflow) {
-          const workflow = data.workflow;
+        if (data.workflowId) {
+          const workflow = data;
 
           // Extract ICU feedback
           if (workflow.internal_coordinating_users && workflow.internal_coordinating_users.length > 0) {
@@ -207,12 +200,12 @@ export const useDocumentView = (documentId: string) => {
           }
 
           // Update workflow stage
-          const backendStage = workflow.current_stage;
+          const backendStage = workflow.currentStage;
           const frontendStage = stageMapping[backendStage as keyof typeof stageMapping] || backendStage || 'OPR Creates';
           setWorkflowState(prev => ({
             ...prev,
             stage: frontendStage,
-            active: true
+            active: workflow.status === 'active'
           }));
 
           return workflow;
@@ -238,18 +231,22 @@ export const useDocumentView = (documentId: string) => {
   const fetchWorkflowStatus = useCallback(async () => {
     try {
       const response = await authTokenService.authenticatedFetch(
-        `/api/workflow/documents/${documentId}/workflow/status?t=${Date.now()}`
+        `/api/workflow-instances/${documentId}?t=${Date.now()}`
       );
 
       if (response.ok) {
         const data = await response.json();
 
-        if (data.success && data.workflow) {
+        if (data.workflowId) {
+          // Map backend stage to frontend stage name
+          const backendStage = data.currentStage;
+          const frontendStage = stageMapping[backendStage as keyof typeof stageMapping] || backendStage;
+
           setWorkflowState(prev => ({
             ...prev,
-            active: data.workflow.is_active,
-            stage: data.workflow.current_stage,
-            id: data.workflow.id
+            active: data.status === 'active',
+            stage: frontendStage,
+            id: data.workflowId
           }));
         }
       }
