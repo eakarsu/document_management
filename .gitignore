@@ -46,15 +46,20 @@ public/build/
 # Environment and Configuration Files
 # ============================================================================
 .env
+.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 .env.staging
+.env.aws
+.env.production
 
-# Local environment overrides (keep .env.example)
+# Local environment overrides (keep .env.example files only)
 .env.local
 .env.*.local
+
+# NEVER commit any .env files with credentials!
 
 # Configuration files with sensitive data
 config/local.json
