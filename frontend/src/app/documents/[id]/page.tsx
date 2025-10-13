@@ -230,15 +230,12 @@ const DocumentViewPage: React.FC = () => {
                 </Button>
 
                 {(() => {
-                  // Show OPR Review button for OPR/Action Officer/Leadership roles
+                  // Show OPR Review button ONLY for OPR role
                   const userRoleStr = userRole?.role || userRole?.roleType || '';
                   const userEmail = userRole?.email || '';
 
-                  // Check if user is OPR, Action Officer, Leadership, or has OPR in email
-                  const canAccessOPRReview = userRoleStr.toLowerCase().includes('opr') ||
-                    userRoleStr.toLowerCase().includes('action') ||
-                    userRoleStr.toLowerCase().includes('ao') ||
-                    userRoleStr.toLowerCase().includes('leadership') ||
+                  // Check if user is OPR (exact match only)
+                  const canAccessOPRReview = userRoleStr.toLowerCase() === 'opr' ||
                     userEmail.toLowerCase().includes('opr') ||
                     userRoleStr === 'ADMIN' ||
                     userRoleStr === 'Admin';
