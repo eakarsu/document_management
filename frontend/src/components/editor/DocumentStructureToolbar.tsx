@@ -78,6 +78,79 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     setSubParagraphDialog(true);
   };
 
+  // AUTO-NUMBER ALL PARAGRAPHS - Automatically renumber all paragraphs in document
+  const autoNumberAllParagraphs = () => {
+    const content = editor.getHTML();
+
+    let chapterNum = 0;
+    let sectionNum = 0;
+    let paraNum = 0;
+
+    // Parse and renumber all elements
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    // Number chapters (h1)
+    tempDiv.querySelectorAll('h1').forEach((h1) => {
+      chapterNum++;
+      sectionNum = 0;
+      const text = h1.textContent?.replace(/^CHAPTER\s+\d+\.?\s*/i, '') || '';
+      h1.textContent = `CHAPTER ${chapterNum}. ${text}`;
+    });
+
+    // Number sections (h3)
+    tempDiv.querySelectorAll('h3').forEach((h3) => {
+      sectionNum++;
+      paraNum = 0;
+      const text = h3.textContent?.replace(/^\d+\.\d+\.?\s*/, '') || '';
+      h3.textContent = `${chapterNum}.${sectionNum}. ${text}`;
+    });
+
+    // Number paragraphs (p with strong at start)
+    tempDiv.querySelectorAll('p').forEach((p) => {
+      const strong = p.querySelector('strong');
+      if (strong && p.firstChild === strong) {
+        paraNum++;
+        const text = p.textContent?.replace(/^\d+\.\d+\.\d+\.?\s*/, '') || '';
+        strong.textContent = `${chapterNum}.${sectionNum}.${paraNum}.`;
+        // Keep the rest of the text
+        const restText = Array.from(p.childNodes)
+          .slice(1)
+          .map(node => node.textContent)
+          .join('');
+        p.innerHTML = `<strong>${chapterNum}.${sectionNum}.${paraNum}.</strong> ${restText}`;
+      }
+    });
+
+    editor.commands.setContent(tempDiv.innerHTML);
+    alert('All paragraphs have been automatically numbered!');
+  };
+
+  // SMART INSERT PARAGRAPH - Insert paragraph with auto-calculated next number
+  const insertSmartParagraph = () => {
+    const content = editor.getHTML();
+
+    // Find all existing paragraph numbers
+    const paraMatches = content.match(/\d+\.\d+\.\d+\./g) || [];
+
+    if (paraMatches.length === 0) {
+      // No paragraphs yet, start with 1.1.1
+      editor.commands.insertContent('<p><strong>1.1.1.</strong> Type your content here</p>');
+    } else {
+      // Get the last paragraph number
+      const lastPara = paraMatches[paraMatches.length - 1];
+      const parts = lastPara.replace('.', '').split('.');
+      const ch = parseInt(parts[0]) || 1;
+      const sec = parseInt(parts[1]) || 1;
+      const para = parseInt(parts[2]) || 0;
+
+      // Increment paragraph number
+      const nextNum = `${ch}.${sec}.${para + 1}`;
+
+      editor.commands.insertContent(`<p><strong>${nextNum}.</strong> Type your content here</p>`);
+    }
+  };
+
   // Quick insert templates
   const insertTemplate = (type: string) => {
     switch(type) {
@@ -204,6 +277,38 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
         <Tooltip title="Insert Roman Numeral (i.)">
           <Button onClick={() => insertSubParagraph('roman')}>
             i.
+          </Button>
+        </Tooltip>
+      </ButtonGroup>
+
+      <Divider orientation="vertical" flexItem />
+
+      {/* Auto-Numbering Tools */}
+      <ButtonGroup variant="outlined" size="small">
+        <Tooltip title="Smart Insert Paragraph - Auto-calculates next number">
+          <Button
+            onClick={insertSmartParagraph}
+            sx={{
+              bgcolor: 'success.light',
+              color: 'white',
+              fontWeight: 'bold',
+              '&:hover': { bgcolor: 'success.main' }
+            }}
+          >
+            + Para
+          </Button>
+        </Tooltip>
+        <Tooltip title="Auto-Number All Paragraphs - Renumber entire document">
+          <Button
+            onClick={autoNumberAllParagraphs}
+            sx={{
+              bgcolor: 'primary.light',
+              color: 'white',
+              fontWeight: 'bold',
+              '&:hover': { bgcolor: 'primary.main' }
+            }}
+          >
+            🔢 Auto
           </Button>
         </Tooltip>
       </ButtonGroup>
