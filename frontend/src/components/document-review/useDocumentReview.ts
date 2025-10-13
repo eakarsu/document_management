@@ -187,8 +187,8 @@ export const useDocumentReview = (documentId: string) => {
   }, [documentId, state.isAIGeneratedDoc]);
 
   const handleAddComment = useCallback(async () => {
-    if (!currentComment.component || !currentComment.commentType) {
-      alert('Please fill in required fields: Component and Comment Type');
+    if (!currentComment.commentType) {
+      alert('Please fill in required field: Comment Type');
       return;
     }
 

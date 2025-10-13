@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   AppBar,
@@ -8,7 +8,9 @@ import {
   Typography,
   Box,
   IconButton,
-  Badge
+  Badge,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import {
   ArrowBack,
@@ -26,6 +28,7 @@ const DocumentReviewPage = () => {
   const router = useRouter();
   const params = useParams();
   const documentId = params?.id as string;
+  const [selectionSnackbar, setSelectionSnackbar] = useState(false);
 
   const {
     state,
@@ -68,6 +71,23 @@ const DocumentReviewPage = () => {
           showPageNumbers={state.showPageNumbers}
           onToggleLineNumbers={(checked) => setState(prev => ({ ...prev, showLineNumbers: checked }))}
           onTogglePageNumbers={(checked) => setState(prev => ({ ...prev, showPageNumbers: checked }))}
+          onTextSelected={(selectedText, location, pageNumber, paragraphNumber, lineNumber) => {
+            // Auto-populate comment form with selected text in "Change From" field
+            setCurrentComment(prev => ({
+              ...prev,
+              changeFrom: selectedText,  // Selected text goes to "Change From" field
+              location: location,
+              page: pageNumber || prev.page,
+              paragraphNumber: paragraphNumber || prev.paragraphNumber,
+              lineNumber: lineNumber || prev.lineNumber
+            }));
+            // Open the form if it's closed
+            if (!state.showAddForm) {
+              setState(prev => ({ ...prev, showAddForm: true }));
+            }
+            // Show notification
+            setSelectionSnackbar(true);
+          }}
         />
 
         <Box sx={{ width: '600px', overflow: 'auto', p: 3, bgcolor: 'background.default' }}>
@@ -106,6 +126,17 @@ const DocumentReviewPage = () => {
           />
         </Box>
       </Box>
+
+      <Snackbar
+        open={selectionSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setSelectionSnackbar(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSelectionSnackbar(false)} severity="success" sx={{ width: '100%' }}>
+          Selected text added to comment form!
+        </Alert>
+      </Snackbar>
     </>
   );
 };

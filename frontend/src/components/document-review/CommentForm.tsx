@@ -75,7 +75,7 @@ const CommentForm: React.FC<CommentFormProps> = ({
               <Box sx={{ p: 1.5, bgcolor: 'blue.50', borderRadius: 1, border: 1, borderColor: 'blue.200', mb: 2 }}>
                 <Typography variant="caption" color="primary" fontWeight="bold">Current Selection:</Typography>
                 <Typography variant="body2" sx={{ mt: 0.5 }}>
-                  {selectedComment.component} - {selectedComment.coordinatorComment}
+                  {selectedComment.component ? `${selectedComment.component} - ` : ''}{selectedComment.coordinatorComment}
                 </Typography>
               </Box>
             </Grid>
@@ -90,7 +90,7 @@ const CommentForm: React.FC<CommentFormProps> = ({
             <TextField
               fullWidth
               size="small"
-              label="Component *"
+              label="Component"
               value={currentComment.component}
               onChange={(e) => onUpdateCurrentComment({ ...currentComment, component: e.target.value })}
               placeholder="AF/A1"
