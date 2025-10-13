@@ -37,6 +37,8 @@ interface DocumentInfo {
 const AIDocumentGenerator: React.FC = () => {
   const searchParams = useSearchParams();
   const templateFromUrl = searchParams.get('template');
+  const modeFromUrl = searchParams.get('mode');
+  const isManualMode = modeFromUrl === 'manual';
   
   const [sealFile, setSealFile] = useState<File | null>(null);
   const [sealPreview, setSealPreview] = useState<string>('');
@@ -251,7 +253,49 @@ const AIDocumentGenerator: React.FC = () => {
     setError('');
 
     try {
-      // Get template defaults
+      // For manual mode, create document without AI
+      if (isManualMode) {
+        const token = localStorage.getItem('accessToken');
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+        const response = await fetch(`${backendUrl}/api/documents/create-with-template`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: documentInfo.instructionTitle || 'New Document',
+            description: documentInfo.subject || 'Manual document creation',
+            templateId: documentTemplate,
+            category: 'instruction'
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || 'Failed to create document');
+        }
+
+        const result = await response.json();
+        const documentId = result.document?.id || result.id;
+
+        setGeneratedDocument({
+          id: documentId,
+          pages: documentInfo.pages,
+          feedbackCount: 0,
+          title: documentInfo.instructionTitle || 'New Document'
+        });
+
+        setTimeout(() => {
+          window.location.href = `/documents/${documentId}`;
+        }, 2000);
+
+        setIsGenerating(false);
+        return;
+      }
+
+      // Get template defaults (for AI mode)
       const templateDefaults = getTemplateDefaults(documentTemplate);
       
       // Prepare seal image if uploaded, otherwise use template default
@@ -333,18 +377,20 @@ const AIDocumentGenerator: React.FC = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
-      <Typography variant="h3" component="h1" gutterBottom sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
+      <Typography variant="h3" component="h1" gutterBottom sx={{
+        display: 'flex',
+        alignItems: 'center',
         gap: 2,
         mb: 3
       }}>
-        <AutoAwesome color="primary" />
-        AI-Powered Air Force Document Generator
+        {isManualMode ? <Article color="primary" /> : <AutoAwesome color="primary" />}
+        {isManualMode ? 'Air Force Document Generator' : 'AI-Powered Air Force Document Generator'}
       </Typography>
 
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        Upload your Air Force seal and provide document details. AI will generate a complete, properly formatted Air Force document with official header.
+        {isManualMode
+          ? 'Upload your Air Force seal and provide document details. The system will generate a complete, properly formatted Air Force document with official header.'
+          : 'Upload your Air Force seal and provide document details. AI will generate a complete, properly formatted Air Force document with official header.'}
       </Typography>
 
       <Grid container spacing={3}>
@@ -493,8 +539,10 @@ const AIDocumentGenerator: React.FC = () => {
 
             <Divider sx={{ my: 2 }} />
 
-            {/* AI Generation Settings */}
-            <Typography variant="h6" gutterBottom>AI Generation Settings</Typography>
+            {/* Generation Settings */}
+            <Typography variant="h6" gutterBottom>
+              {isManualMode ? 'Generation Settings' : 'AI Generation Settings'}
+            </Typography>
             
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel>Document Template</InputLabel>
@@ -561,7 +609,7 @@ const AIDocumentGenerator: React.FC = () => {
               </Grid>
               <Grid item xs={6}>
                 <TextField
-                  label="AI Feedback Items"
+                  label={isManualMode ? 'Feedback Items' : 'AI Feedback Items'}
                   type="number"
                   value={feedbackCount}
                   onChange={(e) => setFeedbackCount(parseInt(e.target.value))}
@@ -586,8 +634,8 @@ const AIDocumentGenerator: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <AutoAwesome sx={{ mr: 1 }} />
-                  Generate AI Document
+                  {isManualMode ? <Article sx={{ mr: 1 }} /> : <AutoAwesome sx={{ mr: 1 }} />}
+                  {isManualMode ? 'Generate Document' : 'Generate AI Document'}
                 </>
               )}
             </Button>
@@ -638,7 +686,7 @@ const AIDocumentGenerator: React.FC = () => {
                   <Typography variant="h6">Document Generated Successfully!</Typography>
                   <Box sx={{ mt: 1 }}>
                     <Chip label={`${generatedDocument.pages} pages`} size="small" sx={{ mr: 1 }} />
-                    <Chip label={`${generatedDocument.feedbackCount} AI suggestions`} size="small" sx={{ mr: 1 }} />
+                    <Chip label={`${generatedDocument.feedbackCount} ${isManualMode ? 'suggestions' : 'AI suggestions'}`} size="small" sx={{ mr: 1 }} />
                     <Chip label={documentTemplate.toUpperCase()} size="small" />
                   </Box>
                 </Alert>

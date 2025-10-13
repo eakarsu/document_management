@@ -10,9 +10,13 @@ export async function POST(request: NextRequest) {
 
     // Get request body
     const body = await request.json();
+    console.log('Document Generator - Request body keys:', Object.keys(body));
+    console.log('Document Generator - Template:', body.template);
+    console.log('Document Generator - Has seal image:', !!body.sealImage);
 
-    // Forward to backend AI document generator service
+    // Forward to backend document generator service
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+    console.log('Document Generator - Backend URL:', backendUrl);
     const backendResponse = await fetch(`${backendUrl}/api/ai-document-generator`, {
       method: 'POST',
       headers: {
@@ -24,8 +28,13 @@ export async function POST(request: NextRequest) {
 
     if (!backendResponse.ok) {
       const errorData = await backendResponse.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('Backend response error:', {
+        status: backendResponse.status,
+        statusText: backendResponse.statusText,
+        error: errorData
+      });
       return NextResponse.json(
-        { error: errorData.error || 'Failed to generate document' },
+        { error: errorData.error || 'Failed to generate document', details: errorData.details },
         { status: backendResponse.status }
       );
     }
@@ -34,9 +43,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data);
 
   } catch (error) {
-    console.error('Error generating AI document:', error);
+    console.error('Error generating document:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to generate document';
+    console.error('Full error details:', {
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return NextResponse.json(
-      { error: 'Failed to generate document' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
