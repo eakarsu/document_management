@@ -113,16 +113,51 @@ export const useOPRFeedbackHandlers = ({
     const appliedChanges = new Map();
 
     if (mergeMode === 'manual') {
-      const updatedContent = editableContent.replace(
-        selectedFeedback.changeFrom,
-        selectedFeedback.changeTo
-      );
+      let updatedContent = editableContent;
+
+      // Use paragraph number to locate and replace text
+      if (selectedFeedback.paragraphNumber) {
+        console.log('Using paragraph number for replacement:', selectedFeedback.paragraphNumber);
+
+        // Find paragraph by number in the document
+        const paragraphRegex = new RegExp(
+          `(${selectedFeedback.paragraphNumber.replace(/\./g, '\\.')}\\s+.*?)(?=\\d+(?:\\.\\d+)+\\s+|$)`,
+          's'
+        );
+
+        const match = editableContent.match(paragraphRegex);
+
+        if (match && match[0].includes(selectedFeedback.changeFrom)) {
+          // Replace text only within this paragraph
+          const updatedParagraph = match[0].replace(
+            selectedFeedback.changeFrom,
+            selectedFeedback.changeTo
+          );
+          updatedContent = editableContent.replace(match[0], updatedParagraph);
+          console.log('✓ Replaced text in paragraph', selectedFeedback.paragraphNumber);
+        } else {
+          console.warn('Could not find text in paragraph', selectedFeedback.paragraphNumber, '- falling back to simple replace');
+          // Fallback to simple replace if paragraph not found
+          updatedContent = editableContent.replace(
+            selectedFeedback.changeFrom,
+            selectedFeedback.changeTo
+          );
+        }
+      } else {
+        console.warn('No paragraph number available - using simple text replace');
+        // Fallback to simple replace if no paragraph number
+        updatedContent = editableContent.replace(
+          selectedFeedback.changeFrom,
+          selectedFeedback.changeTo
+        );
+      }
 
       if (updatedContent !== editableContent) {
         appliedChanges.set(`change-${Date.now()}`, {
           original: selectedFeedback.changeFrom,
           changed: selectedFeedback.changeTo,
           feedbackId: selectedFeedback.id || '',
+          paragraphNumber: selectedFeedback.paragraphNumber,
         });
 
         setEditableContent(updatedContent);
