@@ -117,26 +117,39 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     // Number sections (h3)
     tempDiv.querySelectorAll('h3').forEach((h3) => {
       sectionNum++;
-      paraNum = 0;
       // Remove any existing numbering (handles both "1.1." and "1.1 " formats)
       const text = h3.textContent?.replace(/^\d+\.\d+\.?\s*/, '').trim() || '';
       h3.textContent = `${chapterNum}.${sectionNum}. ${text}`;
     });
 
     // Number paragraphs with hierarchy support (1.1.1, 1.1.1.1, 1.1.1.1.1, etc.)
-    let currentParaPrefix = `${chapterNum}.${sectionNum}`;
+    // Process all elements in order to track section context for paragraphs
+    let currentSection = sectionNum;
+    paraNum = 0; // Reset paragraph counter
     let levelCounters: { [key: string]: number } = {};
 
-    tempDiv.querySelectorAll('p').forEach((p) => {
-      const strong = p.querySelector('strong');
-      if (strong && p.firstChild === strong) {
-        // Determine indent level from margin-left style
-        const marginLeft = p.style.marginLeft || '0px';
-        const indentLevel = parseInt(marginLeft) / 40; // 0px=level0, 40px=level1, 80px=level2, etc.
+    // Get all elements (H3 sections and P paragraphs) in document order
+    const allElements = Array.from(tempDiv.querySelectorAll('h3, p'));
 
-        // Build the number based on hierarchy
-        let levelKey = indentLevel.toString();
-        let numberParts = [chapterNum, sectionNum];
+    allElements.forEach((element) => {
+      if (element.tagName === 'H3') {
+        // Update current section context when we encounter a new H3
+        const match = element.textContent?.match(/^(\d+)\.(\d+)\./);
+        if (match) {
+          currentSection = parseInt(match[2]);
+          paraNum = 0; // Reset paragraph counter for new section
+          levelCounters = {}; // Reset sub-level counters
+        }
+      } else if (element.tagName === 'P') {
+        const p = element as HTMLParagraphElement;
+        const strong = p.querySelector('strong');
+        if (strong && p.firstChild === strong) {
+          // Determine indent level from margin-left style
+          const marginLeft = p.style.marginLeft || '0px';
+          const indentLevel = parseInt(marginLeft) / 40; // 0px=level0, 40px=level1, 80px=level2, etc.
+
+          // Build the number based on hierarchy using currentSection
+          let numberParts = [chapterNum, currentSection];
 
         if (indentLevel === 0) {
           // Top-level paragraph: 1.1.1, 1.1.2, etc.
@@ -165,12 +178,13 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
         const newNumber = numberParts.join('.') + '.';
         strong.textContent = newNumber;
 
-        // Rebuild paragraph preserving indentation
-        const restText = Array.from(p.childNodes)
-          .slice(1)
-          .map(node => node.textContent)
-          .join('');
-        p.innerHTML = `<strong>${newNumber}</strong> ${restText}`;
+          // Rebuild paragraph preserving indentation
+          const restText = Array.from(p.childNodes)
+            .slice(1)
+            .map(node => node.textContent)
+            .join('');
+          p.innerHTML = `<strong>${newNumber}</strong> ${restText}`;
+        }
       }
     });
 

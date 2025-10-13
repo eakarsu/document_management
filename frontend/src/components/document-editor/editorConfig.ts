@@ -66,10 +66,13 @@ const AutoNumbering = Extension.create({
   addKeyboardShortcuts() {
     return {
       Enter: ({ editor }) => {
-        console.log('🔍 AutoNumbering: Enter key pressed');
+        console.log('🔍 🔍 🔍 AutoNumbering: Enter key pressed - EXTENSION IS ACTIVE');
 
         const { state } = editor;
         const { $from } = state.selection;
+
+        console.log('Full state:', state);
+        console.log('Selection:', state.selection);
 
         // Get the parent paragraph node
         let currentNode = $from.parent;
@@ -83,16 +86,40 @@ const AutoNumbering = Extension.create({
 
         // Get the full text content of the paragraph
         const paraText = currentNode.textContent;
-        console.log('🔍 Paragraph text:', paraText);
+        console.log('🔍 Paragraph text:', JSON.stringify(paraText));
+        console.log('🔍 Paragraph text length:', paraText.length);
+        console.log('🔍 First 50 chars:', JSON.stringify(paraText.substring(0, 50)));
 
-        // Check if paragraph starts with a number pattern like "1.1.1. "
-        const numberMatch = paraText.match(/^(\d+(?:\.\d+)+)\.\s/);
-        console.log('🔍 Number match:', numberMatch);
+        // Check if paragraph has a strong mark (bold) at the beginning with numbers
+        const firstChild = currentNode.firstChild;
+        console.log('🔍 First child:', firstChild);
+        console.log('🔍 First child type:', firstChild?.type.name);
+
+        // Check if first child has strong mark
+        let hasStrongMark = false;
+        if (firstChild && firstChild.marks) {
+          hasStrongMark = firstChild.marks.some((mark: any) => mark.type.name === 'strong');
+          console.log('🔍 Has strong mark:', hasStrongMark);
+        }
+
+        // Try to extract number from the text (works with or without strong tag)
+        let numberMatch = paraText.match(/^(\d+(?:\.\d+)+)\.\s/);
+        console.log('🔍 Number match (with space):', numberMatch);
+
+        if (!numberMatch) {
+          // Try without requiring space after period
+          numberMatch = paraText.match(/^(\d+(?:\.\d+)+)\./);
+          console.log('🔍 Number match (no space required):', numberMatch);
+        }
 
         if (!numberMatch) {
           console.log('❌ No number pattern found, skipping');
           return false; // Not a numbered paragraph
         }
+
+        // If we found a match but there's no strong mark, user typed it manually
+        // We should still process it
+        console.log('✅ Found numbered paragraph (has strong mark:', hasStrongMark, ')');
 
         const currentNumber = numberMatch[1];
         const parts = currentNumber.split('.').map(Number);
@@ -111,65 +138,38 @@ const AutoNumbering = Extension.create({
         const currentIndent = marginMatch ? parseInt(marginMatch[1]) : 0;
         console.log('🔍 Current indent:', currentIndent);
 
-        // Calculate next number (one level deeper)
+        // Calculate next number (SAME LEVEL, INCREMENT - like Word/Google Docs)
         let nextNumber: string;
         let nextIndent: number;
 
-        if (parts.length === 3) {
-          // 1.1.1 → 1.1.1.1 (go deeper)
-          nextNumber = `${currentNumber}.1`;
-          nextIndent = 40;
-        } else if (parts.length === 4) {
-          // 1.1.1.1 → 1.1.1.1.1 (go deeper)
-          nextNumber = `${currentNumber}.1`;
-          nextIndent = 80;
-        } else if (parts.length === 5) {
-          // 1.1.1.1.1 → 1.1.1.1.1.1 (go deeper)
-          nextNumber = `${currentNumber}.1`;
-          nextIndent = 120;
-        } else if (parts.length === 6) {
-          // Very deep - increment at same level
-          parts[parts.length - 1]++;
-          nextNumber = parts.join('.');
-          nextIndent = currentIndent;
-        } else {
-          // Default
-          nextNumber = `${currentNumber}.1`;
-          nextIndent = currentIndent + 40;
-        }
+        // Increment the last number part and keep same indent level
+        parts[parts.length - 1]++;
+        nextNumber = parts.join('.');
+        nextIndent = currentIndent;
+
+        console.log('🔍 Same level increment - parts:', parts);
 
         console.log('➡️ Next number:', nextNumber, 'Next indent:', nextIndent);
 
-        // Split the current paragraph first (standard Enter behavior)
+        // Use TipTap's insertContent with HTML
         editor.commands.splitBlock();
 
-        // After a short delay, replace the empty paragraph with our numbered one
-        setTimeout(() => {
-          const currentHTML = editor.getHTML();
-          console.log('📝 Current HTML before replacement:', currentHTML.substring(currentHTML.length - 200));
+        // Insert the numbered paragraph content
+        const htmlContent = `<strong>${nextNumber}.</strong> `;
 
-          // Create the new numbered paragraph content
-          const newContent = nextIndent > 0
-            ? `<p style="margin-left: ${nextIndent}px;"><strong>${nextNumber}.</strong> </p>`
-            : `<p><strong>${nextNumber}.</strong> </p>`;
+        console.log('📝 Inserting HTML content:', htmlContent);
 
-          // Replace the last empty paragraph with our numbered content
-          const updatedHTML = currentHTML.replace(
-            /<p([^>]*)>\s*<\/p>\s*$/,
-            newContent
-          );
+        editor.commands.insertContent(htmlContent);
 
-          console.log('📝 Updated HTML after replacement:', updatedHTML.substring(updatedHTML.length - 200));
+        // Apply indentation if needed
+        if (nextIndent > 0) {
+          editor.commands.updateAttributes('paragraph', {
+            style: `margin-left: ${nextIndent}px`
+          });
+          console.log('📝 Applied indentation:', nextIndent);
+        }
 
-          // Set the updated content
-          editor.commands.setContent(updatedHTML, false);
-
-          // Focus the editor at the end
-          editor.commands.focus('end');
-
-          console.log('✅ Numbered paragraph inserted');
-        }, 10);
-
+        console.log('✅ Numbered paragraph inserted');
         return true;
       },
     };
