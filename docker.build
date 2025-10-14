@@ -1,0 +1,1 @@
+docker buildx build --build-arg NEXT_PUBLIC_APP_MODE=development --build-arg NEXT_PUBLIC_API_URL=https://www.missionsyncai.com --platform linux/amd64,linux/arm64 -t eakarsun4/richmond-dms:latest --push .

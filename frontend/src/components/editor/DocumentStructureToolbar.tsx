@@ -452,7 +452,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
         </Tooltip>
         <Tooltip title="Auto-Number All Paragraphs - Renumber entire document">
           <Button
-            onClick={autoNumberAllParagraphs}
+            onClick={() => autoNumberAllParagraphs()}
             sx={{
               bgcolor: 'primary.light',
               color: 'white',

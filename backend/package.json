@@ -12,7 +12,9 @@
     "test:watch": "jest --watch --detectOpenHandles",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed:dev": "ts-node prisma/seed-all.ts",
+    "seed:production": "ts-node prisma/seed-production.ts"
   },
   "dependencies": {
     "@apollo/server": "^4.9.5",

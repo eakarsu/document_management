@@ -350,6 +350,11 @@ private/
 # JWT tokens
 *.jwt
 
+# Production credentials (NEVER commit!)
+PRODUCTION_CREDENTIALS.txt
+*CREDENTIALS*.txt
+*credentials*.txt
+
 # ============================================================================
 # Backup Files
 # ============================================================================
