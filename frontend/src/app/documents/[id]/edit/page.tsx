@@ -58,6 +58,8 @@ export default function EditDocumentPage() {
   const params = useParams();
   const router = useRouter();
   const documentId = params?.id as string;
+
+  console.log('📄 Edit Page Loaded - Document ID:', documentId, 'Params:', params);
   
   const [documentData, setDocumentData] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
@@ -194,6 +196,8 @@ export default function EditDocumentPage() {
   };
 
   const handleCancel = () => {
+    console.log('🔙 Cancel clicked - navigating to document:', documentId);
+    console.log('🔙 Full path:', `/documents/${documentId}`);
     router.push(`/documents/${documentId}`);
   };
 
@@ -478,7 +482,7 @@ export default function EditDocumentPage() {
             <IconButton
               edge="start"
               color="inherit"
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push(`/documents/${documentId}`)}
               sx={{ mr: 2 }}
             >
               <ArrowBack />

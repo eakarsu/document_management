@@ -189,6 +189,14 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               </Box>
             )}
 
+            {/* Render formatted header if exists */}
+            {!isEditingDocument && documentData?.customFields?.headerHtml && (
+              <Box
+                sx={{ mb: 3 }}
+                dangerouslySetInnerHTML={{ __html: documentData.customFields.headerHtml }}
+              />
+            )}
+
             {/* Document Content */}
             {isEditingDocument ? (
               <>

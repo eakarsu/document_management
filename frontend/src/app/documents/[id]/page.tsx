@@ -149,8 +149,9 @@ const DocumentViewPage: React.FC = () => {
           <IconButton
             edge="start"
             color="inherit"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.back()}
             sx={{ mr: 2 }}
+            title="Go back to previous page"
           >
             <ArrowBack />
           </IconButton>
