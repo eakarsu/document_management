@@ -385,6 +385,7 @@ const OPRReviewPage = () => {
     <>
       <OPRReviewHeader
         documentTitle={documentData?.title}
+        documentId={documentId}
         isEditingDocument={isEditingDocument}
         savingDocument={savingDocument}
         exporting={exporting}

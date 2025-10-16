@@ -50,7 +50,7 @@ const DocumentReviewPage = () => {
     <>
       <AppBar position="sticky" color="primary">
         <Toolbar>
-          <IconButton edge="start" color="inherit" onClick={() => router.push('/dashboard')}>
+          <IconButton edge="start" color="inherit" onClick={() => router.push(`/documents/${documentId}`)}>
             <ArrowBack />
           </IconButton>
           <DocumentIcon sx={{ ml: 2, mr: 1 }} />

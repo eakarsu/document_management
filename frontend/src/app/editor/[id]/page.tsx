@@ -519,7 +519,7 @@ const DocumentEditor: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <IconButton
               edge="start"
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push(`/documents/${documentId}`)}
               sx={{
                 bgcolor: 'primary.main',
                 color: 'white',

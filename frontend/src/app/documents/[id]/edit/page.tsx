@@ -478,7 +478,7 @@ export default function EditDocumentPage() {
             <IconButton
               edge="start"
               color="inherit"
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push(`/documents/${documentId}`)}
               sx={{ mr: 2 }}
             >
               <ArrowBack />

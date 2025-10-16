@@ -24,6 +24,7 @@ import {
 
 interface OPRReviewHeaderProps {
   documentTitle?: string;
+  documentId?: string;
   isEditingDocument: boolean;
   savingDocument: boolean;
   exporting: boolean;
@@ -37,6 +38,7 @@ interface OPRReviewHeaderProps {
 
 const OPRReviewHeader: React.FC<OPRReviewHeaderProps> = ({
   documentTitle,
+  documentId,
   isEditingDocument,
   savingDocument,
   exporting,
@@ -52,7 +54,7 @@ const OPRReviewHeader: React.FC<OPRReviewHeaderProps> = ({
   return (
     <AppBar position="sticky" color="primary">
       <Toolbar>
-        <IconButton edge="start" color="inherit" onClick={() => router.push('/dashboard')}>
+        <IconButton edge="start" color="inherit" onClick={() => router.push(documentId ? `/documents/${documentId}` : '/dashboard')}>
           <ArrowBack />
         </IconButton>
         <DocumentIcon sx={{ ml: 2, mr: 1 }} />
