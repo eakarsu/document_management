@@ -441,3 +441,19 @@ site/
 
 # Note: Keep .env.example, package.json, and other template files
 # This .gitignore is comprehensive for a full-stack Node.js/TypeScript project
+# Production credentials (NEVER commit!)
+PRODUCTION_CREDENTIALS.txt
+*CREDENTIALS*.txt
+*credentials*.txt
+
+
+# Production credentials (NEVER commit!)
+PRODUCTION_CREDENTIALS.txt
+*CREDENTIALS*.txt
+*credentials*.txt
+
+
+# Recovery artifacts
+backup-*/
+*.sh
+my_lost.txt
