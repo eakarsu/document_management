@@ -65,7 +65,7 @@ export default function EditDocumentPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Edit Page Loaded - params:' params);
+    console.log('Edit Page Loaded - params:', params);
   }, [params]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
