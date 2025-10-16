@@ -59,6 +59,7 @@ export interface DocumentData {
     content?: string;
     htmlContent?: string;
     editableContent?: string;
+    headerHtml?: string;
     versionHistory?: HistoryEntry[];
     lastHistorySave?: string;
   };
