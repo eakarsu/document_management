@@ -46,3 +46,37 @@ button, a {
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* Remove all colors, backgrounds, and underlines from tracked changes */
+u,
+[style*="text-decoration: underline"],
+span[data-supplement],
+span.supplement-add,
+span.supplement-mark,
+.supplement-mark,
+.change-insertion,
+.ProseMirror u,
+.ProseMirror [style*="text-decoration: underline"],
+.ProseMirror span[data-supplement],
+.ProseMirror span.supplement-add,
+.ProseMirror .supplement-mark,
+.ProseMirror .change-insertion {
+  background-color: transparent !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  text-decoration: none !important;
+  color: inherit !important;
+  opacity: 1 !important;
+}
+
+/* Hide supplement badges */
+span[data-supplement]::before,
+span.supplement-add::before,
+.supplement-mark::before,
+.ProseMirror span[data-supplement]::before,
+.ProseMirror span.supplement-add::before,
+.ProseMirror .supplement-mark::before {
+  display: none !important;
+}

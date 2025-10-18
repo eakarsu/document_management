@@ -44,6 +44,7 @@ import { api } from '@/lib/api';
 import { JsonWorkflowDisplay } from '../../../components/workflow/JsonWorkflowDisplay';
 import { useDocumentView } from '@/components/document-view/useDocumentView';
 import { workflowSteps, stageRoles } from '@/components/document-view/workflowConstants';
+import { getDocumentActionPermissions } from '@/lib/rolePermissions';
 
 const DocumentViewPage: React.FC = () => {
   const router = useRouter();
@@ -207,50 +208,52 @@ const DocumentViewPage: React.FC = () => {
           <Grid container spacing={2}>
             <Grid item xs={12} md={8}>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  startIcon={<EditIcon />}
-                  onClick={() => router.push(`/editor/${documentId}`)}
-                  sx={{ minWidth: 150 }}
-                >
-                  Edit Document
-                </Button>
-
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  size="large"
-                  startIcon={<ReviewIcon />}
-                  onClick={() => router.push(`/documents/${documentId}/review`)}
-                  sx={{ minWidth: 150 }}
-                >
-                  Review & CRM
-                </Button>
-
                 {(() => {
-                  // Show OPR Review button ONLY for OPR role
+                  // Get role-based permissions
                   const userRoleStr = userRole?.role || userRole?.roleType || '';
-                  const userEmail = userRole?.email || '';
+                  const permissions = getDocumentActionPermissions(userRoleStr);
 
-                  // Check if user is OPR (exact match only)
-                  const canAccessOPRReview = userRoleStr.toLowerCase() === 'opr' ||
-                    userEmail.toLowerCase().includes('opr') ||
-                    userRoleStr === 'ADMIN' ||
-                    userRoleStr === 'Admin';
+                  return (
+                    <>
+                      {permissions.canEditDocument && (
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="large"
+                          startIcon={<EditIcon />}
+                          onClick={() => router.push(`/editor/${documentId}`)}
+                          sx={{ minWidth: 150 }}
+                        >
+                          Edit Document
+                        </Button>
+                      )}
 
-                  return canAccessOPRReview && (
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      size="large"
-                      startIcon={<AssignmentIcon />}
-                      onClick={() => router.push(`/documents/${documentId}/opr-review`)}
-                      sx={{ minWidth: 150 }}
-                    >
-                      OPR Review
-                    </Button>
+                      {permissions.canAccessReviewCRM && (
+                        <Button
+                          variant="contained"
+                          color="secondary"
+                          size="large"
+                          startIcon={<ReviewIcon />}
+                          onClick={() => router.push(`/documents/${documentId}/review`)}
+                          sx={{ minWidth: 150 }}
+                        >
+                          Review & CRM
+                        </Button>
+                      )}
+
+                      {permissions.canAccessOPRReview && (
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="large"
+                          startIcon={<AssignmentIcon />}
+                          onClick={() => router.push(`/documents/${documentId}/opr-review`)}
+                          sx={{ minWidth: 150 }}
+                        >
+                          OPR Review
+                        </Button>
+                      )}
+                    </>
                   );
                 })()}
 

@@ -26,6 +26,9 @@ import { SupplementMark } from '@/lib/tiptap-supplement-mark';
 import { CommentMark } from '@/lib/tiptap-comments';
 import { FootnoteReference, FootnoteContent, Footnotes } from '@/lib/tiptap-footnotes';
 import { CrossReferences } from '@/lib/tiptap-cross-references';
+import { LineHeight } from '@/lib/tiptap-line-height';
+import { Indent } from '@/lib/tiptap-indent';
+import { ParagraphSpacing } from '@/lib/tiptap-paragraph-spacing';
 
 const lowlight = createLowlight(common);
 
@@ -283,6 +286,20 @@ export const createEditorConfig = (options: {
       FootnoteContent,
       Footnotes,
       CrossReferences,
+      LineHeight.configure({
+        types: ['paragraph', 'heading'],
+        heights: ['1', '1.15', '1.5', '2', '2.5', '3'],
+        defaultHeight: '1.5',
+      }),
+      Indent.configure({
+        types: ['paragraph', 'heading', 'listItem'],
+        minIndent: 0,
+        maxIndent: 400,
+        defaultIndent: 40,
+      }),
+      ParagraphSpacing.configure({
+        types: ['paragraph', 'heading'],
+      }),
     ],
     onUpdate: ({ editor }) => {
       if (onUpdate) {

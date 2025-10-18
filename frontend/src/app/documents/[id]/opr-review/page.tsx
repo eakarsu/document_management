@@ -779,12 +779,6 @@ const OPRReviewPage = () => {
                           setEditableContent(updatedContent);
                           setDocumentContent(updatedContent);
 
-                          // Force re-render of the document viewer by toggling edit mode
-                          setIsEditingDocument(true);
-                          setTimeout(() => {
-                            setIsEditingDocument(false);
-                          }, 10);
-
                           // Update feedback status to 'merged'
                           const updatedFeedback = feedback.map(f =>
                             f.id === selectedFeedback.id

@@ -123,8 +123,9 @@ const EnhancedDocumentEditor: React.FC<EnhancedDocumentEditorProps> = ({
       }
 
       .supplemented-section[data-supplement-type="ADD"] {
-        background-color: rgba(76, 175, 80, 0.1);
-        border-left-color: #4caf50;
+        background-color: transparent;
+        border-left-color: transparent;
+        text-decoration: none;
       }
 
       .supplemented-section[data-supplement-type="DELETE"] {
