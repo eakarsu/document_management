@@ -39,8 +39,11 @@ router.get('/:documentId', authMiddleware, async (req: any, res) => {
     console.log('Has basic access:', hasBasicAccess);
 
     const isWorkflowParticipant = userRole && typeof userRole === 'string' && [
-      'LEGAL', 'LEGAL_REVIEWER', 'SUB_REVIEWER', 'REVIEWER',
-      'COORDINATOR', 'PCM', 'ACTION_OFFICER', 'LEADERSHIP', 'ADMIN', 'AFDPO'
+      'LEGAL', 'LEGAL_REVIEWER', 'STAFF_JUDGE_ADVOCATE', 'SUB_REVIEWER', 'REVIEWER',
+      'COORDINATOR', 'PCM', 'PCM_REVIEWER', 'ACTION_OFFICER', 'OPR',
+      'LEADERSHIP', 'LEADER', 'SQUADRON_COMMANDER', 'GROUP_COMMANDER',
+      'WING_COMMANDER', 'MAJCOM_REVIEWER', 'HQAF_APPROVER', 'FRONT_OFFICE',
+      'ADMIN', 'AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER'
     ].includes(userRole.toUpperCase());
 
     console.log('Is workflow participant:', isWorkflowParticipant);

@@ -138,16 +138,25 @@ export const checkActionPermission = (
       // Coordinator matching
       if (roleLower === 'coordinator' && userRoleLower.includes('coord')) return true;
 
-      // Legal matching
-      if (roleLower === 'legal' && userRoleLower.includes('legal')) return true;
+      // Legal matching - handle all legal role variations
+      if ((roleLower === 'legal' || roleLower === 'legal_reviewer') &&
+          (userRoleLower.includes('legal') || userRoleLower === 'legal' ||
+           userRoleLower === 'legal_reviewer' || userRoleLower === 'legalreviewer' ||
+           userRoleLower === 'staff_judge_advocate' || userRoleLower.includes('judge'))) {
+        return true;
+      }
 
       // Leadership matching (including OPR Leadership/Commander)
       if ((roleLower === 'leadership' || roleLower === 'opr_leadership' || roleLower === 'commander') &&
           (userRoleLower.includes('leader') || userRoleLower.includes('commander') ||
            userRoleLower === 'opr.leadership')) return true;
 
-      // AFDPO matching
-      if (roleLower === 'afdpo' && userRoleLower.includes('publish')) return true;
+      // AFDPO matching - handle all AFDPO/Publisher role variations
+      if ((roleLower === 'afdpo' || roleLower === 'publisher' || roleLower === 'afdpo_publisher' || roleLower === 'hqaf_approver') &&
+          (userRoleLower.includes('publish') || userRoleLower.includes('afdpo') ||
+           userRoleLower === 'hqaf_approver' || userRoleLower.includes('hqaf'))) {
+        return true;
+      }
 
       return false;
     });

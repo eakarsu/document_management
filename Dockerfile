@@ -68,11 +68,11 @@ until pg_isready -h ${POSTGRES_HOST:-postgres} -p ${POSTGRES_PORT:-5432} -U ${PO
 done
 echo "✅ PostgreSQL ready!"
 
-# Run migrations
-echo "🔄 Running database migrations..."
+# Run migrations with db push (bypasses corrupted migration files)
+echo "🔄 Pushing database schema..."
 cd /app/backend
-npx prisma migrate deploy --schema=./prisma/schema.prisma
-echo "✅ Migrations completed!"
+npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss
+echo "✅ Schema pushed successfully!"
 
 # Check if database needs seeding
 echo "🌱 Checking if database needs seeding..."

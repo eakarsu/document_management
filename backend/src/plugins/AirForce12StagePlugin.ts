@@ -386,7 +386,7 @@ export class AirForce12StagePlugin implements IWorkflowPlugin {
             requireComment: true
           }
         ],
-        allowedRoles: ['LEADERSHIP'],
+        allowedRoles: ['LEADERSHIP', 'OPR', 'OPR_LEADERSHIP'],
         ui: {
           icon: 'verified',
           color: '#7C3AED'
@@ -458,7 +458,7 @@ export class AirForce12StagePlugin implements IWorkflowPlugin {
             type: 'custom'
           }
         ],
-        allowedRoles: ['AFDPO'],
+        allowedRoles: ['AFDPO', 'HQAF_APPROVER', 'PUBLISHER', 'AFDPO_PUBLISHER'],
         ui: {
           icon: 'publish',
           color: '#EA580C'
@@ -560,10 +560,10 @@ export class AirForce12StagePlugin implements IWorkflowPlugin {
         edit: ['ACTION_OFFICER', 'OPR', 'LEADERSHIP']
       },
       '9': {
-        view: ['LEADERSHIP', 'ACTION_OFFICER', 'PCM'],
-        edit: ['LEADERSHIP'],
-        approve: ['LEADERSHIP'],
-        reject: ['LEADERSHIP']
+        view: ['LEADERSHIP', 'OPR', 'OPR_LEADERSHIP', 'ACTION_OFFICER', 'PCM'],
+        edit: ['LEADERSHIP', 'OPR', 'OPR_LEADERSHIP'],
+        approve: ['LEADERSHIP', 'OPR', 'OPR_LEADERSHIP'],
+        reject: ['LEADERSHIP', 'OPR', 'OPR_LEADERSHIP']
       },
       '10': {
         view: ['PCM', 'ACTION_OFFICER'],
@@ -572,10 +572,10 @@ export class AirForce12StagePlugin implements IWorkflowPlugin {
         reject: ['PCM']
       },
       '11': {
-        view: ['AFDPO', 'PCM', 'ACTION_OFFICER'],
-        edit: ['AFDPO'],
-        publish: ['AFDPO'],
-        archive: ['AFDPO']
+        view: ['AFDPO', 'HQAF_APPROVER', 'PUBLISHER', 'AFDPO_PUBLISHER', 'PCM', 'ACTION_OFFICER'],
+        edit: ['AFDPO', 'HQAF_APPROVER', 'PUBLISHER', 'AFDPO_PUBLISHER'],
+        publish: ['AFDPO', 'HQAF_APPROVER', 'PUBLISHER', 'AFDPO_PUBLISHER'],
+        archive: ['AFDPO', 'HQAF_APPROVER', 'PUBLISHER', 'AFDPO_PUBLISHER']
       }
     }
   };
