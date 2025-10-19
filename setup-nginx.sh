@@ -164,3 +164,5 @@ echo "3. Firewall Status:"
 ufw status | grep -E "80|443" || echo "   UFW not active or rules not set"
 echo ""
 echo "==========================================="
+
+sudo certbot --nginx -d missionsyncai.com -d www.missionsyncai.com --staging
