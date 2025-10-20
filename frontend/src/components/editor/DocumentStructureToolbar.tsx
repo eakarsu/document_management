@@ -78,126 +78,60 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     setSubParagraphDialog(true);
   };
 
-  // AUTO-NUMBER ALL PARAGRAPHS - Automatically renumber all paragraphs in document
+  // AUTO-NUMBER ALL PARAGRAPHS - Fix duplicates ONLY, don't recalculate structure
   const autoNumberAllParagraphs = (showAlert = true) => {
+    console.log('🔢🔢🔢 AUTO-NUMBER (Fix duplicates only)');
     const content = editor.getHTML();
-
-    let chapterNum = 0;
-    let sectionNum = 0;
-    let paraNum = 0;
-
-    // Parse and renumber all elements
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
 
-    // Number chapters (h1)
-    const h1Elements = tempDiv.querySelectorAll('h1');
-    h1Elements.forEach((h1) => {
-      chapterNum++;
-      sectionNum = 0;
-      const text = h1.textContent?.replace(/^CHAPTER\s+\d+\.?\s*/i, '').replace(/^:\s*/, '') || '';
-      h1.textContent = `CHAPTER ${chapterNum}${text ? ': ' + text : ''}`;
-    });
+    // Group all numbered paragraphs by their prefix
+    const paragraphGroups = new Map<string, HTMLParagraphElement[]>();
 
-    // If no H1 found, check if there are H3s with chapter numbers already and extract the chapter
-    if (chapterNum === 0) {
-      const firstH3 = tempDiv.querySelector('h3');
-      if (firstH3) {
-        const match = firstH3.textContent?.match(/^(\d+)\.\d+\./);
-        if (match) {
-          chapterNum = parseInt(match[1]);
-        } else {
-          chapterNum = 1; // Default to chapter 1 if no H1 and can't extract
+    Array.from(tempDiv.querySelectorAll('p')).forEach(p => {
+      const strong = p.querySelector('strong');
+      if (strong && p.firstChild === strong) {
+        const num = strong.textContent || '';
+        const parts = num.replace(/\.$/, '').split('.');
+        // Only process valid numbers with at least 3 levels
+        if (parts.length >= 3 && parts.every(part => /^\d+$/.test(part))) {
+          const prefix = parts.slice(0, -1).join('.');
+          if (!paragraphGroups.has(prefix)) {
+            paragraphGroups.set(prefix, []);
+          }
+          paragraphGroups.get(prefix)!.push(p);
+          console.log(`  Found: ${num} (prefix: ${prefix})`);
         }
-      } else {
-        chapterNum = 1; // Default to chapter 1
       }
-    }
-
-    // Number sections (h3)
-    tempDiv.querySelectorAll('h3').forEach((h3) => {
-      sectionNum++;
-      // Remove any existing numbering (handles both "1.1." and "1.1 " formats)
-      const text = h3.textContent?.replace(/^\d+\.\d+\.?\s*/, '').trim() || '';
-      h3.textContent = `${chapterNum}.${sectionNum}. ${text}`;
     });
 
-    // Number paragraphs with hierarchy support (1.1.1, 1.1.1.1, 1.1.1.1.1, etc.)
-    // Process all elements in order to track section context for paragraphs
-    let currentSection = sectionNum;
-    paraNum = 0; // Reset paragraph counter
-    let levelCounters: { [key: string]: number } = {};
+    console.log(`Found ${paragraphGroups.size} groups`);
 
-    // Get all elements (H3 sections and P paragraphs) in document order
-    const allElements = Array.from(tempDiv.querySelectorAll('h3, p'));
-
-    allElements.forEach((element) => {
-      if (element.tagName === 'H3') {
-        // Update current section context when we encounter a new H3
-        const match = element.textContent?.match(/^(\d+)\.(\d+)\./);
-        if (match) {
-          currentSection = parseInt(match[2]);
-          paraNum = 0; // Reset paragraph counter for new section
-          levelCounters = {}; // Reset sub-level counters
-        }
-      } else if (element.tagName === 'P') {
-        const p = element as HTMLParagraphElement;
-        const strong = p.querySelector('strong');
-        if (strong && p.firstChild === strong) {
-          // Determine indent level from margin-left style
-          const marginLeft = p.style.marginLeft || '0px';
-          const indentLevel = parseInt(marginLeft) / 40; // 0px=level0, 40px=level1, 80px=level2, etc.
-
-          // Build the number based on hierarchy using currentSection
-          let numberParts = [chapterNum, currentSection];
-
-        if (indentLevel === 0) {
-          // Top-level paragraph: 1.1.1, 1.1.2, etc.
-          paraNum++;
-          numberParts.push(paraNum);
-          levelCounters = {}; // Reset sub-levels
-        } else if (indentLevel === 1) {
-          // Sub-paragraph: 1.1.1.1, 1.1.1.2, etc.
-          levelCounters['1'] = (levelCounters['1'] || 0) + 1;
-          numberParts.push(paraNum, levelCounters['1']);
-          levelCounters['2'] = 0; // Reset deeper levels
-          levelCounters['3'] = 0;
-        } else if (indentLevel === 2) {
-          // Sub-sub-paragraph: 1.1.1.1.1, etc.
-          levelCounters['2'] = (levelCounters['2'] || 0) + 1;
-          numberParts.push(paraNum, levelCounters['1'] || 1, levelCounters['2']);
-          levelCounters['3'] = 0; // Reset deeper
-        } else if (indentLevel === 3) {
-          // Very deep: 1.1.1.1.1.1, etc.
-          levelCounters['3'] = (levelCounters['3'] || 0) + 1;
-          numberParts.push(paraNum, levelCounters['1'] || 1, levelCounters['2'] || 1, levelCounters['3']);
-        }
-
-        // Remove all existing numbers from text
+    // Renumber each group sequentially
+    paragraphGroups.forEach((paras, prefix) => {
+      console.log(`\nGroup "${prefix}.*" has ${paras.length} paragraphs:`);
+      paras.forEach((p, idx) => {
+        const oldNum = p.querySelector('strong')?.textContent || '';
+        const newNum = `${prefix}.${idx + 1}.`;
         const text = p.textContent?.replace(/^[\d.]+\s*/, '').trim() || '';
-        const newNumber = numberParts.join('.') + '.';
-        strong.textContent = newNumber;
-
-          // Rebuild paragraph preserving indentation
-          const restText = Array.from(p.childNodes)
-            .slice(1)
-            .map(node => node.textContent)
-            .join('');
-          p.innerHTML = `<strong>${newNumber}</strong> ${restText}`;
-        }
-      }
+        p.innerHTML = `<strong>${newNum}</strong> ${text}`;
+        console.log(`  ${oldNum} → ${newNum}`);
+      });
     });
 
     editor.commands.setContent(tempDiv.innerHTML);
+    console.log('✅ Auto-number complete');
     if (showAlert) {
-      alert('All paragraphs have been automatically numbered!');
+      alert('Duplicate paragraph numbers have been fixed!');
     }
   };
 
   // SMART INSERT PARAGRAPH - Context-aware insert WITH auto-renumbering
   const insertSmartParagraph = () => {
+    console.log('🟢 +Para button clicked');
     const content = editor.getHTML();
     const { from } = editor.state.selection;
+    console.log('📍 Cursor position:', from);
 
     // Parse document structure
     const tempDiv = document.createElement('div');
@@ -205,7 +139,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     const allElements = Array.from(tempDiv.querySelectorAll('h1, h3, p'));
 
     // Find what element comes IMMEDIATELY BEFORE the cursor position
-    let beforeCursor = { chapter: 1, section: 0, paragraph: 0, type: 'none' };
+    let beforeCursor: any = { chapter: 1, section: 0, paragraph: 0, type: 'none', fullNumber: '' };
 
     // Get the DOM position of cursor
     const cursorPos = editor.view.domAtPos(from);
@@ -238,14 +172,19 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
       } else if (searchNode.tagName === 'P') {
         const strong = searchNode.querySelector('strong');
         if (strong) {
-          const match = strong.textContent?.match(/^(\d+)\.(\d+)\.(\d+)\./);
+          const fullNumber = strong.textContent || '';
+          console.log('🔍 Found paragraph with number:', fullNumber);
+          // Match ANY number of levels (1.2.3 or 1.2.3.4.5.6, etc.)
+          const match = fullNumber.match(/^(\d+)\.(\d+)\.(\d+)/);
           if (match) {
             beforeCursor = {
               chapter: parseInt(match[1]),
               section: parseInt(match[2]),
               paragraph: parseInt(match[3]),
-              type: 'paragraph'
+              type: 'paragraph',
+              fullNumber: fullNumber  // Store the full number for later use
             };
+            console.log('✅ Set beforeCursor:', beforeCursor);
             break;
           }
         }
@@ -270,23 +209,28 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
       // After section → insert paragraph 1.1.1
       newContent = `<p><strong>${beforeCursor.chapter}.${beforeCursor.section}.1.</strong> Type your content here</p>`;
     } else if (beforeCursor.type === 'paragraph') {
-      // After paragraph → insert SUB-PARAGRAPH (go deeper)
-      // Check how deep we already are by counting dots in the strong tag
-      const strongEl = searchNode?.querySelector('strong');
-      const existingNumber = strongEl?.textContent || '';
-      const dotCount = (existingNumber.match(/\./g) || []).length;
+      // After paragraph → increment the LAST number (same level sibling)
+      const fullNumber = beforeCursor.fullNumber || '';
+      console.log('📝 Processing paragraph, fullNumber:', fullNumber);
+      const parts = fullNumber.replace(/\.$/, '').split('.');
+      console.log('📝 Number parts:', parts);
 
-      if (dotCount === 3) {
-        // 1.1.1. → insert 1.1.1.1 (sub-paragraph, indent 40px)
-        newContent = `<p style="margin-left: 40px;"><strong>${beforeCursor.chapter}.${beforeCursor.section}.${beforeCursor.paragraph}.1.</strong> Type your content here</p>`;
-      } else if (dotCount === 4) {
-        // 1.1.1.1. → insert 1.1.1.1.1 (sub-sub-paragraph, indent 80px)
-        newContent = `<p style="margin-left: 80px;"><strong>${beforeCursor.chapter}.${beforeCursor.section}.${beforeCursor.paragraph}.1.1.</strong> Type your content here</p>`;
-      } else if (dotCount === 5) {
-        // 1.1.1.1.1. → insert 1.1.1.1.1.1 (very deep, indent 120px)
-        newContent = `<p style="margin-left: 120px;"><strong>${beforeCursor.chapter}.${beforeCursor.section}.${beforeCursor.paragraph}.1.1.1.</strong> Type your content here</p>`;
+      if (parts.length > 0) {
+        // Increment the last part
+        const oldLast = parts[parts.length - 1];
+        parts[parts.length - 1] = (parseInt(parts[parts.length - 1]) + 1).toString();
+        const newNumber = parts.join('.') + '.';
+        console.log(`📝 Incremented: ${oldLast} → ${parts[parts.length - 1]}, new number: ${newNumber}`);
+
+        // Calculate indent based on depth
+        const indentLevel = Math.max(0, parts.length - 3); // 3 levels = no indent, 4 = 40px, 5 = 80px, etc.
+        const marginLeft = indentLevel * 40;
+        const styleAttr = marginLeft > 0 ? ` style="margin-left: ${marginLeft}px;"` : '';
+        console.log(`📝 Indent level: ${indentLevel}, margin: ${marginLeft}px`);
+
+        newContent = `<p${styleAttr}><strong>${newNumber}</strong> Type your content here</p>`;
       } else {
-        // Fallback - insert next paragraph at same level
+        // Fallback
         newContent = `<p><strong>${beforeCursor.chapter}.${beforeCursor.section}.${beforeCursor.paragraph + 1}.</strong> Type your content here</p>`;
       }
     } else {
@@ -295,12 +239,11 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     }
 
     // Insert at cursor position
+    console.log('🚀 Inserting content:', newContent);
     editor.commands.insertContent(newContent);
+    console.log('✅ Content inserted');
 
-    // Auto-renumber everything after insertion to fix any conflicts (silent)
-    setTimeout(() => {
-      autoNumberAllParagraphs(false); // false = no alert popup
-    }, 100);
+    // Do NOT auto-renumber - let user manually click Auto button
   };
 
   // Quick insert templates

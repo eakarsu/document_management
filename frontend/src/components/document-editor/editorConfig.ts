@@ -77,7 +77,7 @@ const AutoNumbering = Extension.create({
         console.log('Full state:', state);
         console.log('Selection:', state.selection);
 
-        // Get the parent paragraph node
+        // Get the parent paragraph node (the one we're currently in)
         let currentNode = $from.parent;
         console.log('🔍 Current node type:', currentNode.type.name);
 
@@ -87,7 +87,7 @@ const AutoNumbering = Extension.create({
           return false;
         }
 
-        // Get the full text content of the paragraph
+        // Get the full text content of the paragraph we're in
         const paraText = currentNode.textContent;
         console.log('🔍 Paragraph text:', JSON.stringify(paraText));
         console.log('🔍 Paragraph text length:', paraText.length);
@@ -173,6 +173,11 @@ const AutoNumbering = Extension.create({
         }
 
         console.log('✅ Numbered paragraph inserted');
+
+        // DO NOT auto-renumber - it breaks the cursor position
+        // The setContent() call loses cursor context, causing duplicate numbers
+        // User must manually click the "Auto" button to fix duplicates
+
         return true;
       },
     };
