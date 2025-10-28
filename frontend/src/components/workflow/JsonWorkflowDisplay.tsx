@@ -309,50 +309,48 @@ export const JsonWorkflowDisplay: React.FC<JsonWorkflowDisplayProps> = ({
         )}
 
         {/* Actions - Only show if workflow is not completed */}
-        {(filteredActions.length > 0 || userRole === 'Admin') && !workflowInstance?.completedAt && (
+        {filteredActions.length > 0 && !workflowInstance?.completedAt && (
           <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
-              {filteredActions.length > 0 && !workflowInstance?.completedAt && (
-                <>
-                  <Typography variant="h6" gutterBottom>
-                    Available Actions
-                  </Typography>
-                  <WorkflowActions
-                    actions={filteredActions}
-                    processingWorkflow={processingWorkflow}
-                    onActionClick={handleActionClick}
-                    currentStageId={workflowInstance?.currentStageId}
-                  />
-                </>
-              )}
+              <Typography variant="h6" gutterBottom>
+                Available Actions
+              </Typography>
+              <WorkflowActions
+                actions={filteredActions}
+                processingWorkflow={processingWorkflow}
+                onActionClick={handleActionClick}
+                currentStageId={workflowInstance?.currentStageId}
+              />
+            </Paper>
+          </Grid>
+        )}
 
-              {/* Reset Button - Admin Only - Only when workflow actually exists */}
-              {(userRole === 'Admin' || userRole === 'ADMIN') && workflowInstance && workflowInstance.workflowId && (
-                <Box sx={{ mt: filteredActions.length > 0 ? 2 : 0, pt: filteredActions.length > 0 ? 2 : 0, borderTop: filteredActions.length > 0 ? 1 : 0, borderColor: 'divider' }}>
-                  <Typography variant="h6" gutterBottom color="primary">
-                    Admin Controls
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    color={workflowInstance?.completedAt || !workflowInstance?.isActive ? "error" : "warning"}
-                    startIcon={<Refresh />}
-                    onClick={resetWorkflow}
-                    disabled={processingWorkflow}
-                    size="large"
-                  >
-                    Reset Workflow to Initial Stage
-                  </Button>
-                  {workflowInstance?.completedAt && (
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      This workflow was completed/published. Resetting will restart the entire workflow process from the beginning.
-                    </Alert>
-                  )}
-                  {!workflowInstance?.isActive && !workflowInstance?.completedAt && (
-                    <Alert severity="warning" sx={{ mt: 2 }}>
-                      This workflow is inactive. Reset it to restart the process.
-                    </Alert>
-                  )}
-                </Box>
+        {/* Admin Controls - Always show for Admin when workflow exists */}
+        {(userRole === 'Admin' || userRole === 'ADMIN') && workflowInstance && workflowInstance.workflowId && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom color="primary">
+                Admin Controls
+              </Typography>
+              <Button
+                variant="contained"
+                color={workflowInstance?.completedAt || !workflowInstance?.isActive ? "error" : "warning"}
+                startIcon={<Refresh />}
+                onClick={resetWorkflow}
+                disabled={processingWorkflow}
+                size="large"
+              >
+                Reset Workflow to Initial Stage
+              </Button>
+              {workflowInstance?.completedAt && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  This workflow was completed/published. Resetting will restart the entire workflow process from the beginning.
+                </Alert>
+              )}
+              {!workflowInstance?.isActive && !workflowInstance?.completedAt && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  This workflow is inactive. Reset it to restart the process.
+                </Alert>
               )}
             </Paper>
           </Grid>

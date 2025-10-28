@@ -385,6 +385,7 @@ const OPRReviewPage = () => {
     <>
       <OPRReviewHeader
         documentTitle={documentData?.title}
+        documentId={documentId}
         isEditingDocument={isEditingDocument}
         savingDocument={savingDocument}
         exporting={exporting}
@@ -777,12 +778,6 @@ const OPRReviewPage = () => {
                           // Update BOTH content states to ensure the change is visible
                           setEditableContent(updatedContent);
                           setDocumentContent(updatedContent);
-
-                          // Force re-render of the document viewer by toggling edit mode
-                          setIsEditingDocument(true);
-                          setTimeout(() => {
-                            setIsEditingDocument(false);
-                          }, 10);
 
                           // Update feedback status to 'merged'
                           const updatedFeedback = feedback.map(f =>

@@ -34,7 +34,8 @@ import {
   TextField,
   Select,
   MenuItem,
-  InputLabel
+  InputLabel,
+  Menu
 } from '@mui/material';
 import {
   ArrowBack,
@@ -75,7 +76,11 @@ import CommentsPanel from '@/components/editor/CommentsPanel';
 import AdvancedSearchReplace from '@/components/editor/AdvancedSearchReplace';
 import AirForceHeader from '@/components/editor/AirForceHeader';
 import { EditorToolbar } from '@/components/editor/EditorToolbar';
+import { CompactEditorToolbar } from '@/components/editor/CompactEditorToolbar';
+import { MenuBasedToolbar } from '@/components/editor/MenuBasedToolbar';
 import { AdvancedToolbar } from '@/components/editor/AdvancedToolbar';
+import { TextEnhancementsToolbar } from '@/components/editor/TextEnhancementsToolbar';
+import { AdvancedFeaturesToolbar } from '@/components/editor/AdvancedFeaturesToolbar';
 import '@/styles/supplement-marks.css';
 import '@/styles/editor-document.css';
 
@@ -98,6 +103,23 @@ const DocumentEditor: React.FC = () => {
     setTrackChanges,
     setShowChanges,
   } = useDocumentData(documentId);
+
+  // Toolbar mode state (menu, compact, or full)
+  const [toolbarMode, setToolbarMode] = useState<'menu' | 'compact' | 'full'>(() => {
+    // Load from localStorage if available
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('editorToolbarMode');
+      return (saved as 'menu' | 'compact' | 'full') || 'menu';
+    }
+    return 'menu';
+  });
+
+  // Save toolbar mode preference
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('editorToolbarMode', toolbarMode);
+    }
+  }, [toolbarMode]);
 
   // UI state
   const [editorUI, setEditorUI] = useState<EditorUI>({
@@ -138,6 +160,9 @@ const DocumentEditor: React.FC = () => {
 
   // User state
   const [user, setUser] = useState<UserInfo | null>(null);
+
+  // Export menu state
+  const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
 
   // Page calculation refs
   const calculatePageFromCursorRef = useRef<(() => void) | null>(null);
@@ -476,33 +501,229 @@ const DocumentEditor: React.FC = () => {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format: 'pdf' | 'docx' | 'html' | 'txt' = 'pdf') => {
     if (!documentData || !editor) return;
 
     try {
-      const content = editor.getHTML();
-      const response = await authTokenService.authenticatedFetch('/api/export', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content,
-          format: 'pdf',
-          filename: `${documentData.title}.pdf`,
-        }),
-      });
+      // Get the editor content
+      let editorContent = editor.getHTML();
+      const title = documentData.title || 'document';
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${documentData.title}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+      // Include header if it exists
+      const customFields = documentData.customFields as any;
+      let fullContent = '';
+
+      if (customFields?.headerHtml) {
+        // Extract styles from headerHtml
+        const styleMatch = customFields.headerHtml.match(/<style>([\s\S]*?)<\/style>/);
+        const headerStyles = styleMatch ? styleMatch[1] : '';
+
+        // Combine header HTML with editor content
+        fullContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <style>
+    body {
+      font-family: 'Times New Roman', serif;
+      font-size: 12pt;
+      line-height: 1.6;
+      margin: 1in;
+    }
+    h1 {
+      font-size: 14pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      page-break-after: avoid;
+    }
+    h2 {
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 18pt;
+      margin-bottom: 12pt;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 12pt;
+      font-weight: bold;
+      font-style: italic;
+      page-break-after: avoid;
+    }
+    p {
+      margin-bottom: 12pt;
+      text-align: justify;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12pt 0;
+      page-break-inside: avoid;
+    }
+    table td, table th { border: 1px solid black; padding: 6pt; }
+    table th { background-color: #f0f0f0; font-weight: bold; }
+    /* Remove page breaks after table of contents */
+    .table-of-contents,
+    [class*="toc"],
+    [id*="toc"] {
+      page-break-after: avoid;
+    }
+    /* Prevent orphaned headings */
+    h1, h2, h3, h4, h5, h6 {
+      page-break-after: avoid;
+    }
+    ${headerStyles}
+  </style>
+</head>
+<body>
+  ${customFields.headerHtml}
+  ${editorContent}
+</body>
+</html>`;
+      } else {
+        // No header - just wrap content with basic HTML
+        fullContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <style>
+    body {
+      font-family: 'Times New Roman', serif;
+      font-size: 12pt;
+      line-height: 1.6;
+      margin: 1in;
+    }
+    h1 {
+      font-size: 14pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      page-break-after: avoid;
+    }
+    h2 {
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 18pt;
+      margin-bottom: 12pt;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 12pt;
+      font-weight: bold;
+      font-style: italic;
+      page-break-after: avoid;
+    }
+    p {
+      margin-bottom: 12pt;
+      text-align: justify;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12pt 0;
+      page-break-inside: avoid;
+    }
+    table td, table th { border: 1px solid black; padding: 6pt; }
+    table th { background-color: #f0f0f0; font-weight: bold; }
+    /* Remove page breaks after table of contents */
+    .table-of-contents,
+    [class*="toc"],
+    [id*="toc"] {
+      page-break-after: avoid;
+    }
+    /* Prevent orphaned headings */
+    h1, h2, h3, h4, h5, h6 {
+      page-break-after: avoid;
+    }
+  </style>
+</head>
+<body>
+  ${editorContent}
+</body>
+</html>`;
+      }
+
+      switch (format) {
+        case 'pdf':
+          // Generate PDF using export-pdf endpoint
+          const pdfResponse = await fetch('/api/export-pdf', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              content: fullContent,
+              title
+            })
+          });
+
+          if (pdfResponse.ok) {
+            const blob = await pdfResponse.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          } else {
+            setError('Failed to generate PDF');
+          }
+          break;
+
+        case 'docx':
+          // Generate DOCX using export-docx endpoint
+          const docxResponse = await fetch('/api/export-docx', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              content: fullContent,
+              title
+            })
+          });
+
+          if (docxResponse.ok) {
+            const blob = await docxResponse.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          } else {
+            setError('Failed to generate Word document');
+          }
+          break;
+
+        case 'html':
+          // Export as HTML - use fullContent which already has header and styles
+          const htmlBlob = new Blob([fullContent], { type: 'text/html' });
+          const htmlUrl = URL.createObjectURL(htmlBlob);
+          const htmlLink = document.createElement('a');
+          htmlLink.href = htmlUrl;
+          htmlLink.download = `${title}.html`;
+          htmlLink.click();
+          URL.revokeObjectURL(htmlUrl);
+          break;
+
+        case 'txt':
+          // Convert HTML to plain text - use fullContent to include header
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = fullContent;
+          const textContent = tempDiv.textContent || tempDiv.innerText || '';
+          const txtBlob = new Blob([textContent], { type: 'text/plain' });
+          const txtUrl = URL.createObjectURL(txtBlob);
+          const txtLink = document.createElement('a');
+          txtLink.href = txtUrl;
+          txtLink.download = `${title}.txt`;
+          txtLink.click();
+          URL.revokeObjectURL(txtUrl);
+          break;
       }
     } catch (error) {
       console.error('Export error:', error);
@@ -559,7 +780,7 @@ const DocumentEditor: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <IconButton
               edge="start"
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push(`/documents/${documentId}`)}
               sx={{
                 bgcolor: 'primary.main',
                 color: 'white',
@@ -617,6 +838,30 @@ const DocumentEditor: React.FC = () => {
 
             <Divider orientation="vertical" flexItem sx={{ height: 30 }} />
 
+            {/* Toolbar mode toggle */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip
+                label={
+                  toolbarMode === 'menu' ? 'Menu Toolbar' :
+                  toolbarMode === 'compact' ? 'Compact Toolbar' :
+                  'Full Toolbar'
+                }
+                size="small"
+                onClick={() => setToolbarMode(prev =>
+                  prev === 'menu' ? 'compact' :
+                  prev === 'compact' ? 'full' :
+                  'menu'
+                )}
+                sx={{
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'grey.300' },
+                  fontSize: '0.7rem',
+                  fontWeight: 500
+                }}
+                color={toolbarMode === 'menu' ? 'primary' : toolbarMode === 'compact' ? 'secondary' : 'default'}
+              />
+            </Box>
+
             {/* Primary action buttons */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <ButtonGroup variant="contained" size="small" sx={{ boxShadow: 1 }}>
@@ -656,7 +901,7 @@ const DocumentEditor: React.FC = () => {
 
               <Button
                 variant="outlined"
-                onClick={handleExport}
+                onClick={(e) => setExportMenuAnchor(e.currentTarget)}
                 startIcon={<Download />}
                 title="Export Document"
                 sx={{
@@ -667,49 +912,143 @@ const DocumentEditor: React.FC = () => {
               >
                 Export
               </Button>
+              <Menu
+                anchorEl={exportMenuAnchor}
+                open={Boolean(exportMenuAnchor)}
+                onClose={() => setExportMenuAnchor(null)}
+              >
+                <MenuItem onClick={() => { handleExport('pdf'); setExportMenuAnchor(null); }}>
+                  Export as PDF
+                </MenuItem>
+                <MenuItem onClick={() => { handleExport('docx'); setExportMenuAnchor(null); }}>
+                  Export as Word (.docx)
+                </MenuItem>
+                <MenuItem onClick={() => { handleExport('html'); setExportMenuAnchor(null); }}>
+                  Export as HTML
+                </MenuItem>
+                <MenuItem onClick={() => { handleExport('txt'); setExportMenuAnchor(null); }}>
+                  Export as Text
+                </MenuItem>
+              </Menu>
             </Box>
           </Box>
         </Toolbar>
       </AppBar>
 
-      {/* Main Editor Toolbar */}
-      <EditorToolbar
-        editor={editor}
-        saving={editorState.saving}
-        hasUnsavedChanges={editorState.hasUnsavedChanges}
-        trackChanges={editorState.trackChanges}
-        changes={[]} // You can implement change tracking later
-        comments={editorUI.comments}
-        hasSupplements={hasSupplements}
-        viewMode={viewMode.mode}
-        currentPage={editorState.currentPage}
-        totalPages={editorState.totalPages}
-        wordCount={editorState.wordCount}
-        charCount={editorState.charCount}
-        fontSize={editorUI.fontSize}
-        fontFamily={editorUI.fontFamily}
-        documentId={documentId}
-        onSave={() => handleSave(true)}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        onTrackChangesToggle={setTrackChanges}
-        onChangesDrawerOpen={() => setShowChanges(true)}
-        onCommentsOpen={() => setEditorUI(prev => ({ ...prev, commentsDrawerOpen: true }))}
-        onAdvancedSearchOpen={() => setEditorUI(prev => ({ ...prev, findReplaceOpen: true }))}
-        onExportDialogOpen={handleExport}
-        onViewModeChange={(mode) => setViewMode({ mode })}
-        onFontSizeChange={(size) => setEditorUI(prev => ({ ...prev, fontSize: size }))}
-        onFontFamilyChange={(family) => setEditorUI(prev => ({ ...prev, fontFamily: family }))}
-      />
-
-      {/* Advanced Toolbar */}
-      <Paper sx={{ px: 2, py: 1 }}>
-        <AdvancedToolbar
+      {/* Conditional Toolbar Rendering */}
+      {toolbarMode === 'menu' ? (
+        /* Menu-Based Toolbar - Microsoft Word style with Home, Insert, Format, Review, View tabs */
+        <MenuBasedToolbar
           editor={editor}
-          onHasUnsavedChanges={handleHasUnsavedChanges}
-          removeAllColors={removeAllColors}
+          saving={editorState.saving}
+          hasUnsavedChanges={editorState.hasUnsavedChanges}
+          trackChanges={editorState.trackChanges}
+          changes={[]}
+          comments={editorUI.comments}
+          hasSupplements={hasSupplements}
+          viewMode={viewMode.mode}
+          currentPage={editorState.currentPage}
+          totalPages={editorState.totalPages}
+          wordCount={editorState.wordCount}
+          charCount={editorState.charCount}
+          fontSize={editorUI.fontSize}
+          fontFamily={editorUI.fontFamily}
+          documentId={documentId}
+          onSave={() => handleSave(true)}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onTrackChangesToggle={setTrackChanges}
+          onChangesDrawerOpen={() => setShowChanges(true)}
+          onCommentsOpen={() => setEditorUI(prev => ({ ...prev, commentsDrawerOpen: true }))}
+          onAdvancedSearchOpen={() => setEditorUI(prev => ({ ...prev, findReplaceOpen: true }))}
+          onExportDialogOpen={(format) => handleExport(format)}
+          onViewModeChange={(mode) => setViewMode({ mode })}
+          onFontSizeChange={(size) => setEditorUI(prev => ({ ...prev, fontSize: size }))}
+          onFontFamilyChange={(family) => setEditorUI(prev => ({ ...prev, fontFamily: family }))}
         />
-      </Paper>
+      ) : toolbarMode === 'compact' ? (
+        /* Compact Toolbar - Space-saving design with dropdown menus */
+        <CompactEditorToolbar
+          editor={editor}
+          saving={editorState.saving}
+          hasUnsavedChanges={editorState.hasUnsavedChanges}
+          trackChanges={editorState.trackChanges}
+          changes={[]}
+          comments={editorUI.comments}
+          hasSupplements={hasSupplements}
+          viewMode={viewMode.mode}
+          currentPage={editorState.currentPage}
+          totalPages={editorState.totalPages}
+          wordCount={editorState.wordCount}
+          charCount={editorState.charCount}
+          fontSize={editorUI.fontSize}
+          fontFamily={editorUI.fontFamily}
+          documentId={documentId}
+          onSave={() => handleSave(true)}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onTrackChangesToggle={setTrackChanges}
+          onChangesDrawerOpen={() => setShowChanges(true)}
+          onCommentsOpen={() => setEditorUI(prev => ({ ...prev, commentsDrawerOpen: true }))}
+          onAdvancedSearchOpen={() => setEditorUI(prev => ({ ...prev, findReplaceOpen: true }))}
+          onExportDialogOpen={(format) => handleExport(format)}
+          onViewModeChange={(mode) => setViewMode({ mode })}
+          onFontSizeChange={(size) => setEditorUI(prev => ({ ...prev, fontSize: size }))}
+          onFontFamilyChange={(family) => setEditorUI(prev => ({ ...prev, fontFamily: family }))}
+        />
+      ) : (
+        /* Full Toolbar - All features visible with all toolbars */
+        <>
+          {/* Main Editor Toolbar */}
+          <EditorToolbar
+            editor={editor}
+            saving={editorState.saving}
+            hasUnsavedChanges={editorState.hasUnsavedChanges}
+            trackChanges={editorState.trackChanges}
+            changes={[]} // You can implement change tracking later
+            comments={editorUI.comments}
+            hasSupplements={hasSupplements}
+            viewMode={viewMode.mode}
+            currentPage={editorState.currentPage}
+            totalPages={editorState.totalPages}
+            wordCount={editorState.wordCount}
+            charCount={editorState.charCount}
+            fontSize={editorUI.fontSize}
+            fontFamily={editorUI.fontFamily}
+            documentId={documentId}
+            onSave={() => handleSave(true)}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onTrackChangesToggle={setTrackChanges}
+            onChangesDrawerOpen={() => setShowChanges(true)}
+            onCommentsOpen={() => setEditorUI(prev => ({ ...prev, commentsDrawerOpen: true }))}
+            onAdvancedSearchOpen={() => setEditorUI(prev => ({ ...prev, findReplaceOpen: true }))}
+            onExportDialogOpen={(format) => handleExport(format)}
+            onViewModeChange={(mode) => setViewMode({ mode })}
+            onFontSizeChange={(size) => setEditorUI(prev => ({ ...prev, fontSize: size }))}
+            onFontFamilyChange={(family) => setEditorUI(prev => ({ ...prev, fontFamily: family }))}
+          />
+
+          {/* Advanced Toolbar */}
+          <Paper sx={{ px: 2, py: 1 }}>
+            <AdvancedToolbar
+              editor={editor}
+              onHasUnsavedChanges={handleHasUnsavedChanges}
+              removeAllColors={removeAllColors}
+            />
+          </Paper>
+
+          {/* Text Enhancements Toolbar */}
+          <Paper sx={{ px: 2, py: 1, mb: 1 }}>
+            <TextEnhancementsToolbar editor={editor} />
+          </Paper>
+
+          {/* Advanced Features Toolbar (Paragraph, Lists, Tables, Document, Collaboration, Productivity, Accessibility) */}
+          <Box sx={{ mb: 1 }}>
+            <AdvancedFeaturesToolbar editor={editor} documentId={documentId} />
+          </Box>
+        </>
+      )}
 
       {/* Document Structure Toolbar */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>

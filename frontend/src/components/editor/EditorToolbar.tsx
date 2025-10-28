@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   Box,
@@ -13,7 +13,9 @@ import {
   FormControlLabel,
   Typography,
   Badge,
-  Chip
+  Chip,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -58,7 +60,7 @@ interface EditorToolbarProps {
   onChangesDrawerOpen: () => void;
   onCommentsOpen: () => void;
   onAdvancedSearchOpen: () => void;
-  onExportDialogOpen: () => void;
+  onExportDialogOpen: (format: 'pdf' | 'docx' | 'html' | 'txt') => void;
   onViewModeChange: (mode: ViewMode) => void;
   onFontSizeChange: (size: string) => void;
   onFontFamilyChange: (family: string) => void;
@@ -93,12 +95,14 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onFontFamilyChange
 }) => {
   const router = useRouter();
+  const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
 
   return (
-    <Paper sx={{ p: 2, mb: 2 }}>
-      {/* Control Row - Reorganized for Better UX */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 2, pb: 2, borderBottom: '1px solid #e0e0e0' }}>
-        {/* Primary Actions - Save & Undo/Redo */}
+    <Paper sx={{ p: 1.5, mb: 2, boxShadow: 2 }}>
+      {/* Row 1: Primary Actions & Document Tools */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 1.5, pb: 1.5, borderBottom: '1px solid #e0e0e0' }}>
+
+        {/* Group 1: File Operations */}
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
           <Button
             variant="contained"
@@ -107,7 +111,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
             onClick={onSave}
             disabled={saving || !hasUnsavedChanges}
-            sx={{ minWidth: 80 }}
+            sx={{ minWidth: 80, fontWeight: 600 }}
           >
             {saving ? 'Saving' : 'Save'}
           </Button>
@@ -129,17 +133,11 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               <Redo fontSize="small" />
             </IconButton>
           </ButtonGroup>
-
-          {/* Table Grid Picker */}
-          <TableGridPicker editor={editor} />
-
-          {/* Table Controls - Only visible when cursor is in a table */}
-          <TableControls editor={editor} />
         </Box>
 
-        <Divider orientation="vertical" flexItem />
+        <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
 
-        {/* Document Tools */}
+        {/* Group 2: Document Tools */}
         <ButtonGroup size="small" variant="outlined">
           <Button
             onClick={onAdvancedSearchOpen}
@@ -149,7 +147,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             Find
           </Button>
           <Button
-            onClick={onExportDialogOpen}
+            onClick={(e) => setExportMenuAnchor(e.currentTarget)}
             title="Export Document"
             startIcon={<Download fontSize="small" />}
           >
@@ -163,10 +161,38 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </Button>
         </ButtonGroup>
 
-        <Divider orientation="vertical" flexItem />
+        {/* Export Menu */}
+        <Menu
+          anchorEl={exportMenuAnchor}
+          open={Boolean(exportMenuAnchor)}
+          onClose={() => setExportMenuAnchor(null)}
+        >
+          <MenuItem onClick={() => { onExportDialogOpen('pdf'); setExportMenuAnchor(null); }}>
+            Export as PDF
+          </MenuItem>
+          <MenuItem onClick={() => { onExportDialogOpen('docx'); setExportMenuAnchor(null); }}>
+            Export as Word (.docx)
+          </MenuItem>
+          <MenuItem onClick={() => { onExportDialogOpen('html'); setExportMenuAnchor(null); }}>
+            Export as HTML
+          </MenuItem>
+          <MenuItem onClick={() => { onExportDialogOpen('txt'); setExportMenuAnchor(null); }}>
+            Export as Text
+          </MenuItem>
+        </Menu>
 
-        {/* Review & Collaboration */}
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
+
+        {/* Group 3: Insert Table */}
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          <TableGridPicker editor={editor} />
+          <TableControls editor={editor} />
+        </Box>
+
+        <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
+
+        {/* Group 4: Review & Collaboration */}
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
           <FormControlLabel
             control={
               <Switch
@@ -175,8 +201,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 size="small"
               />
             }
-            label={<Typography variant="body2">Track</Typography>}
-            sx={{ mr: 0 }}
+            label={<Typography variant="body2" sx={{ fontSize: '0.85rem' }}>Track Changes</Typography>}
+            sx={{ mr: 0.5 }}
           />
           <IconButton
             size="small"
@@ -206,13 +232,13 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </IconButton>
         </Box>
 
-        <Divider orientation="vertical" flexItem />
+        <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
 
-        {/* View Options */}
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        {/* Group 5: View Options */}
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
           <Button
             size="small"
-            variant="text"
+            variant="outlined"
             onClick={() => router.push(`/documents/${documentId}`)}
             startIcon={<PreviewIcon fontSize="small" />}
             title="Preview Document"
@@ -224,21 +250,21 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               <Button
                 variant={viewMode === 'base' ? 'contained' : 'outlined'}
                 onClick={() => onViewModeChange('base')}
-                sx={{ minWidth: 50, fontSize: '0.75rem' }}
+                sx={{ minWidth: 45, fontSize: '0.75rem' }}
               >
                 Base
               </Button>
               <Button
                 variant={viewMode === 'integrated' ? 'contained' : 'outlined'}
                 onClick={() => onViewModeChange('integrated')}
-                sx={{ minWidth: 70, fontSize: '0.75rem' }}
+                sx={{ minWidth: 65, fontSize: '0.75rem' }}
               >
                 Integrated
               </Button>
               <Button
                 variant={viewMode === 'supplement' ? 'contained' : 'outlined'}
                 onClick={() => onViewModeChange('supplement')}
-                sx={{ minWidth: 80, fontSize: '0.75rem' }}
+                sx={{ minWidth: 75, fontSize: '0.75rem' }}
               >
                 Supplement
               </Button>
@@ -286,66 +312,72 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         </Box>
       </Box>
 
-      {/* Second Row - Text Formatting */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 2 }}>
-        {/* Font Family */}
-        <select
-          value={fontFamily}
-          onChange={(e) => {
-            onFontFamilyChange(e.target.value);
-            editor?.chain().focus().setFontFamily(e.target.value).run();
-          }}
-          style={{
-            padding: '4px 8px',
-            borderRadius: '4px',
-            border: '1px solid #ccc',
-            fontSize: '14px'
-          }}
-        >
-          <option value="serif">Serif</option>
-          <option value="sans-serif">Sans Serif</option>
-          <option value="monospace">Monospace</option>
-          <option value="cursive">Cursive</option>
-          <option value="Arial">Arial</option>
-          <option value="Times New Roman">Times New Roman</option>
-          <option value="Courier New">Courier New</option>
-          <option value="Georgia">Georgia</option>
-          <option value="Verdana">Verdana</option>
-        </select>
+      {/* Row 2: Text Formatting */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
 
-        {/* Font Size */}
-        <select
-          value={fontSize}
-          onChange={(e) => {
-            onFontSizeChange(e.target.value);
-            editor?.chain().focus().setMark('textStyle', { fontSize: e.target.value }).run();
-          }}
-          style={{
-            padding: '4px 8px',
-            borderRadius: '4px',
-            border: '1px solid #ccc',
-            fontSize: '14px'
-          }}
-        >
-          <option value="12px">12</option>
-          <option value="14px">14</option>
-          <option value="16px">16</option>
-          <option value="18px">18</option>
-          <option value="20px">20</option>
-          <option value="24px">24</option>
-          <option value="28px">28</option>
-          <option value="32px">32</option>
-          <option value="36px">36</option>
-        </select>
+        {/* Group 1: Font Controls */}
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          <select
+            value={fontFamily}
+            onChange={(e) => {
+              onFontFamilyChange(e.target.value);
+              editor?.chain().focus().setFontFamily(e.target.value).run();
+            }}
+            style={{
+              padding: '5px 10px',
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              fontSize: '13px',
+              minWidth: '140px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Arial">Arial</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Courier New">Courier New</option>
+            <option value="serif">Serif</option>
+            <option value="sans-serif">Sans Serif</option>
+            <option value="monospace">Monospace</option>
+          </select>
 
-        <Divider orientation="vertical" flexItem />
+          <select
+            value={fontSize}
+            onChange={(e) => {
+              onFontSizeChange(e.target.value);
+              editor?.chain().focus().setMark('textStyle', { fontSize: e.target.value }).run();
+            }}
+            style={{
+              padding: '5px 8px',
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              fontSize: '13px',
+              minWidth: '60px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="12px">12</option>
+            <option value="14px">14</option>
+            <option value="16px">16</option>
+            <option value="18px">18</option>
+            <option value="20px">20</option>
+            <option value="24px">24</option>
+            <option value="28px">28</option>
+            <option value="32px">32</option>
+            <option value="36px">36</option>
+          </select>
+        </Box>
 
-        {/* Basic Formatting */}
-        <ButtonGroup size="small">
+        <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
+
+        {/* Group 2: Text Style (Bold, Italic, Underline, Strike) */}
+        <ButtonGroup size="small" variant="outlined">
           <Button
             variant={editor?.isActive('bold') ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().toggleBold().run()}
             title="Bold (Ctrl+B)"
+            sx={{ minWidth: 36 }}
           >
             <strong>B</strong>
           </Button>
@@ -353,6 +385,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             variant={editor?.isActive('italic') ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().toggleItalic().run()}
             title="Italic (Ctrl+I)"
+            sx={{ minWidth: 36 }}
           >
             <em>I</em>
           </Button>
@@ -360,6 +393,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             variant={editor?.isActive('underline') ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().toggleUnderline().run()}
             title="Underline (Ctrl+U)"
+            sx={{ minWidth: 36 }}
           >
             <u>U</u>
           </Button>
@@ -367,13 +401,21 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             variant={editor?.isActive('strike') ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().toggleStrike().run()}
             title="Strikethrough"
+            sx={{ minWidth: 36 }}
           >
             <s>S</s>
           </Button>
+        </ButtonGroup>
+
+        <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
+
+        {/* Group 3: Text Effects (Subscript, Superscript) */}
+        <ButtonGroup size="small" variant="outlined">
           <Button
             variant={editor?.isActive('subscript') ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().toggleSubscript().run()}
             title="Subscript"
+            sx={{ minWidth: 36 }}
           >
             X<sub>2</sub>
           </Button>
@@ -381,47 +423,53 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             variant={editor?.isActive('superscript') ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().toggleSuperscript().run()}
             title="Superscript"
+            sx={{ minWidth: 36 }}
           >
             X<sup>2</sup>
           </Button>
         </ButtonGroup>
 
-        <Divider orientation="vertical" flexItem />
+        <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
 
-        {/* Color Options */}
-        <input
-          type="color"
-          onChange={(e) => editor?.chain().focus().setColor(e.target.value).run()}
-          title="Text Color"
-          style={{
-            width: '32px',
-            height: '32px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        />
-        <input
-          type="color"
-          onChange={(e) => editor?.chain().focus().toggleHighlight({ color: e.target.value }).run()}
-          title="Highlight Color"
-          style={{
-            width: '32px',
-            height: '32px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        />
+        {/* Group 4: Colors */}
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          <input
+            type="color"
+            onChange={(e) => editor?.chain().focus().setColor(e.target.value).run()}
+            title="Text Color"
+            style={{
+              width: '36px',
+              height: '32px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              padding: '2px'
+            }}
+          />
+          <input
+            type="color"
+            onChange={(e) => editor?.chain().focus().toggleHighlight({ color: e.target.value }).run()}
+            title="Highlight Color"
+            style={{
+              width: '36px',
+              height: '32px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              padding: '2px'
+            }}
+          />
+        </Box>
 
-        <Divider orientation="vertical" flexItem />
+        <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
 
-        {/* Text Alignment */}
-        <ButtonGroup size="small">
+        {/* Group 5: Text Alignment */}
+        <ButtonGroup size="small" variant="outlined">
           <Button
             variant={editor?.isActive({ textAlign: 'left' }) ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().setTextAlign('left').run()}
             title="Align Left"
+            sx={{ minWidth: 36 }}
           >
             ⫷
           </Button>
@@ -429,6 +477,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             variant={editor?.isActive({ textAlign: 'center' }) ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().setTextAlign('center').run()}
             title="Align Center"
+            sx={{ minWidth: 36 }}
           >
             ≡
           </Button>
@@ -436,6 +485,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             variant={editor?.isActive({ textAlign: 'right' }) ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().setTextAlign('right').run()}
             title="Align Right"
+            sx={{ minWidth: 36 }}
           >
             ⫸
           </Button>
@@ -443,6 +493,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             variant={editor?.isActive({ textAlign: 'justify' }) ? 'contained' : 'outlined'}
             onClick={() => editor?.chain().focus().setTextAlign('justify').run()}
             title="Justify"
+            sx={{ minWidth: 36 }}
           >
             ⫼
           </Button>

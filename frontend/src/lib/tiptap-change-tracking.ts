@@ -135,7 +135,7 @@ export const ChangeTracking = Extension.create<ChangeTrackingOptions>({
                 decorations.push(
                   Decoration.inline(change.from, change.to, {
                     class: 'change-insertion',
-                    style: 'background-color: #c8f7c5; border-bottom: 2px solid #27ae60;',
+                    style: 'background-color: transparent; text-decoration: none;',
                     title: `Added by ${change.author} at ${new Date(change.timestamp).toLocaleString()}`,
                   })
                 );

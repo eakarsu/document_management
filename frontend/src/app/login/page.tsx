@@ -174,15 +174,12 @@ const LoginPage: React.FC = () => {
         console.log('💾 Stored in localStorage');
         console.log('🍪 Cookies should be set by API response');
 
-        // Wait for cookies to be processed before redirecting
-        // This is critical - the Set-Cookie header needs time to be processed
-        await new Promise(resolve => setTimeout(resolve, 500));
-
         const redirectPath = new URLSearchParams(window.location.search).get('redirect') || '/dashboard';
         console.log('🔄 Redirecting to:', redirectPath);
 
-        // Use router.push for client-side navigation that preserves cookies
-        router.push(redirectPath);
+        // Use window.location.href for full page reload to ensure cookies are properly set
+        // router.push() causes race condition on first login where middleware checks cookies before they're ready
+        window.location.href = redirectPath;
         return;
       } else {
         const errorData = await response.json();

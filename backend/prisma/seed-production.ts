@@ -264,6 +264,17 @@ async function main() {
       const password = generateSecurePassword(16);
       const hashedPassword = await bcrypt.hash(password, 10);
 
+      // Generate unique username
+      const baseUsername = email.split('@')[0];
+      let username = baseUsername;
+      let counter = 1;
+
+      // Check if username exists, if so add a number
+      while (await prisma.user.findUnique({ where: { username } })) {
+        username = `${baseUsername}${counter}`;
+        counter++;
+      }
+
       const user = await prisma.user.upsert({
         where: { email },
         update: {
@@ -283,7 +294,7 @@ async function main() {
           roleId: roleObj.id,
           isActive: true,
           emailVerified: true,
-          username: email.split('@')[0],
+          username,
         },
       });
 

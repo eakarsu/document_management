@@ -26,6 +26,9 @@ import { SupplementMark } from '@/lib/tiptap-supplement-mark';
 import { CommentMark } from '@/lib/tiptap-comments';
 import { FootnoteReference, FootnoteContent, Footnotes } from '@/lib/tiptap-footnotes';
 import { CrossReferences } from '@/lib/tiptap-cross-references';
+import { LineHeight } from '@/lib/tiptap-line-height';
+import { Indent } from '@/lib/tiptap-indent';
+import { ParagraphSpacing } from '@/lib/tiptap-paragraph-spacing';
 
 const lowlight = createLowlight(common);
 
@@ -74,7 +77,7 @@ const AutoNumbering = Extension.create({
         console.log('Full state:', state);
         console.log('Selection:', state.selection);
 
-        // Get the parent paragraph node
+        // Get the parent paragraph node (the one we're currently in)
         let currentNode = $from.parent;
         console.log('🔍 Current node type:', currentNode.type.name);
 
@@ -84,7 +87,7 @@ const AutoNumbering = Extension.create({
           return false;
         }
 
-        // Get the full text content of the paragraph
+        // Get the full text content of the paragraph we're in
         const paraText = currentNode.textContent;
         console.log('🔍 Paragraph text:', JSON.stringify(paraText));
         console.log('🔍 Paragraph text length:', paraText.length);
@@ -170,6 +173,11 @@ const AutoNumbering = Extension.create({
         }
 
         console.log('✅ Numbered paragraph inserted');
+
+        // DO NOT auto-renumber - it breaks the cursor position
+        // The setContent() call loses cursor context, causing duplicate numbers
+        // User must manually click the "Auto" button to fix duplicates
+
         return true;
       },
     };
@@ -283,6 +291,20 @@ export const createEditorConfig = (options: {
       FootnoteContent,
       Footnotes,
       CrossReferences,
+      LineHeight.configure({
+        types: ['paragraph', 'heading'],
+        heights: ['1', '1.15', '1.5', '2', '2.5', '3'],
+        defaultHeight: '1.5',
+      }),
+      Indent.configure({
+        types: ['paragraph', 'heading', 'listItem'],
+        minIndent: 0,
+        maxIndent: 400,
+        defaultIndent: 40,
+      }),
+      ParagraphSpacing.configure({
+        types: ['paragraph', 'heading'],
+      }),
     ],
     onUpdate: ({ editor }) => {
       if (onUpdate) {

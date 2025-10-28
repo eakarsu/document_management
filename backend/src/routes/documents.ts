@@ -71,13 +71,20 @@ router.get('/',
         'SUB_REVIEWER': ['3.5', '5.5'],
         'REVIEWER': ['3.5', '5.5'],
         // Legal users can see documents in stage 7 and later stages (after their review)
-        'LEGAL': ['7', '8', '9', '10', 'Legal Review & Approval'],
-        'LEGAL_REVIEWER': ['7', '8', '9', '10', 'Legal Review & Approval'],
+        'LEGAL': ['7', '8', '9', '10'],
+        'LEGAL_REVIEWER': ['7', '8', '9', '10'],
+        'STAFF_JUDGE_ADVOCATE': ['7', '8', '9', '10'],
         'LEADERSHIP': ['9'],
         'LEADER': ['9'],
-        'AFDPO': ['11', 'AFDPO Publication & Distribution'],
-        'PUBLISHER': ['11', 'AFDPO Publication & Distribution'],
-        'AFDPO_PUBLISHER': ['11', 'AFDPO Publication & Distribution'],
+        'SQUADRON_COMMANDER': ['6'],
+        'GROUP_COMMANDER': ['7'],
+        'WING_COMMANDER': ['8'],
+        'MAJCOM_REVIEWER': ['9'],
+        'HQAF_APPROVER': ['10', '11'],
+        'FRONT_OFFICE': ['3', '5'],
+        'AFDPO': ['11'],
+        'PUBLISHER': ['11'],
+        'AFDPO_PUBLISHER': ['11'],
         'ADMIN': ['1', '2', '3', '3.5', '4', '5', '5.5', '6', '7', '8', '9', '10']
       };
 
@@ -739,13 +746,20 @@ router.get('/search',
         'SUB_REVIEWER': ['3.5', '5.5'],
         'REVIEWER': ['3.5', '5.5'],
         // Legal users can see documents in stage 7 and later stages (after their review)
-        'LEGAL': ['7', '8', '9', '10', 'Legal Review & Approval'],
-        'LEGAL_REVIEWER': ['7', '8', '9', '10', 'Legal Review & Approval'],
+        'LEGAL': ['7', '8', '9', '10'],
+        'LEGAL_REVIEWER': ['7', '8', '9', '10'],
+        'STAFF_JUDGE_ADVOCATE': ['7', '8', '9', '10'],
         'LEADERSHIP': ['9'],
         'LEADER': ['9'],
-        'AFDPO': ['11', 'AFDPO Publication & Distribution'],
-        'PUBLISHER': ['11', 'AFDPO Publication & Distribution'],
-        'AFDPO_PUBLISHER': ['11', 'AFDPO Publication & Distribution'],
+        'SQUADRON_COMMANDER': ['6'],
+        'GROUP_COMMANDER': ['7'],
+        'WING_COMMANDER': ['8'],
+        'MAJCOM_REVIEWER': ['9'],
+        'HQAF_APPROVER': ['10', '11'],
+        'FRONT_OFFICE': ['3', '5'],
+        'AFDPO': ['11'],
+        'PUBLISHER': ['11'],
+        'AFDPO_PUBLISHER': ['11'],
         'ADMIN': ['1', '2', '3', '3.5', '4', '5', '5.5', '6', '7', '8', '9', '10']
       };
 
@@ -884,15 +898,12 @@ router.get('/:id',
         '4': ['ACTION_OFFICER', 'OPR', 'ADMIN'],
         '5': ['COORDINATOR', 'ADMIN'],
         '5.5': ['SUB_REVIEWER', 'REVIEWER', 'OPR', 'ADMIN'],
-        '6': ['ACTION_OFFICER', 'OPR', 'ADMIN'],
-        '7': ['LEGAL', 'LEGAL_REVIEWER', 'ADMIN'],
-        '8': ['ACTION_OFFICER', 'OPR', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // Allow legal users to see documents even after their stage
-        '9': ['LEADERSHIP', 'LEADER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // Legal can view in later stages
-        '10': ['PCM', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // PCM Final Validation
-        '11': ['AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER'], // AFDPO Publication
-        // Also map stage names
-        'Legal Review & Approval': ['LEGAL', 'LEGAL_REVIEWER', 'ADMIN'],
-        'AFDPO Publication & Distribution': ['AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER']
+        '6': ['ACTION_OFFICER', 'OPR', 'SQUADRON_COMMANDER', 'ADMIN'],
+        '7': ['LEGAL', 'LEGAL_REVIEWER', 'STAFF_JUDGE_ADVOCATE', 'GROUP_COMMANDER', 'ADMIN'],
+        '8': ['ACTION_OFFICER', 'OPR', 'WING_COMMANDER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER', 'STAFF_JUDGE_ADVOCATE'],
+        '9': ['LEADERSHIP', 'LEADER', 'MAJCOM_REVIEWER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER', 'STAFF_JUDGE_ADVOCATE'],
+        '10': ['PCM', 'HQAF_APPROVER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER', 'STAFF_JUDGE_ADVOCATE'],
+        '11': ['AFDPO', 'PUBLISHER', 'AFDPO_PUBLISHER', 'HQAF_APPROVER', 'ADMIN', 'LEGAL', 'LEGAL_REVIEWER', 'STAFF_JUDGE_ADVOCATE']
       };
 
       // Check if user's role allows access for the current stage

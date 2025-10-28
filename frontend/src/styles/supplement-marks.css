@@ -9,14 +9,15 @@ span[data-supplement] {
   cursor: help;
 }
 
-/* ADD - Green highlight */
+/* ADD - All styles removed to make text normal */
 span.supplement-add {
-  background-color: rgba(76, 175, 80, 0.2);
-  border-bottom: 2px solid #4caf50;
+  background-color: transparent;
+  border-bottom: none;
+  text-decoration: none;
 }
 
 span.supplement-add:hover {
-  background-color: rgba(76, 175, 80, 0.3);
+  background-color: transparent;
 }
 
 /* MODIFY - Orange/Warning highlight */
@@ -96,7 +97,8 @@ span[data-supplement]::before {
 }
 
 span.supplement-add::before {
-  background-color: #4caf50;
+  background-color: transparent;
+  display: none;
 }
 
 span.supplement-modify::before {
@@ -120,9 +122,9 @@ span[data-supplement]:hover::before {
   span[data-supplement] {
     border-bottom-width: 1px !important;
   }
-  
+
   span.supplement-add {
-    background-color: rgba(76, 175, 80, 0.1) !important;
+    background-color: transparent !important;
   }
   
   span.supplement-modify {
@@ -156,16 +158,16 @@ span[data-supplement]:hover::before {
   }
 }
 
-/* Animation for newly added marks */
+/* Animation for newly added marks - Disabled green highlight */
 @keyframes highlight-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+    box-shadow: 0 0 0 0 transparent;
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+    box-shadow: 0 0 0 10px transparent;
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 

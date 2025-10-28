@@ -37,20 +37,64 @@ fi
 echo "📁 Creating SSL directory..."
 mkdir -p /etc/nginx/ssl/missionsyncai.com
 
+# Configure firewall to allow HTTP and HTTPS
+echo "🔥 Configuring firewall..."
+if command -v ufw &> /dev/null; then
+    echo "📝 Enabling UFW firewall rules..."
+    ufw allow 'Nginx Full' || true
+    ufw allow 80/tcp || true
+    ufw allow 443/tcp || true
+    ufw allow 22/tcp || true  # Ensure SSH stays open
+    echo "✅ Firewall rules configured"
+else
+    echo "⚠️  UFW not found, checking iptables..."
+    # Ensure ports 80 and 443 are open
+    iptables -I INPUT -p tcp --dport 80 -j ACCEPT || true
+    iptables -I INPUT -p tcp --dport 443 -j ACCEPT || true
+    echo "✅ Iptables rules configured"
+fi
+
 # Stop nginx temporarily
 echo "⏸️  Stopping nginx..."
 systemctl stop nginx || true
+
+# Verify port 80 is not in use
+echo "🔍 Checking if port 80 is available..."
+if lsof -Pi :80 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo "⚠️  Port 80 is in use. Attempting to free it..."
+    fuser -k 80/tcp || true
+    sleep 2
+fi
 
 # Get SSL certificate from Let's Encrypt
 echo "🔒 Obtaining SSL certificate from Let's Encrypt..."
 echo "This will prompt you for email and agreement to terms of service"
 # Use --preferred-challenges http to ensure HTTP-01 challenge on IPv4
-certbot certonly --standalone --preferred-challenges http -d missionsyncai.com -d www.missionsyncai.com
+# List www first so Let's Encrypt creates the directory as www.missionsyncai.com
+certbot certonly --standalone --preferred-challenges http -d www.missionsyncai.com -d missionsyncai.com
 
-# Copy SSL certificates to our directory
+# Verify certificate directory exists
+if [ ! -d "/etc/letsencrypt/live/www.missionsyncai.com" ]; then
+    echo "❌ Error: Certificate directory not found!"
+    echo "Checking for alternative certificate directory..."
+    if [ -d "/etc/letsencrypt/live/missionsyncai.com" ]; then
+        echo "✅ Found certificates at /etc/letsencrypt/live/missionsyncai.com"
+        CERT_DIR="missionsyncai.com"
+    else
+        echo "❌ No certificates found. Exiting."
+        exit 1
+    fi
+else
+    echo "✅ Certificates created at /etc/letsencrypt/live/www.missionsyncai.com"
+    CERT_DIR="www.missionsyncai.com"
+fi
+
+# Copy SSL certificates to our directory (optional backup)
 echo "📋 Copying SSL certificates..."
-cp /etc/letsencrypt/live/missionsyncai.com/fullchain.pem /etc/nginx/ssl/missionsyncai.com/
-cp /etc/letsencrypt/live/missionsyncai.com/privkey.pem /etc/nginx/ssl/missionsyncai.com/
+cp /etc/letsencrypt/live/${CERT_DIR}/fullchain.pem /etc/nginx/ssl/missionsyncai.com/
+cp /etc/letsencrypt/live/${CERT_DIR}/privkey.pem /etc/nginx/ssl/missionsyncai.com/
+
+echo "📝 Certificate directory: /etc/letsencrypt/live/${CERT_DIR}"
 
 # Backup existing nginx config if it exists
 if [ -f /etc/nginx/sites-available/missionsyncai.com ]; then
@@ -99,12 +143,26 @@ echo "   https://missionsyncai.com"
 echo "   https://www.missionsyncai.com"
 echo ""
 echo "📝 Configuration file: /etc/nginx/sites-available/missionsyncai.com"
-echo "📋 SSL certificates: /etc/nginx/ssl/missionsyncai.com/"
+echo "📋 SSL certificates: /etc/letsencrypt/live/${CERT_DIR}/"
+echo "📋 SSL backup: /etc/nginx/ssl/missionsyncai.com/"
 echo "📊 Logs: /var/log/nginx/missionsyncai.com.*.log"
 echo ""
 echo "🔄 SSL certificate will auto-renew daily at 3 AM"
 echo ""
-echo "⚠️  Make sure your DNS is pointing to this server:"
+echo "⚠️  IMPORTANT: Make sure the following are configured:"
+echo ""
+echo "1. DNS Records:"
 echo "   missionsyncai.com -> $(curl -s ifconfig.me)"
 echo "   www.missionsyncai.com -> $(curl -s ifconfig.me)"
+echo ""
+echo "2. AWS Security Group (if using EC2):"
+echo "   - Port 80 (HTTP) - Allow from 0.0.0.0/0"
+echo "   - Port 443 (HTTPS) - Allow from 0.0.0.0/0"
+echo "   - Port 22 (SSH) - Allow from your IP"
+echo ""
+echo "3. Firewall Status:"
+ufw status | grep -E "80|443" || echo "   UFW not active or rules not set"
+echo ""
 echo "==========================================="
+
+sudo certbot --nginx -d missionsyncai.com -d www.missionsyncai.com --staging
