@@ -58,15 +58,9 @@ export default function EditDocumentPage() {
   const params = useParams();
   const router = useRouter();
   const documentId = params?.id as string;
-
-  console.log('📄 Edit Page Loaded - Document ID:', documentId, 'Params:', params);
   
   const [documentData, setDocumentData] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    console.log('Edit Page Loaded - params:', params);
-  }, [params]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -200,8 +194,6 @@ export default function EditDocumentPage() {
   };
 
   const handleCancel = () => {
-    console.log('🔙 Cancel clicked - navigating to document:', documentId);
-    console.log('🔙 Full path:', `/documents/${documentId}`);
     router.push(`/documents/${documentId}`);
   };
 

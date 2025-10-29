@@ -230,42 +230,6 @@ const DocumentEditor: React.FC = () => {
       hasHeadings: /<h[1-6]/i.test(content)
     });
 
-    // Remove duplicate header/TOC but keep Introduction and Summary
-    if (customFields?.headerHtml) {
-      // Look for the Introduction paragraph - try multiple search terms
-      let introStart = content.indexOf('This Air Force technical manual');
-
-      if (introStart === -1) {
-        introStart = content.indexOf('This technical manual');
-      }
-
-      if (introStart === -1) {
-        // Look for SUMMARY OF CHANGES as fallback
-        introStart = content.indexOf('SUMMARY OF CHANGES');
-      }
-
-      console.log('🔍 EDITOR - Looking for Introduction/Summary, found at index:', introStart);
-
-      if (introStart > 100) { // Only remove if there's content before it (the duplicate header)
-        // Find the opening div or p tag before this text
-        const searchArea = content.substring(Math.max(0, introStart - 300), introStart);
-        let cutIndex = searchArea.lastIndexOf('<div');
-
-        if (cutIndex === -1) {
-          cutIndex = searchArea.lastIndexOf('<p');
-        }
-
-        if (cutIndex !== -1) {
-          const actualCutIndex = Math.max(0, introStart - 300) + cutIndex;
-          console.log('✂️ EDITOR - Removing duplicate header/TOC, keeping from index:', actualCutIndex);
-          content = content.substring(actualCutIndex);
-          console.log('✅ EDITOR - Kept Introduction, Summary, and all content');
-        }
-      } else {
-        console.log('ℹ️ EDITOR - No duplicate detected, keeping all content');
-      }
-    }
-
     return content;
   };
 
@@ -276,24 +240,20 @@ const DocumentEditor: React.FC = () => {
 
   // Check if content already has a header
   const contentHasHeader = () => {
-    // If we have headerHtml in customFields, we're removing the duplicate header from content
-    // So always return false to show the formatted header from headerHtml
+    // If we have headerHtml in customFields, the content shouldn't have the header
+    // So we can always show the formatted header from headerHtml
     const customFields = documentData?.customFields as any;
     if (customFields?.headerHtml) {
-      console.log('📌 contentHasHeader: Returning false because we have headerHtml (header removed from content)');
-      return false; // Always show the header from headerHtml since we remove it from content
+      return false; // Always show the header from headerHtml
     }
 
-    // If no headerHtml, check if content has header elements
     const content = getActualContent();
-    const hasHeader = content.includes('BY ORDER OF THE') ||
+    // Check for Air Force header elements
+    return content.includes('BY ORDER OF THE') ||
            content.includes('DEPARTMENT OF THE AIR FORCE') ||
            content.includes('air-force-document-header') ||
            content.includes('classification-header') ||
            content.includes('UNCLASSIFIED');
-
-    console.log('📌 contentHasHeader: No headerHtml, checking content -', hasHeader ? 'has header' : 'no header');
-    return hasHeader;
   };
 
   // Initialize TipTap editor

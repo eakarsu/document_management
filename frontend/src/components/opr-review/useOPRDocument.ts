@@ -26,81 +26,19 @@ export const useOPRDocument = (documentId: string) => {
         console.log('Loaded document. Has version history?', !!(doc.customFields?.versionHistory),
                     'History length:', doc.customFields?.versionHistory?.length || 0);
 
-        // Get content - CHECK ALL FIELDS to find Introduction/Summary
-        console.log('🔍 OPR REVIEW - Checking all content fields:');
-        console.log('editableContent length:', doc.customFields?.editableContent?.length || 0);
-        console.log('editableContent has "This technical manual"?', doc.customFields?.editableContent?.includes('This technical manual') || false);
-        console.log('editableContent has "SUMMARY OF CHANGES"?', doc.customFields?.editableContent?.includes('SUMMARY OF CHANGES') || false);
-
-        console.log('htmlContent length:', doc.customFields?.htmlContent?.length || 0);
-        console.log('htmlContent has "This technical manual"?', doc.customFields?.htmlContent?.includes('This technical manual') || false);
-        console.log('htmlContent has "SUMMARY OF CHANGES"?', doc.customFields?.htmlContent?.includes('SUMMARY OF CHANGES') || false);
-
-        console.log('content length:', doc.customFields?.content?.length || 0);
-        console.log('content has "This technical manual"?', doc.customFields?.content?.includes('This technical manual') || false);
-        console.log('content has "SUMMARY OF CHANGES"?', doc.customFields?.content?.includes('SUMMARY OF CHANGES') || false);
-
+        // Get content - use editableContent to avoid duplicate header
         let content = '';
-        let contentSource = '';
         if (doc.customFields?.editableContent) {
           content = doc.customFields.editableContent;
-          contentSource = 'editableContent';
         } else if (doc.customFields?.htmlContent) {
           content = doc.customFields.htmlContent;
-          contentSource = 'htmlContent';
         } else if (doc.customFields?.content) {
           content = doc.customFields.content;
-          contentSource = 'content';
         } else if (doc.content) {
           content = doc.content;
-          contentSource = 'doc.content';
         } else if (doc.description) {
           content = `<p>${doc.description}</p>`;
-          contentSource = 'description';
         }
-
-        console.log('✅ Using content from:', contentSource);
-        console.log('Content length:', content.length);
-
-        // Remove duplicate header/TOC but keep Introduction and Summary
-        if (doc.customFields?.headerHtml) {
-          // Look for the Introduction paragraph - try multiple search terms
-          let introStart = content.indexOf('This Air Force technical manual');
-
-          if (introStart === -1) {
-            introStart = content.indexOf('This technical manual');
-          }
-
-          if (introStart === -1) {
-            // Look for SUMMARY OF CHANGES as fallback
-            introStart = content.indexOf('SUMMARY OF CHANGES');
-          }
-
-          console.log('🔍 Looking for Introduction/Summary, found at index:', introStart);
-
-          if (introStart > 100) { // Only remove if there's content before it (the duplicate header)
-            // Find the opening div or p tag before this text
-            const searchArea = content.substring(Math.max(0, introStart - 300), introStart);
-            let cutIndex = searchArea.lastIndexOf('<div');
-
-            if (cutIndex === -1) {
-              cutIndex = searchArea.lastIndexOf('<p');
-            }
-
-            if (cutIndex !== -1) {
-              const actualCutIndex = Math.max(0, introStart - 300) + cutIndex;
-              console.log('✂️ Removing duplicate header/TOC, keeping from index:', actualCutIndex);
-              const before = content.substring(0, Math.min(100, actualCutIndex));
-              console.log('Removed content preview:', before);
-              content = content.substring(actualCutIndex);
-              console.log('✅ Kept Introduction, Summary, and all content');
-            }
-          } else {
-            console.log('ℹ️ No duplicate detected (introStart <= 100), keeping all content');
-          }
-        }
-
-        console.log('Final content length:', content.length);
 
         setDocumentContent(content);
         setEditableContent(content);

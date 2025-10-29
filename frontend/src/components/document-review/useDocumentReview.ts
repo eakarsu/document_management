@@ -124,42 +124,6 @@ export const useDocumentReview = (documentId: string) => {
           `;
         }
 
-        // Remove duplicate header/TOC but keep Introduction and Summary
-        if (doc.customFields?.headerHtml) {
-          // Look for the Introduction paragraph - try multiple search terms
-          let introStart = content.indexOf('This Air Force technical manual');
-
-          if (introStart === -1) {
-            introStart = content.indexOf('This technical manual');
-          }
-
-          if (introStart === -1) {
-            // Look for SUMMARY OF CHANGES as fallback
-            introStart = content.indexOf('SUMMARY OF CHANGES');
-          }
-
-          console.log('🔍 DOCUMENT REVIEW - Looking for Introduction/Summary, found at index:', introStart);
-
-          if (introStart > 100) { // Only remove if there's content before it (the duplicate header)
-            // Find the opening div or p tag before this text
-            const searchArea = content.substring(Math.max(0, introStart - 300), introStart);
-            let cutIndex = searchArea.lastIndexOf('<div');
-
-            if (cutIndex === -1) {
-              cutIndex = searchArea.lastIndexOf('<p');
-            }
-
-            if (cutIndex !== -1) {
-              const actualCutIndex = Math.max(0, introStart - 300) + cutIndex;
-              console.log('✂️ DOCUMENT REVIEW - Removing duplicate header/TOC, keeping from index:', actualCutIndex);
-              content = content.substring(actualCutIndex);
-              console.log('✅ DOCUMENT REVIEW - Kept Introduction, Summary, and all content');
-            }
-          } else {
-            console.log('ℹ️ DOCUMENT REVIEW - No duplicate detected, keeping all content');
-          }
-        }
-
         let isAIDoc = false;
         let comments: CRMComment[] = [];
 
