@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import crypto from 'crypto';
 import { DocumentService } from '../services/DocumentService';
 import { StorageService } from '../services/StorageService';
 import { SearchService } from '../services/SearchService';
@@ -1236,6 +1237,219 @@ router.delete('/:id',
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Deletion failed'
+      });
+    }
+  }
+);
+
+// Create supplement document
+router.post('/create-supplement',
+  async (req: any, res) => {
+    try {
+      const {
+        parentDocumentId,
+        supplementSection,
+        organization,
+        paragraphNumber,
+        content,
+        opr,
+        certifiedBy,
+        supplementType,
+        title,
+        description,
+        category,
+        headerData
+      } = req.body;
+
+      logger.info('Creating supplement document', {
+        parentDocumentId,
+        organization,
+        supplementSection
+      });
+
+      // Validate required fields
+      if (!parentDocumentId || !supplementSection || !organization || !paragraphNumber || !content) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields: parentDocumentId, supplementSection, organization, paragraphNumber, content'
+        });
+      }
+
+      // Fetch parent document to get details
+      const parentDocument = await prisma.document.findUnique({
+        where: { id: parentDocumentId }
+      });
+
+      if (!parentDocument) {
+        return res.status(404).json({
+          success: false,
+          error: 'Parent document not found'
+        });
+      }
+
+      // Format the supplement content with (Added)(ORG) tag
+      const formattedContent = `
+        <h4>${paragraphNumber}. (Added)(${organization})</h4>
+        <p>${content}</p>
+      `;
+
+      // Generate unique checksum for the supplement
+      const checksum = crypto
+        .createHash('sha256')
+        .update(formattedContent + Date.now() + Math.random())
+        .digest('hex');
+
+      // Create supplement document
+      const supplement = await prisma.document.create({
+        data: {
+          title: title || `${parentDocument.title} - ${organization} Supplement`,
+          description: description || `Supplement to ${supplementSection} by ${organization}`,
+          fileName: `supplement_${organization}_${Date.now()}.html`,
+          originalName: `${organization}_Supplement.html`,
+          mimeType: 'text/html',
+          fileSize: Buffer.byteLength(formattedContent, 'utf8'),
+          checksum: checksum,
+          storagePath: '',
+          storageProvider: 'local',
+          status: 'DRAFT',
+          category: category || 'supplement',
+          customFields: {
+            content: formattedContent,
+            editableContent: formattedContent,
+            htmlContent: formattedContent,
+            supplementType: supplementType || 'standalone',
+            organization,
+            paragraphNumber,
+            opr,
+            certifiedBy,
+            parentDocumentId,
+            supplementSection,
+            template: 'supplement',
+            headerData: headerData || null
+          },
+          parentDocumentId: parentDocumentId,
+          supplementOrganization: organization,
+          supplementType: supplementType || 'standalone',
+          createdById: req.user.id,
+          organizationId: req.user.organizationId
+        },
+        include: {
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true
+            }
+          }
+        }
+      });
+
+      logger.info('Supplement created successfully', { supplementId: supplement.id });
+
+      res.status(201).json({
+        success: true,
+        message: 'Supplement created successfully',
+        document: supplement,
+        id: supplement.id
+      });
+
+    } catch (error: any) {
+      logger.error('Supplement creation failed:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create supplement'
+      });
+    }
+  }
+);
+
+// Update supplement document
+router.put('/:id/update-supplement',
+  async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        organization,
+        paragraphNumber,
+        content,
+        opr,
+        certifiedBy
+      } = req.body;
+
+      logger.info('Updating supplement document', { supplementId: id });
+
+      // Fetch existing supplement
+      const existingSupplement = await prisma.document.findUnique({
+        where: { id }
+      });
+
+      if (!existingSupplement) {
+        return res.status(404).json({
+          success: false,
+          error: 'Supplement document not found'
+        });
+      }
+
+      // Verify it's a supplement
+      const customFields = existingSupplement.customFields as any;
+      if (existingSupplement.category !== 'supplement' &&
+          customFields?.template !== 'supplement') {
+        return res.status(400).json({
+          success: false,
+          error: 'This document is not a supplement'
+        });
+      }
+
+      // Format the updated supplement content with (Added)(ORG) tag
+      const formattedContent = `
+        <h4>${paragraphNumber}. (Added)(${organization})</h4>
+        <p>${content}</p>
+      `;
+
+      // Update supplement document
+      const updatedSupplement = await prisma.document.update({
+        where: { id },
+        data: {
+          fileSize: Buffer.byteLength(formattedContent, 'utf8'),
+          customFields: {
+            ...(existingSupplement.customFields as any || {}),
+            content: formattedContent,
+            editableContent: formattedContent,
+            htmlContent: formattedContent,
+            organization,
+            paragraphNumber,
+            opr,
+            certifiedBy
+          },
+          supplementOrganization: organization,
+          updatedAt: new Date()
+        },
+        include: {
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true
+            }
+          }
+        }
+      });
+
+      logger.info('Supplement updated successfully', { supplementId: id });
+
+      res.status(200).json({
+        success: true,
+        message: 'Supplement updated successfully',
+        document: updatedSupplement
+      });
+
+    } catch (error: any) {
+      logger.error('Supplement update failed:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update supplement'
       });
     }
   }

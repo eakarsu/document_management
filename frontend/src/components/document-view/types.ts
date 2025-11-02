@@ -18,6 +18,9 @@ export interface DocumentDetails {
   filePath?: string;
   content?: string;
   customFields?: any;
+  supplementType?: string;
+  supplementOrganization?: string;
+  parentDocumentId?: string;
 }
 
 export interface UserRole {

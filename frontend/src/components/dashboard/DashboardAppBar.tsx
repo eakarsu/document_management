@@ -33,7 +33,7 @@ export const DashboardAppBar: React.FC<DashboardAppBarProps> = ({
       <Toolbar>
         <Business sx={{ mr: 2 }} />
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          Richmond Document Management System
+          PubOne by MissionSynchAI
         </Typography>
         <IconButton
           size="large"

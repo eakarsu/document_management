@@ -221,7 +221,20 @@ const DocumentViewPage: React.FC = () => {
                           color="primary"
                           size="large"
                           startIcon={<EditIcon />}
-                          onClick={() => router.push(`/editor/${documentId}`)}
+                          onClick={() => {
+                            // Check if this is a supplement document
+                            const isSupplement = documentData?.category === 'supplement' ||
+                                                documentData?.customFields?.template === 'supplement' ||
+                                                documentData?.supplementType;
+
+                            if (isSupplement) {
+                              // Redirect to supplement editor with edit mode
+                              router.push(`/ai-document-generator?mode=manual&supplement=true&editMode=true&documentId=${documentId}`);
+                            } else {
+                              // Regular document editor
+                              router.push(`/editor/${documentId}`);
+                            }
+                          }}
                           sx={{ minWidth: 150 }}
                         >
                           Edit Document
@@ -275,17 +288,6 @@ const DocumentViewPage: React.FC = () => {
 
             <Grid item xs={12} md={4}>
               <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<ViewIcon />}
-                  onClick={() => {
-                    const element = document.getElementById('document-preview');
-                    element?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                >
-                  Preview
-                </Button>
                 <Button
                   variant="outlined"
                   color="primary"
@@ -384,100 +386,6 @@ const DocumentViewPage: React.FC = () => {
                   </CardContent>
                 </Card>
               )}
-            </Paper>
-
-            {/* Document Viewer */}
-            <Paper id="document-preview" sx={{ p: 2 }}>
-              <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                📄 Document Preview
-              </Typography>
-
-              {/* Display formatted header if available */}
-              {documentData.customFields?.headerHtml && (
-                <>
-                  {/* Extract and apply styles from headerHtml */}
-                  {(() => {
-                    const styleMatch = documentData.customFields.headerHtml.match(/<style>([\s\S]*?)<\/style>/);
-                    if (styleMatch) {
-                      return <style dangerouslySetInnerHTML={{ __html: styleMatch[1] }} />;
-                    }
-                    return null;
-                  })()}
-
-                  {/* Display the header */}
-                  <Box
-                    sx={{
-                      mb: 3,
-                      backgroundColor: 'white',
-                      padding: '20px',
-                      '& .header-table': {
-                        width: '100%',
-                        marginBottom: '20px'
-                      },
-                      '& .header-table td': {
-                        verticalAlign: 'top',
-                        padding: '10px'
-                      },
-                      '& .left-column': {
-                        width: '35%',
-                        textAlign: 'center'
-                      },
-                      '& .right-column': {
-                        width: '65%',
-                        textAlign: 'right'
-                      },
-                      '& .seal-container img': {
-                        width: '100px',
-                        height: '100px',
-                        display: 'block',
-                        margin: '0 auto'
-                      },
-                      '& .compliance-section': {
-                        textAlign: 'center',
-                        fontWeight: 'bold',
-                        fontSize: '10pt',
-                        margin: '30px 0',
-                        padding: '10px 0',
-                        borderTop: '2px solid #000',
-                        borderBottom: '2px solid #000'
-                      },
-                      '& .info-table': {
-                        width: '100%',
-                        borderCollapse: 'collapse',
-                        marginTop: '20px'
-                      },
-                      '& .info-table td': {
-                        padding: '8px',
-                        borderTop: '1px solid #000',
-                        fontSize: '10pt',
-                        verticalAlign: 'top'
-                      }
-                    }}
-                    dangerouslySetInnerHTML={{ __html: documentData.customFields.headerHtml }}
-                  />
-                </>
-              )}
-
-              {/* Display document content */}
-              <Box
-                dangerouslySetInnerHTML={{
-                  __html: documentData.customFields?.editableContent ||
-                          documentData.customFields?.content ||
-                          documentData.content ||
-                          '<p>No content available</p>'
-                }}
-                sx={{
-                  '& h1, & h2, & h3, & h4, & h5, & h6': {
-                    fontWeight: 'bold',
-                    marginTop: '1em',
-                    marginBottom: '0.5em'
-                  },
-                  '& p': {
-                    marginBottom: '1em',
-                    lineHeight: 1.6
-                  }
-                }}
-              />
             </Paper>
 
             {/* OPR Feedback Processor */}

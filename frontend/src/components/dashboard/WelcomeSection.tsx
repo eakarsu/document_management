@@ -11,7 +11,7 @@ export const WelcomeSection: React.FC = () => {
   return (
     <Box sx={{ mb: 4 }}>
       <Typography variant="h4" gutterBottom>
-        Welcome to Richmond DMS
+        Welcome to PubOne by MissionSynchAI
       </Typography>
       <Typography variant="subtitle1" color="text.secondary" gutterBottom>
         Your enterprise document management system with AI-powered workflow automation is ready to use

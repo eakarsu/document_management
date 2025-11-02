@@ -34,7 +34,8 @@ import {
   Collapse,
   ListSubheader,
   Checkbox,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import {
   Description as DocumentIcon,
@@ -61,7 +62,13 @@ import {
   Create as CreateIcon,
   AccountTree as WorkflowBuilderIcon,
   ArrowDropDown as ArrowDropDownIcon,
-  AdminPanelSettings as AdminIcon
+  AdminPanelSettings as AdminIcon,
+  PostAdd as PostAddIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import WorkflowTasks from '../../components/WorkflowTasks';
@@ -83,6 +90,59 @@ interface DashboardData {
   }>;
 }
 
+// Reusable Paragraph Component
+const SelectableParagraph: React.FC<{
+  paragraph: any;
+  selectedSection: string;
+  onSelect: (id: string, title: string) => void;
+  marginLeft: number;
+}> = ({ paragraph, selectedSection, onSelect, marginLeft }) => {
+  const isSelected = selectedSection === paragraph.id;
+
+  return (
+    <ListItem
+      button
+      selected={isSelected}
+      onClick={() => onSelect(paragraph.id, paragraph.fullText || paragraph.title)}
+      sx={{
+        ml: marginLeft,
+        border: '1px solid',
+        borderColor: isSelected ? 'primary.main' : 'divider',
+        bgcolor: isSelected ? 'primary.light' : 'background.paper',
+        borderRadius: 1,
+        mb: 1,
+        p: 1.5,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        '&:hover': {
+          bgcolor: isSelected ? 'primary.light' : 'action.hover'
+        }
+      }}
+    >
+      <Box sx={{ width: '100%' }}>
+        <ListItemText
+          primary={paragraph.fullText || paragraph.title}
+          primaryTypographyProps={{
+            color: isSelected ? 'primary.main' : 'text.primary',
+            fontWeight: isSelected ? 'bold' : 'normal',
+            fontSize: '0.875rem'
+          }}
+          sx={{
+            '& .MuiTypography-root': {
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word'
+            }
+          }}
+        />
+        {isSelected && (
+          <Chip label="Selected" color="primary" size="small" sx={{ mt: 1 }} />
+        )}
+      </Box>
+    </ListItem>
+  );
+};
+
 const DashboardPage: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData>({
@@ -99,6 +159,16 @@ const DashboardPage: React.FC = () => {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
   const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
+  const [supplementDialog, setSupplementDialog] = useState(false);
+  const [supplementStep, setSupplementStep] = useState(1);
+  const [selectedDocument, setSelectedDocument] = useState<any>(null);
+  const [selectedSection, setSelectedSection] = useState('');
+  const [selectedSectionTitle, setSelectedSectionTitle] = useState('');
+  const [documentStructure, setDocumentStructure] = useState<any>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [loadingStructure, setLoadingStructure] = useState(false);
+  const [allDocuments, setAllDocuments] = useState<any[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
   const router = useRouter();
 
   // Authentication is handled by middleware - no need to check here
@@ -353,6 +423,322 @@ const DashboardPage: React.FC = () => {
     router.push('/workflow-builder');
   };
 
+  const handleCreateSupplement = async () => {
+    setSupplementDialog(true);
+    setSupplementStep(1);
+    setSelectedDocument(null);
+    setSelectedSection('');
+    setLoadingDocuments(true);
+
+    try {
+      // Fetch ALL documents (not just recent)
+      const response = await api.get('/api/documents/search?limit=1000');
+      if (response.ok) {
+        const data = await response.json();
+        setAllDocuments(data.documents || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch all documents:', error);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const handleDocumentSelect = async (doc: any) => {
+    setSelectedDocument(doc);
+    setLoadingStructure(true);
+
+    try {
+      console.log('=== Fetching document ===');
+      console.log('Document ID:', doc.id);
+      console.log('Document Title:', doc.title);
+
+      // Fetch the document content to extract structure
+      const response = await api.get(`/api/documents/${doc.id}`);
+      console.log('API Response status:', response.status, response.ok);
+
+      if (response.ok) {
+        const documentData = await response.json();
+        console.log('=== Document Data Received ===');
+        console.log('Full document data:', documentData);
+
+        // Parse document structure from content
+        const structure = parseDocumentStructure(documentData);
+        console.log('=== Parsed Structure ===');
+        console.log('Structure:', structure);
+        setDocumentStructure(structure);
+      } else {
+        console.error('Response not OK:', response.status);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        alert(`Failed to load document: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('=== ERROR fetching document ===');
+      console.error('Error details:', error);
+      alert(`Error loading document: ${error}`);
+    } finally {
+      setLoadingStructure(false);
+      setSupplementStep(2);
+    }
+  };
+
+  const parseDocumentStructure = (documentData: any) => {
+    // The API returns { success: true, document: {...} }
+    const doc = documentData.document || documentData;
+
+    console.log('=== Parsing Document Structure ===');
+    console.log('Document object:', doc);
+    console.log('Custom Fields:', doc.customFields);
+    console.log('All document keys:', Object.keys(doc));
+
+    // Get content from customFields - try all possible locations
+    const content =
+      doc.customFields?.htmlContent ||
+      doc.customFields?.editableContent ||
+      doc.customFields?.content ||
+      doc.customFields?.documentContent ||
+      doc.content ||
+      doc.editableContent ||
+      doc.htmlContent ||
+      '';
+
+    console.log('Content extracted:', content ? `${content.length} chars` : 'EMPTY');
+    if (content) {
+      console.log('Content preview:', content.substring(0, 1000));
+    } else {
+      console.error('NO CONTENT FOUND! Checked all fields.');
+    }
+
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    // Debug: Log ALL elements with their text content
+    console.log('=== ALL HTML ELEMENTS ===');
+    const allElements = tempDiv.querySelectorAll('*');
+    console.log('Total elements:', allElements.length);
+
+    // Show first 100 elements to understand structure
+    for (let i = 0; i < Math.min(100, allElements.length); i++) {
+      const el = allElements[i];
+      const text = el.textContent?.trim().substring(0, 100) || '';
+      const className = el.className ? ` class="${el.className}"` : '';
+      const id = el.id ? ` id="${el.id}"` : '';
+      console.log(`${i}: <${el.tagName.toLowerCase()}${className}${id}> ${text}`);
+    }
+
+    // Search specifically for elements containing "2.1.2"
+    console.log('=== SEARCHING FOR 2.1.2 ===');
+    const searchText = '2.1.2';
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i];
+      const text = el.textContent?.trim() || '';
+      if (text.includes(searchText) && text.length < 200) {
+        console.log(`Found "${searchText}" in <${el.tagName.toLowerCase()}> class="${el.className}" id="${el.id}": ${text.substring(0, 150)}`);
+      }
+    }
+
+    const structure: any = { chapters: [] };
+    let currentChapter: any = null;
+    let currentSection: any = null;
+    let currentSubsection: any = null;
+    let currentSubSubsection: any = null; // New level for H5
+
+    // Find all heading elements (h1, h2, h3, h4, h5, h6) and paragraph elements
+    const elements = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6, p');
+    console.log('=== HEADINGS AND PARAGRAPHS ===');
+    console.log('Total headings/paragraphs found:', elements.length);
+
+    elements.forEach((element, index) => {
+      const text = element.textContent?.trim() || '';
+      const tagName = element.tagName.toLowerCase();
+
+      if (!text) return; // Skip empty elements
+
+      // Detect numbering level: 1. = chapter, 1.1. = section, 1.1.1. = subsection, 1.1.1.1. = paragraph
+      const numberMatch = text.match(/^(\d+(?:\.\d+)*)\.\s*/);
+      const numberingLevel = numberMatch ? (numberMatch[1].match(/\./g) || []).length : -1;
+
+      console.log(`Element ${index}: ${tagName} - "${text.substring(0, 50)}" - Level: ${numberingLevel}`);
+
+      // H1 or H2 = Chapter (single digit like "1." or "Chapter X")
+      if (tagName === 'h1' || tagName === 'h2') {
+        currentChapter = {
+          id: `ch-${index}`,
+          title: text,
+          sections: [],
+          paragraphs: []
+        };
+        structure.chapters.push(currentChapter);
+        currentSection = null;
+        currentSubsection = null;
+        console.log(`  → Created chapter: ${text}`);
+      }
+      // H3 = Section (like "1.1." or any H3)
+      else if (tagName === 'h3') {
+        if (currentChapter) {
+          currentSection = {
+            id: `sec-${index}`,
+            title: text,
+            subsections: [],
+            paragraphs: []
+          };
+          currentChapter.sections.push(currentSection);
+          currentSubsection = null;
+          console.log(`  → Created section: ${text}`);
+        }
+      }
+      // H4 = Subsection (like "2.1.2 Transportation Coordination")
+      else if (tagName === 'h4') {
+        if (currentSection) {
+          currentSubsection = {
+            id: `subsec-${index}`,
+            title: text,
+            subsubsections: [], // H5 elements will go here
+            paragraphs: []
+          };
+          currentSection.subsections.push(currentSubsection);
+          currentSubSubsection = null; // Reset sub-subsection
+          console.log(`  → Created subsection (H4): ${text}`);
+        } else if (currentChapter) {
+          // Subsection without section - create a default section
+          currentSection = {
+            id: `sec-auto-${index}`,
+            title: 'Section',
+            subsections: [],
+            paragraphs: []
+          };
+          currentChapter.sections.push(currentSection);
+          currentSubsection = {
+            id: `subsec-${index}`,
+            title: text,
+            subsubsections: [],
+            paragraphs: []
+          };
+          currentSection.subsections.push(currentSubsection);
+          currentSubSubsection = null;
+          console.log(`  → Created auto section + subsection (H4): ${text}`);
+        }
+      }
+      // H5 = Sub-subsection (like "2.1.2.1 Inter-Departmental Coordination")
+      else if (tagName === 'h5') {
+        if (currentSubsection) {
+          currentSubSubsection = {
+            id: `subsubsec-${index}`,
+            title: text,
+            paragraphs: []
+          };
+          currentSubsection.subsubsections.push(currentSubSubsection);
+          console.log(`  → Created sub-subsection (H5): ${text}`);
+        } else if (currentSection) {
+          // H5 without H4 - treat as paragraph
+          if (!currentSection.paragraphs) currentSection.paragraphs = [];
+          currentSection.paragraphs.push({
+            id: `para-h5-${index}`,
+            title: text,
+            fullText: text,
+            isHeading: true
+          });
+          console.log(`  → Added H5 as paragraph to section (no H4): ${text}`);
+        }
+      }
+      // H6 = Treat as paragraph under current context
+      else if (tagName === 'h6') {
+        const paragraph = {
+          id: `para-h6-${index}`,
+          title: text,
+          fullText: text,
+          isHeading: true
+        };
+
+        if (currentSubSubsection) {
+          currentSubSubsection.paragraphs.push(paragraph);
+          console.log(`  → Added H6 as paragraph to sub-subsection: ${text}`);
+        } else if (currentSubsection) {
+          currentSubsection.paragraphs.push(paragraph);
+          console.log(`  → Added H6 as paragraph to subsection: ${text}`);
+        } else if (currentSection) {
+          if (!currentSection.paragraphs) currentSection.paragraphs = [];
+          currentSection.paragraphs.push(paragraph);
+          console.log(`  → Added H6 as paragraph to section: ${text}`);
+        }
+      }
+      // P = Paragraph (like "2.1.2.1.1. Effective coordination...")
+      else if (tagName === 'p') {
+        if (text.length > 5) {
+          const paragraphTitle = text.length > 80 ? text.substring(0, 80) + '...' : text;
+          const paragraph = {
+            id: `para-${index}`,
+            title: paragraphTitle,
+            fullText: text
+          };
+
+          // Add to deepest available level
+          if (currentSubSubsection) {
+            currentSubSubsection.paragraphs.push(paragraph);
+            console.log(`  → Added paragraph to sub-subsection (H5)`);
+          } else if (currentSubsection) {
+            currentSubsection.paragraphs.push(paragraph);
+            console.log(`  → Added paragraph to subsection (H4)`);
+          } else if (currentSection) {
+            currentSection.paragraphs.push(paragraph);
+            console.log(`  → Added paragraph to section (H3)`);
+          } else if (currentChapter) {
+            currentChapter.paragraphs.push(paragraph);
+            console.log(`  → Added paragraph to chapter (H2)`);
+          }
+        }
+      }
+    });
+
+    // If no structure was found, return a basic structure
+    console.log('=== Final Structure ===');
+    console.log('Chapters found:', structure.chapters.length);
+    structure.chapters.forEach((ch: any, i: number) => {
+      console.log(`Chapter ${i + 1}: ${ch.title} (${ch.sections?.length || 0} sections)`);
+    });
+
+    if (structure.chapters.length === 0) {
+      console.warn('No chapters found in document! Returning empty structure.');
+      return {
+        chapters: []
+      };
+    }
+
+    return structure;
+  };
+
+  // REMOVED: No more mock data - we only use real document content from database
+
+  const toggleSection = (sectionId: string) => {
+    const newExpanded = new Set(expandedSections);
+    if (newExpanded.has(sectionId)) {
+      newExpanded.delete(sectionId);
+    } else {
+      newExpanded.add(sectionId);
+    }
+    setExpandedSections(newExpanded);
+  };
+
+  const handleSectionSelect = (sectionId: string, sectionTitle: string) => {
+    setSelectedSection(sectionId);
+    setSelectedSectionTitle(sectionTitle); // Store the title separately
+  };
+
+  const handleSupplementCreate = () => {
+    // Navigate to document creation with supplement parameters - pass the title which has the number
+    router.push(`/ai-document-generator?mode=manual&supplement=true&documentId=${selectedDocument.id}&section=${encodeURIComponent(selectedSectionTitle || selectedSection)}`);
+    setSupplementDialog(false);
+  };
+
+  const handleSupplementDialogClose = () => {
+    setSupplementDialog(false);
+    setSupplementStep(1);
+    setSelectedDocument(null);
+    setSelectedSection('');
+  };
+
   const handleUsersManagement = () => {
     router.push('/users');
   };
@@ -365,7 +751,7 @@ const DashboardPage: React.FC = () => {
         <Toolbar>
           <Business sx={{ mr: 2 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Richmond Document Management System
+            PubOne by MissionSynchAI
           </Typography>
           <IconButton
             size="large"
@@ -397,7 +783,7 @@ const DashboardPage: React.FC = () => {
         {/* Welcome Section */}
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" gutterBottom>
-            Welcome to Richmond DMS
+            Welcome to PubOne by MissionSynchAI
           </Typography>
           <Typography variant="subtitle1" color="text.secondary" gutterBottom>
             Your enterprise document management system with AI-powered workflow automation is ready to use
@@ -418,91 +804,35 @@ const DashboardPage: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Feature Cards */}
+        {/* Create New Document and Create Supplement - Large Featured Buttons */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* Document Management */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} md={6}>
             <Card
               sx={{
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: 3
-                }
-              }}
-              onClick={() => router.push('/documents')}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <DocumentIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  Document Management
-                </Typography>
-                <Typography color="text.secondary" variant="body2">
-                  Create, edit, and manage documents with collaborative workflows
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* AI Document Generator */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                 color: 'white',
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
                   transform: 'translateY(-4px)',
-                  boxShadow: 3
+                  boxShadow: 6
                 }
               }}
-              onClick={handleAIDocumentGenerator}
+              onClick={() => router.push('/ai-document-generator?mode=manual')}
             >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <SmartIcon sx={{ fontSize: 48, color: 'white', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  AI Document Generator
+              <CardContent sx={{ textAlign: 'center', p: 5 }}>
+                <CreateIcon sx={{ fontSize: 72, color: 'white', mb: 2 }} />
+                <Typography variant="h4" gutterBottom>
+                  Create New Document
                 </Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }} variant="body2">
-                  Generate professional documents with AI assistance
+                <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem' }}>
+                  Start creating a new document with our powerful editor
                 </Typography>
               </CardContent>
             </Card>
           </Grid>
-
-          {/* Workflow Builder */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card
-              sx={{
-                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-                color: 'white',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                  transform: 'translateY(-4px)',
-                  boxShadow: 3
-                }
-              }}
-              onClick={handleWorkflowBuilder}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <WorkflowBuilderIcon sx={{ fontSize: 48, color: 'white', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  Workflow Builder
-                </Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }} variant="body2">
-                  Design and manage document approval workflows
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* AI Workflow Assistant */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} md={6}>
             <Card
               sx={{
                 background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
@@ -512,118 +842,18 @@ const DashboardPage: React.FC = () => {
                 '&:hover': {
                   background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
                   transform: 'translateY(-4px)',
-                  boxShadow: 3
+                  boxShadow: 6
                 }
               }}
-              onClick={handleAIWorkflow}
+              onClick={handleCreateSupplement}
             >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <AIIcon sx={{ fontSize: 48, color: 'white', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  AI Workflow Assistant
+              <CardContent sx={{ textAlign: 'center', p: 5 }}>
+                <PostAddIcon sx={{ fontSize: 72, color: 'white', mb: 2 }} />
+                <Typography variant="h4" gutterBottom>
+                  Create Supplement
                 </Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }} variant="body2">
-                  8 AI-powered features for workflow optimization
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Search & Analytics */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card
-              sx={{
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: 3
-                }
-              }}
-              onClick={handleSearchDocuments}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <SearchIcon sx={{ fontSize: 48, color: 'info.main', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  Search & Analytics
-                </Typography>
-                <Typography color="text.secondary" variant="body2">
-                  Find documents and analyze workflow performance
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Publishing Management */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card
-              sx={{
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: 3
-                }
-              }}
-              onClick={handlePublishing}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <PublishIcon sx={{ fontSize: 48, color: 'success.main', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  Publishing Management
-                </Typography>
-                <Typography color="text.secondary" variant="body2">
-                  Manage document publishing and distribution
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* User Management */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card
-              sx={{
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: 3
-                }
-              }}
-              onClick={handleUsersManagement}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <AdminIcon sx={{ fontSize: 48, color: 'warning.main', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  User Management
-                </Typography>
-                <Typography color="text.secondary" variant="body2">
-                  Manage users, roles, and permissions
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* File Upload */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Card
-              sx={{
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: 3
-                }
-              }}
-              onClick={handleUploadDocument}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <UploadIcon sx={{ fontSize: 48, color: 'secondary.main', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  File Upload
-                </Typography>
-                <Typography color="text.secondary" variant="body2">
-                  Upload and import documents from various sources
+                <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem' }}>
+                  Add supplemental content to an existing document
                 </Typography>
               </CardContent>
             </Card>
@@ -742,21 +972,6 @@ const DashboardPage: React.FC = () => {
                 Quick Actions
               </Typography>
               <Stack spacing={2}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={<CreateIcon />}
-                  size="large"
-                  onClick={() => router.push('/ai-document-generator?mode=manual')}
-                  sx={{
-                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                    }
-                  }}
-                >
-                  Create New Document
-                </Button>
                 <Button
                   fullWidth
                   variant="outlined"
@@ -965,6 +1180,311 @@ const DashboardPage: React.FC = () => {
           </Button>
           <Button onClick={confirmBulkDelete} color="error" variant="contained">
             Delete All
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Supplement Dialog */}
+      <Dialog
+        open={supplementDialog}
+        onClose={handleSupplementDialogClose}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <PostAddIcon color="primary" />
+          {supplementStep === 1 ? 'Step 1 of 2: Select Document' : 'Step 2 of 2: Select Section/Paragraph'}
+        </DialogTitle>
+        <DialogContent>
+          {supplementStep === 1 ? (
+            <>
+              <DialogContentText sx={{ mb: 2 }}>
+                Select the original document you want to create a supplement for:
+              </DialogContentText>
+              {loadingDocuments ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Box sx={{ maxHeight: '400px', overflow: 'auto' }}>
+                  <List>
+                    {allDocuments.map((doc) => (
+                      <ListItem
+                        key={doc.id}
+                        button
+                        selected={selectedDocument?.id === doc.id}
+                        onClick={() => handleDocumentSelect(doc)}
+                        sx={{
+                          border: '1px solid',
+                          borderColor: selectedDocument?.id === doc.id ? 'primary.main' : 'divider',
+                          borderRadius: 1,
+                          mb: 1,
+                          '&:hover': {
+                            backgroundColor: 'action.hover'
+                          }
+                        }}
+                      >
+                        <ListItemIcon>
+                          <DocumentIcon color={selectedDocument?.id === doc.id ? 'primary' : 'inherit'} />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={doc.title}
+                          secondary={`Category: ${doc.category} | Status: ${doc.status} | Created: ${new Date(doc.createdAt).toLocaleDateString()}`}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
+            </>
+          ) : (
+            <>
+              <DialogContentText sx={{ mb: 2 }}>
+                Drill down to select the specific paragraph you want to supplement:
+              </DialogContentText>
+              <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                <Typography variant="subtitle2" color="primary">
+                  Selected Document: {selectedDocument?.title}
+                </Typography>
+              </Box>
+
+              {loadingStructure ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Box sx={{ maxHeight: '400px', overflow: 'auto' }}>
+                  {!documentStructure || documentStructure.chapters.length === 0 ? (
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                      No structure found in this document. The document may not have chapters, sections, or formatted headings.
+                      <br /><br />
+                      Please check the browser console for details about what content was loaded.
+                    </Alert>
+                  ) : (
+                    documentStructure.chapters.map((chapter: any) => (
+                    <Box key={chapter.id}>
+                      {/* Chapter Level - Now Selectable */}
+                      <ListItem
+                        button
+                        selected={selectedSection === chapter.id}
+                        sx={{
+                          bgcolor: selectedSection === chapter.id ? 'primary.light' : 'grey.100',
+                          border: selectedSection === chapter.id ? '2px solid' : '1px solid',
+                          borderColor: selectedSection === chapter.id ? 'primary.main' : 'grey.300',
+                          mb: 1,
+                          borderRadius: 1,
+                          '&:hover': { bgcolor: selectedSection === chapter.id ? 'primary.light' : 'grey.200' }
+                        }}
+                      >
+                        <ListItemIcon onClick={() => toggleSection(chapter.id)}>
+                          {expandedSections.has(chapter.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={chapter.title}
+                          primaryTypographyProps={{
+                            fontWeight: 'bold',
+                            color: selectedSection === chapter.id ? 'primary.main' : 'text.primary'
+                          }}
+                          onClick={() => handleSectionSelect(chapter.id, chapter.title)}
+                        />
+                        {selectedSection === chapter.id && (
+                          <Chip label="Selected" color="primary" size="small" />
+                        )}
+                      </ListItem>
+
+                      {/* Sections Level or Paragraphs directly under Chapter */}
+                      <Collapse in={expandedSections.has(chapter.id)} timeout="auto">
+                        {chapter.sections && chapter.sections.length > 0 ? (
+                          chapter.sections.map((section: any) => (
+                          <Box key={section.id} sx={{ ml: 2 }}>
+                            <ListItem
+                              button
+                              selected={selectedSection === section.id}
+                              sx={{
+                                bgcolor: selectedSection === section.id ? 'primary.light' : 'grey.50',
+                                border: selectedSection === section.id ? '2px solid' : '1px solid',
+                                borderColor: selectedSection === section.id ? 'primary.main' : 'grey.200',
+                                mb: 0.5,
+                                borderRadius: 1,
+                                '&:hover': { bgcolor: selectedSection === section.id ? 'primary.light' : 'grey.100' }
+                              }}
+                            >
+                              <ListItemIcon onClick={() => toggleSection(section.id)}>
+                                {expandedSections.has(section.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={section.title}
+                                primaryTypographyProps={{
+                                  fontWeight: '500',
+                                  color: selectedSection === section.id ? 'primary.main' : 'text.primary'
+                                }}
+                                onClick={() => handleSectionSelect(section.id, section.title)}
+                              />
+                              {selectedSection === section.id && (
+                                <Chip label="Selected" color="primary" size="small" />
+                              )}
+                            </ListItem>
+
+                            {/* Subsections Level (H4) - Now Selectable */}
+                            <Collapse in={expandedSections.has(section.id)} timeout="auto">
+                              {section.subsections && section.subsections.length > 0 ? (
+                                section.subsections.map((subsection: any) => (
+                                  <Box key={subsection.id} sx={{ ml: 2 }}>
+                                    <ListItem
+                                      button
+                                      selected={selectedSection === subsection.id}
+                                      sx={{
+                                        bgcolor: selectedSection === subsection.id ? 'primary.light' : 'background.paper',
+                                        border: selectedSection === subsection.id ? '2px solid' : '1px solid',
+                                        borderColor: selectedSection === subsection.id ? 'primary.main' : 'divider',
+                                        mb: 0.5,
+                                        borderRadius: 1,
+                                        '&:hover': { bgcolor: selectedSection === subsection.id ? 'primary.light' : 'grey.50' }
+                                      }}
+                                    >
+                                      <ListItemIcon onClick={() => toggleSection(subsection.id)}>
+                                        {expandedSections.has(subsection.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                      </ListItemIcon>
+                                      <ListItemText
+                                        primary={subsection.title}
+                                        onClick={() => handleSectionSelect(subsection.id, subsection.title)}
+                                        primaryTypographyProps={{
+                                          color: selectedSection === subsection.id ? 'primary.main' : 'text.primary',
+                                          fontWeight: selectedSection === subsection.id ? 'bold' : 'normal'
+                                        }}
+                                      />
+                                      {selectedSection === subsection.id && (
+                                        <Chip label="Selected" color="primary" size="small" />
+                                      )}
+                                    </ListItem>
+
+                                    {/* Sub-subsections (H5) and Paragraphs under Subsection (H4) */}
+                                    <Collapse in={expandedSections.has(subsection.id)} timeout="auto">
+                                      {/* Render sub-subsections if they exist */}
+                                      {subsection.subsubsections && subsection.subsubsections.length > 0 ? (
+                                        subsection.subsubsections.map((subsubsection: any) => (
+                                          <Box key={subsubsection.id} sx={{ ml: 3 }}>
+                                            <ListItem
+                                              button
+                                              selected={selectedSection === subsubsection.id}
+                                              sx={{
+                                                bgcolor: selectedSection === subsubsection.id ? 'primary.light' : 'grey.50',
+                                                border: selectedSection === subsubsection.id ? '2px solid' : '1px solid',
+                                                borderColor: selectedSection === subsubsection.id ? 'primary.main' : 'divider',
+                                                mb: 0.5,
+                                                borderRadius: 1,
+                                                '&:hover': { bgcolor: selectedSection === subsubsection.id ? 'primary.light' : 'action.hover' }
+                                              }}
+                                            >
+                                              <ListItemIcon onClick={() => toggleSection(subsubsection.id)}>
+                                                {expandedSections.has(subsubsection.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                              </ListItemIcon>
+                                              <ListItemText
+                                                primary={subsubsection.title}
+                                                onClick={() => handleSectionSelect(subsubsection.id, subsubsection.title)}
+                                                primaryTypographyProps={{
+                                                  color: selectedSection === subsubsection.id ? 'primary.main' : 'text.primary',
+                                                  fontWeight: selectedSection === subsubsection.id ? 'bold' : 'normal',
+                                                  fontSize: '0.9rem'
+                                                }}
+                                              />
+                                              {selectedSection === subsubsection.id && (
+                                                <Chip label="Selected" color="primary" size="small" />
+                                              )}
+                                            </ListItem>
+
+                                            {/* Paragraphs under Sub-subsection */}
+                                            <Collapse in={expandedSections.has(subsubsection.id)} timeout="auto">
+                                              {subsubsection.paragraphs?.map((paragraph: any) => (
+                                                <SelectableParagraph
+                                                  key={paragraph.id}
+                                                  paragraph={paragraph}
+                                                  selectedSection={selectedSection}
+                                                  onSelect={handleSectionSelect}
+                                                  marginLeft={5}
+                                                />
+                                              ))}
+                                            </Collapse>
+                                          </Box>
+                                        ))
+                                      ) : (
+                                        // Paragraphs directly under Subsection (no sub-subsections)
+                                        subsection.paragraphs?.map((paragraph: any) => (
+                                          <SelectableParagraph
+                                            key={paragraph.id}
+                                            paragraph={paragraph}
+                                            selectedSection={selectedSection}
+                                            onSelect={handleSectionSelect}
+                                            marginLeft={4}
+                                          />
+                                        ))
+                                      )}
+                                    </Collapse>
+                                  </Box>
+                                ))
+                              ) : (
+                                // Paragraphs directly under Section (no subsections)
+                                section.paragraphs?.map((paragraph: any) => (
+                                  <SelectableParagraph
+                                    key={paragraph.id}
+                                    paragraph={paragraph}
+                                    selectedSection={selectedSection}
+                                    onSelect={handleSectionSelect}
+                                    marginLeft={2}
+                                  />
+                                ))
+                              )}
+                            </Collapse>
+                          </Box>
+                          ))
+                        ) : (
+                          // Paragraphs directly under Chapter (no sections)
+                          chapter.paragraphs?.map((paragraph: any) => (
+                            <SelectableParagraph
+                              key={paragraph.id}
+                              paragraph={paragraph}
+                              selectedSection={selectedSection}
+                              onSelect={handleSectionSelect}
+                              marginLeft={1}
+                            />
+                          ))
+                        )}
+                      </Collapse>
+                    </Box>
+                    ))
+                  )}
+                </Box>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={handleSupplementDialogClose}
+            color="inherit"
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          {supplementStep === 2 && (
+            <Button
+              onClick={() => setSupplementStep(1)}
+              color="primary"
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+            >
+              Previous
+            </Button>
+          )}
+          <Button
+            onClick={supplementStep === 1 ? () => setSupplementStep(2) : handleSupplementCreate}
+            color="primary"
+            variant="contained"
+            disabled={supplementStep === 1 ? !selectedDocument : !selectedSection}
+            endIcon={supplementStep === 1 ? <ArrowForwardIcon /> : <AddIcon />}
+          >
+            {supplementStep === 1 ? 'Next' : 'Create Supplement'}
           </Button>
         </DialogActions>
       </Dialog>

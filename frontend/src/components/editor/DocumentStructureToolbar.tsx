@@ -13,17 +13,16 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormControl,
+  FormLabel
 } from '@mui/material';
 import {
   FormatListNumbered,
   FormatListBulleted,
-  LooksOne,
-  LooksTwo,
-  Looks3,
-  Looks4,
-  Looks5,
-  Looks6,
   Title,
   Subject,
   FormatIndentIncrease,
@@ -42,6 +41,11 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
   const [sectionLevel, setSectionLevel] = useState(1);
   const [sectionNumber, setSectionNumber] = useState('');
   const [sectionTitle, setSectionTitle] = useState('');
+  const [sectionMode, setSectionMode] = useState<'child' | 'sibling'>('child'); // child = go deeper, sibling = same level
+  const [siblingNumber, setSiblingNumber] = useState(''); // Store the sibling alternative
+  const [chapterDialog, setChapterDialog] = useState(false);
+  const [chapterNumber, setChapterNumber] = useState('');
+  const [chapterTitle, setChapterTitle] = useState('');
   const [paragraphDialog, setParagraphDialog] = useState(false);
   const [paragraphNumber, setParagraphNumber] = useState('');
   const [paragraphText, setParagraphText] = useState('');
@@ -63,6 +67,146 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     setSectionDialog(true);
   };
 
+  // Add Chapter - detects next chapter number and opens dialog
+  const addChapter = () => {
+    const content = editor.getHTML();
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    // Find all existing chapters (H1 tags with "CHAPTER X" format)
+    const chapters = Array.from(tempDiv.querySelectorAll('h1'));
+    let highestChapter = 0;
+
+    chapters.forEach(h1 => {
+      const match = h1.textContent?.match(/CHAPTER\s+(\d+)/i);
+      if (match) {
+        const chapterNum = parseInt(match[1]);
+        if (chapterNum > highestChapter) {
+          highestChapter = chapterNum;
+        }
+      }
+    });
+
+    // Next chapter number
+    const nextChapter = highestChapter + 1;
+
+    // Open dialog with pre-populated chapter number
+    setChapterNumber(nextChapter.toString());
+    setChapterTitle('');
+    setChapterDialog(true);
+  };
+
+  // Add Section - detects context and goes one level deeper
+  const addSection = () => {
+    const content = editor.getHTML();
+    const { from } = editor.state.selection;
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    // Find the element immediately before cursor (can be H3, P with number, etc.)
+    const cursorPos = editor.view.domAtPos(from);
+    let currentNode = cursorPos.node;
+    let searchNode = currentNode.nodeType === 3 ? currentNode.parentElement : currentNode;
+
+    let sectionNumber = '1.1';
+    let referenceSectionStyle = '';
+    let iterationCount = 0;
+
+    // Walk backwards from cursor to find the most recent numbered element
+    while (searchNode && iterationCount < 20) {
+      iterationCount++;
+      // Check for any heading (H3, H4, H5, H6) with section numbers
+      if (['H3', 'H4', 'H5', 'H6'].includes(searchNode.tagName)) {
+        const match = searchNode.textContent?.match(/^(\d+(?:\.\d+)*)\.?\s/);
+        if (match) {
+          const baseNumber = match[1];
+          // Go one level deeper: "1.2" -> "1.2.1", "1.1.1.1" -> "1.1.1.1.1"
+          sectionNumber = `${baseNumber}.1`;
+          referenceSectionStyle = (searchNode as HTMLElement).getAttribute('style') || '';
+          break;
+        }
+      }
+      // Check for P with numbered paragraph (e.g., "1.1.1.1. Text" or "1.1.1.1 General Guidelines")
+      else if (searchNode.tagName === 'P') {
+        const strong = searchNode.querySelector('strong');
+        const pText = searchNode.textContent || '';
+
+        if (strong) {
+          const fullNumber = strong.textContent || '';
+          // Match any number pattern like "1.1.1.1." or "1.1.1.1"
+          const match = fullNumber.match(/^(\d+(?:\.\d+)*)\./);
+          if (match) {
+            const baseNumber = match[1];
+            // Go one level deeper: "1.1.1.1" -> "1.1.1.1.1"
+            sectionNumber = `${baseNumber}.1`;
+            referenceSectionStyle = (searchNode as HTMLElement).getAttribute('style') || '';
+            break;
+          }
+        }
+
+        // Also check if paragraph starts with a number pattern without strong tag
+        const directMatch = pText.match(/^(\d+(?:\.\d+)+)\s/);
+        if (directMatch) {
+          const baseNumber = directMatch[1];
+          sectionNumber = `${baseNumber}.1`;
+          referenceSectionStyle = (searchNode as HTMLElement).getAttribute('style') || '';
+          break;
+        }
+      }
+      // Check for H1 chapter
+      else if (searchNode.tagName === 'H1') {
+        const match = searchNode.textContent?.match(/CHAPTER\s+(\d+)/i);
+        if (match) {
+          const chapterNum = match[1];
+          sectionNumber = `${chapterNum}.1`;
+          break;
+        }
+      }
+
+      // Move to previous element
+      if (searchNode.previousElementSibling) {
+        searchNode = searchNode.previousElementSibling;
+      } else {
+        searchNode = searchNode.parentElement;
+      }
+    }
+
+    // Calculate sibling number (increment last part instead of adding .1)
+    let calculatedSiblingNumber = '1.2';
+
+    // Walk backwards again to find what to increment for sibling
+    let searchNode2 = currentNode.nodeType === 3 ? currentNode.parentElement : currentNode;
+    while (searchNode2) {
+      if (['H3', 'H4', 'H5', 'H6'].includes(searchNode2.tagName)) {
+        const match = searchNode2.textContent?.match(/^(\d+(?:\.\d+)*)\.?\s/);
+        if (match) {
+          const baseNumber = match[1];
+          const parts = baseNumber.split('.');
+          // Increment the last part
+          const lastNum = parseInt(parts[parts.length - 1]);
+          parts[parts.length - 1] = (lastNum + 1).toString();
+          calculatedSiblingNumber = parts.join('.');
+          break;
+        }
+      }
+      if (searchNode2.previousElementSibling) {
+        searchNode2 = searchNode2.previousElementSibling;
+      } else {
+        searchNode2 = searchNode2.parentElement;
+      }
+    }
+
+    // Store reference style for later use when inserting
+    (window as any).__sectionReferenceStyle = referenceSectionStyle;
+
+    // Open dialog with pre-populated section number (default to child)
+    setSectionNumber(sectionNumber); // Child number
+    setSiblingNumber(calculatedSiblingNumber); // Sibling number
+    setSectionMode('child'); // Default to child mode
+    setSectionTitle('');
+    setSectionDialog(true);
+  };
+
   // Insert numbered paragraph
   const insertNumberedParagraph = () => {
     setParagraphNumber('');
@@ -78,60 +222,111 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     setSubParagraphDialog(true);
   };
 
-  // AUTO-NUMBER ALL PARAGRAPHS - Fix duplicates ONLY, don't recalculate structure
+  // AUTO-NUMBER ALL PARAGRAPHS - Fix duplicates and renumber sequentially
   const autoNumberAllParagraphs = (showAlert = true) => {
-    console.log('🔢🔢🔢 AUTO-NUMBER (Fix duplicates only)');
     const content = editor.getHTML();
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
 
-    // Group all numbered paragraphs by their prefix
-    const paragraphGroups = new Map<string, HTMLParagraphElement[]>();
+    // Get all elements (headings and paragraphs) to understand structure
+    const allElements = Array.from(tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6, p'));
 
-    Array.from(tempDiv.querySelectorAll('p')).forEach(p => {
-      const strong = p.querySelector('strong');
-      if (strong && p.firstChild === strong) {
-        const num = strong.textContent || '';
-        const parts = num.replace(/\.$/, '').split('.');
-        // Only process valid numbers with at least 3 levels
-        if (parts.length >= 3 && parts.every(part => /^\d+$/.test(part))) {
-          const prefix = parts.slice(0, -1).join('.');
-          if (!paragraphGroups.has(prefix)) {
-            paragraphGroups.set(prefix, []);
+    // Track all paragraphs with their positions in document
+    interface ParagraphInfo {
+      element: HTMLParagraphElement;
+      position: number;
+      prefix: string;
+      oldNumber: string;
+    }
+
+    const paragraphGroups = new Map<string, ParagraphInfo[]>();
+
+    allElements.forEach((elem, position) => {
+      if (elem.tagName === 'P') {
+        const p = elem as HTMLParagraphElement;
+
+        // Try to find number in multiple ways:
+        // 1. Inside a <strong> tag
+        // 2. At the start of paragraph text (plain text)
+        let num = '';
+        const pText = p.textContent || '';
+
+        // First, try to find <strong> tag
+        const strong = p.querySelector('strong');
+        if (strong) {
+          num = strong.textContent || '';
+        } else {
+          // No strong tag, check if paragraph starts with a number pattern
+          // Match patterns like "1.1.1.1.1.1." or "1.1.1.1.1.1 " (with dot or space after)
+          const textMatch = pText.match(/^(\d+(?:\.\d+){2,})\.?\s/);
+          if (textMatch) {
+            num = textMatch[1] + '.';
           }
-          paragraphGroups.get(prefix)!.push(p);
-          console.log(`  Found: ${num} (prefix: ${prefix})`);
+        }
+
+        if (num) {
+          // Match any valid number pattern (1.1.1, 1.1.1.1, 1.1.1.1.1, etc.)
+          const match = num.match(/^(\d+(?:\.\d+)+)\.?$/);
+          if (match) {
+            const fullNumber = match[1];
+            const parts = fullNumber.split('.');
+
+            // Must have at least 3 levels (e.g., 1.1.1)
+            if (parts.length >= 3 && parts.every(part => /^\d+$/.test(part))) {
+              // Prefix is everything except the last number
+              const prefix = parts.slice(0, -1).join('.');
+
+              if (!paragraphGroups.has(prefix)) {
+                paragraphGroups.set(prefix, []);
+              }
+
+              paragraphGroups.get(prefix)!.push({
+                element: p,
+                position: position,
+                prefix: prefix,
+                oldNumber: num
+              });
+            }
+          }
         }
       }
     });
 
-    console.log(`Found ${paragraphGroups.size} groups`);
+    // Renumber each group sequentially, ensuring document order
+    paragraphGroups.forEach((paragraphs, prefix) => {
+      // Sort by position to ensure document order
+      paragraphs.sort((a, b) => a.position - b.position);
 
-    // Renumber each group sequentially
-    paragraphGroups.forEach((paras, prefix) => {
-      console.log(`\nGroup "${prefix}.*" has ${paras.length} paragraphs:`);
-      paras.forEach((p, idx) => {
-        const oldNum = p.querySelector('strong')?.textContent || '';
+      paragraphs.forEach((info, idx) => {
+        const p = info.element;
         const newNum = `${prefix}.${idx + 1}.`;
-        const text = p.textContent?.replace(/^[\d.]+\s*/, '').trim() || '';
-        p.innerHTML = `<strong>${newNum}</strong> ${text}`;
-        console.log(`  ${oldNum} → ${newNum}`);
+
+        // Get text content without the number
+        const textWithoutNumber = p.textContent?.replace(/^[\d.]+\s*/, '').trim() || '';
+
+        // Preserve existing style attributes
+        const existingStyle = p.getAttribute('style') || '';
+
+        // Update paragraph with new number
+        p.innerHTML = `<strong>${newNum}</strong> ${textWithoutNumber}`;
+
+        // Restore style if it existed
+        if (existingStyle) {
+          p.setAttribute('style', existingStyle);
+        }
       });
     });
 
     editor.commands.setContent(tempDiv.innerHTML);
-    console.log('✅ Auto-number complete');
     if (showAlert) {
-      alert('Duplicate paragraph numbers have been fixed!');
+      alert('All paragraph numbers have been renumbered!');
     }
   };
 
   // SMART INSERT PARAGRAPH - Context-aware insert WITH auto-renumbering
   const insertSmartParagraph = () => {
-    console.log('🟢 +Para button clicked');
     const content = editor.getHTML();
     const { from } = editor.state.selection;
-    console.log('📍 Cursor position:', from);
 
     // Parse document structure
     const tempDiv = document.createElement('div');
@@ -158,22 +353,24 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
           beforeCursor = { chapter: parseInt(match[1]), section: 0, paragraph: 0, type: 'chapter' };
         }
         break;
-      } else if (searchNode.tagName === 'H3') {
-        const match = searchNode.textContent?.match(/^(\d+)\.(\d+)\.?\s/);
+      } else if (['H3', 'H4', 'H5', 'H6'].includes(searchNode.tagName)) {
+        // Check for any heading (H3, H4, H5, H6) with section numbers
+        const match = searchNode.textContent?.match(/^(\d+(?:\.\d+)*)\.?\s/);
         if (match) {
+          const fullNumber = match[1];
           beforeCursor = {
-            chapter: parseInt(match[1]),
-            section: parseInt(match[2]),
+            chapter: 0,
+            section: 0,
             paragraph: 0,
-            type: 'section'
+            type: 'section',
+            fullNumber: fullNumber  // Store the full number for later use
           };
+          break;
         }
-        break;
       } else if (searchNode.tagName === 'P') {
         const strong = searchNode.querySelector('strong');
         if (strong) {
           const fullNumber = strong.textContent || '';
-          console.log('🔍 Found paragraph with number:', fullNumber);
           // Match ANY number of levels (1.2.3 or 1.2.3.4.5.6, etc.)
           const match = fullNumber.match(/^(\d+)\.(\d+)\.(\d+)/);
           if (match) {
@@ -184,7 +381,6 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
               type: 'paragraph',
               fullNumber: fullNumber  // Store the full number for later use
             };
-            console.log('✅ Set beforeCursor:', beforeCursor);
             break;
           }
         }
@@ -206,27 +402,29 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
       // After chapter → insert section 1.1
       newContent = `<h3>${beforeCursor.chapter}.1. Type section title here</h3>`;
     } else if (beforeCursor.type === 'section') {
-      // After section → insert paragraph 1.1.1
-      newContent = `<p><strong>${beforeCursor.chapter}.${beforeCursor.section}.1.</strong> Type your content here</p>`;
+      // After section/heading → go one level deeper (1.1 → 1.1.1, 1.1.1.1 → 1.1.1.1.1)
+      const fullNumber = (beforeCursor.fullNumber || '').replace(/\.+$/, ''); // Remove ALL trailing dots
+      const newNumber = `${fullNumber}.1.`;
+
+      // Calculate indent based on depth - same formula as sections
+      const parts = newNumber.replace(/\.$/, '').split('.').filter(p => p); // Filter out empty strings
+      const marginLeft = (parts.length - 1) * 20; // level 1=0px, level 2=20px, level 3=40px, etc.
+      const styleAttr = marginLeft > 0 ? ` style="margin-left: ${marginLeft}px;"` : '';
+
+      newContent = `<p${styleAttr}><strong>${newNumber}</strong> Type your content here</p>`;
     } else if (beforeCursor.type === 'paragraph') {
       // After paragraph → increment the LAST number (same level sibling)
-      const fullNumber = beforeCursor.fullNumber || '';
-      console.log('📝 Processing paragraph, fullNumber:', fullNumber);
-      const parts = fullNumber.replace(/\.$/, '').split('.');
-      console.log('📝 Number parts:', parts);
+      const fullNumber = (beforeCursor.fullNumber || '').replace(/\.+$/, ''); // Remove ALL trailing dots
+      const parts = fullNumber.split('.').filter(p => p); // Filter out empty strings
 
       if (parts.length > 0) {
         // Increment the last part
-        const oldLast = parts[parts.length - 1];
         parts[parts.length - 1] = (parseInt(parts[parts.length - 1]) + 1).toString();
         const newNumber = parts.join('.') + '.';
-        console.log(`📝 Incremented: ${oldLast} → ${parts[parts.length - 1]}, new number: ${newNumber}`);
 
-        // Calculate indent based on depth
-        const indentLevel = Math.max(0, parts.length - 3); // 3 levels = no indent, 4 = 40px, 5 = 80px, etc.
-        const marginLeft = indentLevel * 40;
+        // Calculate indent based on depth - same formula as sections
+        const marginLeft = (parts.length - 1) * 20; // level 1=0px, level 2=20px, level 3=40px, etc.
         const styleAttr = marginLeft > 0 ? ` style="margin-left: ${marginLeft}px;"` : '';
-        console.log(`📝 Indent level: ${indentLevel}, margin: ${marginLeft}px`);
 
         newContent = `<p${styleAttr}><strong>${newNumber}</strong> Type your content here</p>`;
       } else {
@@ -239,9 +437,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     }
 
     // Insert at cursor position
-    console.log('🚀 Inserting content:', newContent);
     editor.commands.insertContent(newContent);
-    console.log('✅ Content inserted');
 
     // Do NOT auto-renumber - let user manually click Auto button
   };
@@ -331,21 +527,32 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
       borderRadius: 1,
       mb: 2
     }}>
-      {/* Heading Levels */}
-      <ButtonGroup variant="outlined" size="small">
-        <Tooltip title="Chapter (H1)">
-          <Button onClick={() => insertNumberedSection(1)}>
-            <LooksOne />
+      {/* Add Chapter and Add Section Buttons */}
+      <ButtonGroup variant="contained" size="small">
+        <Tooltip title="Add Chapter - Auto-detects next chapter number">
+          <Button
+            onClick={addChapter}
+            sx={{
+              bgcolor: 'primary.main',
+              color: 'white',
+              fontWeight: 'bold',
+              '&:hover': { bgcolor: 'primary.dark' }
+            }}
+          >
+            + Add Chapter
           </Button>
         </Tooltip>
-        <Tooltip title="Section (H2)">
-          <Button onClick={() => insertNumberedSection(2)}>
-            <LooksTwo />
-          </Button>
-        </Tooltip>
-        <Tooltip title="Subsection (H3)">
-          <Button onClick={() => insertNumberedSection(3)}>
-            <Looks3 />
+        <Tooltip title="Add Section - Auto-detects next section number based on cursor position">
+          <Button
+            onClick={addSection}
+            sx={{
+              bgcolor: 'secondary.main',
+              color: 'white',
+              fontWeight: 'bold',
+              '&:hover': { bgcolor: 'secondary.dark' }
+            }}
+          >
+            + Add Section
           </Button>
         </Tooltip>
       </ButtonGroup>
@@ -498,18 +705,103 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
         </MenuItem>
       </Menu>
 
-      {/* Custom Section Dialog */}
-      <Dialog open={sectionDialog} onClose={() => setSectionDialog(false)}>
-        <DialogTitle>Insert Section</DialogTitle>
+      {/* Add Chapter Dialog */}
+      <Dialog open={chapterDialog} onClose={() => setChapterDialog(false)}>
+        <DialogTitle>Add Chapter</DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
-            label="Section Number"
-            placeholder={sectionLevel === 1 ? "e.g., 1, 2, 3" : sectionLevel === 2 ? "e.g., 1.1, 2.3" : "e.g., 1.2.3"}
-            value={sectionNumber}
-            onChange={(e) => setSectionNumber(e.target.value)}
+            label="Chapter Number"
+            placeholder="e.g., 1, 2, 3"
+            value={chapterNumber}
+            onChange={(e) => setChapterNumber(e.target.value)}
             sx={{ mb: 2, mt: 1 }}
             autoFocus
+          />
+          <TextField
+            fullWidth
+            label="Chapter Title"
+            placeholder="e.g., General Information"
+            value={chapterTitle}
+            onChange={(e) => setChapterTitle(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setChapterDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              if (chapterNumber && chapterTitle) {
+                editor
+                  .chain()
+                  .focus()
+                  .insertContent(`<h1>CHAPTER ${chapterNumber}</h1>\n<h2 style="text-align: center;">${chapterTitle}</h2>\n<p></p>`)
+                  .run();
+                setChapterDialog(false);
+                setChapterNumber('');
+                setChapterTitle('');
+              }
+            }}
+          >
+            Insert
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Section Dialog */}
+      <Dialog open={sectionDialog} onClose={() => setSectionDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Section</DialogTitle>
+        <DialogContent>
+          <FormControl component="fieldset" sx={{ mb: 2, mt: 1 }}>
+            <FormLabel component="legend">Section Type</FormLabel>
+            <RadioGroup
+              value={sectionMode}
+              onChange={(e) => {
+                const mode = e.target.value as 'child' | 'sibling';
+                setSectionMode(mode);
+                // Update section number based on mode
+                setSectionNumber(mode === 'child' ? sectionNumber : siblingNumber);
+              }}
+            >
+              <FormControlLabel
+                value="child"
+                control={<Radio />}
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      <strong>Add child section (go deeper)</strong>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Creates: {sectionNumber} (indented under current section)
+                    </Typography>
+                  </Box>
+                }
+              />
+              <FormControlLabel
+                value="sibling"
+                control={<Radio />}
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      <strong>Add sibling section (same level)</strong>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Creates: {siblingNumber} (same indent as current section)
+                    </Typography>
+                  </Box>
+                }
+              />
+            </RadioGroup>
+          </FormControl>
+
+          <TextField
+            fullWidth
+            label="Section Number"
+            placeholder="e.g., 1.1, 2.3"
+            value={sectionMode === 'child' ? sectionNumber : siblingNumber}
+            disabled
+            sx={{ mb: 2, bgcolor: 'grey.50' }}
+            helperText="Auto-generated based on your selection above"
           />
           <TextField
             fullWidth
@@ -517,23 +809,64 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
             placeholder="e.g., Administrative Requirements"
             value={sectionTitle}
             onChange={(e) => setSectionTitle(e.target.value)}
+            autoFocus
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSectionDialog(false)}>Cancel</Button>
-          <Button 
+          <Button
             variant="contained"
             onClick={() => {
-              if (sectionNumber && sectionTitle) {
-                const headingTag = `h${Math.min(sectionLevel + 1, 6)}`;
+              const finalNumber = sectionMode === 'child' ? sectionNumber : siblingNumber;
+
+              if (finalNumber && sectionTitle) {
+                // Get the reference style from the previous section
+                const refStyle = (window as any).__sectionReferenceStyle || '';
+
+                // Determine heading level and margin based on depth (number of dots)
+                const levels = finalNumber.split('.').filter(n => n).length;
+                let headingTag = 'h3'; // Default for sections like 1.1, 1.2
+
+                // Calculate margin: each level adds 20px (level 1=0px, level 2=20px, level 3=40px, etc.)
+                let marginLeft = (levels - 1) * 20;
+
+                if (levels === 2) {
+                  headingTag = 'h3'; // 1.1, 1.2 (section level)
+                } else if (levels === 3) {
+                  headingTag = 'h4'; // 1.1.1, 1.2.3 (subsection level)
+                } else if (levels === 4) {
+                  headingTag = 'h5'; // 1.1.1.1 (sub-subsection level)
+                } else if (levels >= 5) {
+                  headingTag = 'h6'; // 1.1.1.1.1+ (5th+ level)
+                }
+
+                // Use margin-left for indentation (matching template sections)
+                const finalStyle = `margin-left: ${marginLeft}px;`;
+                console.log(`Creating section ${finalNumber} with ${levels} levels, indent=${marginLeft}px`);
+
+                const styleAttr = ` style="${finalStyle}"`;
+
+                // Extract margin for the paragraph placeholder
+                const paragraphStyle = ` style="margin-left: ${marginLeft}px;"`;
+                console.log(`Paragraph style: ${paragraphStyle}`);
+
+                // Move cursor to end of document or after current block to avoid nesting
+                const { $to } = editor.state.selection;
+                const endPos = $to.after();
+
                 editor
                   .chain()
                   .focus()
-                  .insertContent(`<${headingTag}><strong>${sectionNumber}</strong> ${sectionTitle}</${headingTag}>\n<p></p>`)
+                  .insertContentAt(endPos, `<${headingTag}${styleAttr}>${finalNumber} ${sectionTitle}</${headingTag}>\n<p${paragraphStyle}></p>`)
                   .run();
                 setSectionDialog(false);
                 setSectionNumber('');
+                setSiblingNumber('');
                 setSectionTitle('');
+                setSectionMode('child');
+
+                // Clear the reference style
+                (window as any).__sectionReferenceStyle = '';
               }
             }}
           >
