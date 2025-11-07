@@ -424,7 +424,7 @@ export class AirForce12StagePlugin implements IWorkflowPlugin {
             requireComment: true
           }
         ],
-        allowedRoles: ['PCM'],
+        allowedRoles: ['PCM', 'HQAF_APPROVER'],
         ui: {
           icon: 'fact_check',
           color: '#0891B2'

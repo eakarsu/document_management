@@ -4,7 +4,7 @@ test('Section indentation test - verify margin-left is correct', async ({ page }
   // Login
   await page.goto('http://localhost:3000/login');
   await page.fill('input[name="email"]', 'admin@airforce.mil');
-  await page.fill('input[name="password"]', '');
+  await page.fill('input[name="password"]', '#H%YInr8hPVbctB7');
   await page.click('button[type="submit"]');
   await page.waitForTimeout(2000);
 

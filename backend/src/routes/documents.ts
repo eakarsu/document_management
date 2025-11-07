@@ -1117,7 +1117,8 @@ router.patch('/:id', authMiddleware,
            documentUpdateData.customFields.commentMatrix || documentUpdateData.customFields.lastCommentUpdate) &&
           (userRole === 'REVIEWER' || userRole === 'SUB_REVIEWER' || userRole === 'COORDINATOR' ||
            userRole === 'PCM' || userRole === 'PCM_REVIEWER' ||
-           userRole === 'ACTION_OFFICER' || userRole === 'LEGAL' || userRole === 'LEGAL_REVIEWER')) {
+           userRole === 'ACTION_OFFICER' || userRole === 'LEGAL' || userRole === 'LEGAL_REVIEWER' || userRole === 'ADMIN' ||
+           userRole === 'HQAF_APPROVER' || userRole === 'AFDPO' || userRole === 'AFPDO' || userRole === 'PUBLISHER' || userRole === 'AFDPO_PUBLISHER')) {
 
         logger.info('Reviewer updating feedback for document:', {
           documentId,

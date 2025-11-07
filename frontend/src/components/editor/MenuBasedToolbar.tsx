@@ -758,14 +758,14 @@ export const MenuBasedToolbar: React.FC<MenuBasedToolbarProps> = ({
                       alert('No headings found');
                       return;
                     }
-                    let toc = '<div class="toc"><h2>Table of Contents</h2><ul>';
+                    let toc = '<div class="toc"><h2>Table of Contents</h2>';
                     headers.forEach((h, i) => {
                       const level = parseInt(h.tagName.charAt(1));
                       const text = h.textContent || '';
                       const indent = '&nbsp;&nbsp;'.repeat(level - 1);
-                      toc += `<li>${indent}${text}</li>`;
+                      toc += `<p>${indent}${text}</p>`;
                     });
-                    toc += '</ul></div>';
+                    toc += '</div>';
                     editor?.commands.focus('start');
                     editor?.chain().insertContent(toc).run();
                   }}

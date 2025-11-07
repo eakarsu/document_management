@@ -60,6 +60,7 @@ const OPRReviewPage = () => {
     loading,
     handleSaveDocument,
     handleExport,
+    fetchDocumentAndFeedback,
   } = useOPRDocument(documentId);
 
   // History management
@@ -87,7 +88,7 @@ const OPRReviewPage = () => {
 
   // Helper function to renumber paragraphs after deletion
   const renumberParagraphs = (content: string, deletedParagraphNum: string): string => {
-    console.log('=== RENUMBERING PARAGRAPHS ===');
+    console.log('=== RENUMBERING PARAGRAPHS (DOWN) ===');
     console.log('Deleted paragraph number:', deletedParagraphNum);
 
     const deletedParts = deletedParagraphNum.split('.').map(n => parseInt(n));
@@ -246,10 +247,17 @@ const OPRReviewPage = () => {
         body: JSON.stringify({
           customFields: {
             editableContent: updatedContent,
+            htmlContent: updatedContent,
+            // Update ALL feedback fields to keep them in sync
             crmFeedback: updatedFeedbackList,
+            draftFeedback: updatedFeedbackList,
+            crmComments: updatedFeedbackList,
+            commentMatrix: updatedFeedbackList,
+            lastEditedAt: new Date().toISOString()
           }
         })
       });
+      console.log('[APPLY FEEDBACK] Saved to database - feedback count:', updatedFeedbackList.length);
     } catch (error) {
       console.error('Error saving bulk changes:', error);
     }
@@ -395,6 +403,10 @@ const OPRReviewPage = () => {
         onExport={handleExport}
         onExportMenuOpen={(e) => setExportAnchorEl(e.currentTarget)}
         onExportMenuClose={() => setExportAnchorEl(null)}
+        onRefresh={() => {
+          console.log('[REFRESH] Reloading document and feedback...');
+          fetchDocumentAndFeedback();
+        }}
       />
 
       <Box key={componentKey} sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
@@ -674,41 +686,87 @@ const OPRReviewPage = () => {
 
                         // Special handling for paragraph deletion
                         const isDeletion = !changeToText || !changeToText.trim();
-                        if (isDeletion && selectedFeedback.paragraphNumber) {
-                          console.log('Attempting paragraph deletion with renumbering:', selectedFeedback.paragraphNumber);
+                        console.log('[DELETE] Is deletion?', isDeletion);
+                        console.log('[DELETE] Has paragraph number?', selectedFeedback.paragraphNumber);
+                        console.log('[DELETE] Feedback item:', selectedFeedback);
+
+                        // Try to auto-detect paragraph number if not set
+                        let detectedParagraphNum = selectedFeedback.paragraphNumber;
+                        if (isDeletion && !detectedParagraphNum) {
+                          // Try to extract paragraph number from the beginning of changeFrom text
+                          // Match patterns like: 1.1.1.1, 1.2.3, etc.
+                          const paragraphMatch = changeFromText.match(/^(\d+(?:\.\d+)+)/);
+                          if (paragraphMatch) {
+                            detectedParagraphNum = paragraphMatch[1];
+                            console.log('[DELETE] Auto-detected paragraph number from text:', detectedParagraphNum);
+                          }
+                        }
+
+                        if (isDeletion && detectedParagraphNum) {
+                          console.log('Attempting paragraph deletion with renumbering:', detectedParagraphNum);
+
+                          // Create restoration marker with encoded original text for safety
+                          const markerId = `RESTORE_${selectedFeedback.id || Date.now()}`;
+                          const encodedText = btoa(encodeURIComponent(changeFromText.substring(0, 500))); // Store first 500 chars
+                          const restorationMarker = `<!--${markerId}:${encodedText}-->`;
 
                           // Try to find and remove the entire paragraph including number
                           // Match pattern like: <p>1.1.2.1.1.1 Communication systems...</p>
-                          const paragraphNum = selectedFeedback.paragraphNumber;
+                          const paragraphNum = detectedParagraphNum;
                           const escapedNum = escapeRegex(paragraphNum);
 
                           // Try multiple patterns to match the paragraph
                           const patterns = [
-                            // Pattern 1: <p>number text</p>
+                            // Pattern 1: <p>number text</p> (number and text in same tag)
                             new RegExp(`<p[^>]*>\\s*${escapedNum}\\s+${escapeRegex(changeFromText.trim())}\\s*</p>`, 'i'),
-                            // Pattern 2: <p>number</p><p>text</p>
+                            // Pattern 2: <p>number</p><p>text</p> (number and text in separate tags)
                             new RegExp(`<p[^>]*>\\s*${escapedNum}\\s*</p>\\s*<p[^>]*>\\s*${escapeRegex(changeFromText.trim())}\\s*</p>`, 'i'),
-                            // Pattern 3: Just the paragraph with number at start
-                            new RegExp(`<p[^>]*>\\s*${escapedNum}[^<]*${escapeRegex(changeFromText.substring(0, 50))}[\\s\\S]*?</p>`, 'i'),
+                            // Pattern 3: <p>number...partial text...</p> (number at start with partial text match)
+                            new RegExp(`<p[^>]*>\\s*${escapedNum}[^<]*${escapeRegex(changeFromText.substring(0, Math.min(50, changeFromText.length)))}[\\s\\S]*?</p>`, 'i'),
+                            // Pattern 4: <p><strong>number</strong> text</p> (number in formatting tag)
+                            new RegExp(`<p[^>]*>\\s*<[^>]*>\\s*${escapedNum}\\s*</[^>]*>\\s*${escapeRegex(changeFromText.trim())}\\s*</p>`, 'i'),
+                            // Pattern 5: <p>number (with any content until closing tag)
+                            new RegExp(`<p[^>]*>\\s*${escapedNum}\\b[\\s\\S]*?</p>`, 'i'),
+                            // Pattern 6: Just find the <p> tag containing the paragraph number
+                            new RegExp(`<p[^>]*>(?:[^<]|<(?!/p>))*${escapedNum}(?:[^<]|<(?!/p>))*</p>`, 'i'),
                           ];
 
+                          let deletedParagraphHTML = '';
                           for (const pattern of patterns) {
-                            if (pattern.test(currentContent)) {
-                              updatedContent = currentContent.replace(pattern, '');
+                            const match = currentContent.match(pattern);
+                            if (match) {
+                              deletedParagraphHTML = match[0]; // Store the full HTML
+                              // Store the full paragraph HTML in the marker's encoded data
+                              const fullHtmlEncoded = btoa(encodeURIComponent(deletedParagraphHTML));
+                              const enhancedMarker = `<!--${markerId}:${fullHtmlEncoded}-->`;
+                              updatedContent = currentContent.replace(pattern, enhancedMarker);
                               replacementMade = true;
-                              console.log('Removed paragraph with pattern match');
+                              console.log('Removed paragraph with pattern match, inserted marker with full HTML:', markerId);
                               break;
                             }
                           }
 
                           // Fallback: Try to find just the text without paragraph tags
                           if (!replacementMade) {
+                            // First try: Remove number + text together
                             const textPattern = new RegExp(`${escapedNum}\\s+${escapeRegex(changeFromText.trim())}`, 'i');
                             if (textPattern.test(currentContent)) {
-                              updatedContent = currentContent.replace(textPattern, '');
+                              updatedContent = currentContent.replace(textPattern, restorationMarker);
                               replacementMade = true;
-                              console.log('Removed paragraph text with number');
+                              console.log('Removed paragraph text with number, inserted marker:', markerId);
                             }
+                          }
+
+                          // Ultimate fallback: If text was removed but paragraph number remains, remove it too
+                          if (!replacementMade && currentContent.includes(changeFromText)) {
+                            // Remove the text first
+                            updatedContent = currentContent.replace(changeFromText, restorationMarker);
+                            // Then look for the paragraph number that's now orphaned
+                            // Match the number followed by whitespace or tags but no substantial text
+                            const orphanedNumberPattern = new RegExp(`<p[^>]*>\\s*(?:<[^>]*>)?\\s*${escapedNum}\\s*(?:</[^>]*>)?\\s*</p>`, 'gi');
+                            updatedContent = updatedContent.replace(orphanedNumberPattern, '');
+                            replacementMade = true;
+                            console.log('Removed paragraph text and cleaned up orphaned number, inserted marker:', markerId);
                           }
 
                           // If paragraph was removed, renumber subsequent paragraphs
@@ -728,12 +786,25 @@ const OPRReviewPage = () => {
                             console.log('Text before:', currentContent.substring(Math.max(0, index - 20), index));
                             console.log('Text after:', currentContent.substring(index + changeFromText.length, Math.min(currentContent.length, index + changeFromText.length + 20)));
 
-                            updatedContent = currentContent.replace(
-                              changeFromText,
-                              changeToText
-                            );
+                            // For deletions (empty changeTo), insert a restoration marker
+                            if (isDeletion) {
+                              const markerId = `RESTORE_${selectedFeedback.id || Date.now()}`;
+                              const encodedText = btoa(encodeURIComponent(changeFromText.substring(0, 500))); // Store first 500 chars
+                              const restorationMarker = `<!--${markerId}:${encodedText}-->`;
+                              updatedContent = currentContent.replace(
+                                changeFromText,
+                                restorationMarker
+                              );
+                              console.log('Deletion: Replaced text with marker:', markerId);
+                            } else {
+                              // Standard replacement
+                              updatedContent = currentContent.replace(
+                                changeFromText,
+                                changeToText
+                              );
+                              console.log('Replaced using exact match');
+                            }
                             replacementMade = true;
-                            console.log('Replaced using exact match');
                           }
                         }
                         // Method 2: Try with regex to ignore HTML tags
@@ -744,9 +815,18 @@ const OPRReviewPage = () => {
                           const regex = new RegExp(textToFind.split(/\s+/).join('(?:\\s|<[^>]*>)*'), 'i');
 
                           if (regex.test(currentContent)) {
-                            updatedContent = currentContent.replace(regex, changeToText);
+                            // For deletions, insert a restoration marker
+                            if (isDeletion) {
+                              const markerId = `RESTORE_${selectedFeedback.id || Date.now()}`;
+                              const encodedText = btoa(encodeURIComponent(changeFromText.substring(0, 500))); // Store first 500 chars
+                              const restorationMarker = `<!--${markerId}:${encodedText}-->`;
+                              updatedContent = currentContent.replace(regex, restorationMarker);
+                              console.log('Deletion: Replaced text with marker (regex method):', markerId);
+                            } else {
+                              updatedContent = currentContent.replace(regex, changeToText);
+                              console.log('Replaced using regex (ignoring HTML tags)');
+                            }
                             replacementMade = true;
-                            console.log('Replaced using regex (ignoring HTML tags)');
                           }
                           // Method 3: Try to find the text without considering HTML structure
                           else {
@@ -760,11 +840,23 @@ const OPRReviewPage = () => {
                               const textIndex = textContent.indexOf(changeFromText);
                               console.log(`Found text at position ${textIndex} in stripped content`);
 
-                              // Simple replacement - just replace first occurrence
-                              updatedContent = currentContent.replace(
-                                changeFromText,
-                                changeToText
-                              );
+                              // For deletions, insert a restoration marker
+                              if (isDeletion) {
+                                const markerId = `RESTORE_${selectedFeedback.id || Date.now()}`;
+                                const encodedText = btoa(encodeURIComponent(changeFromText.substring(0, 500))); // Store first 500 chars
+                                const restorationMarker = `<!--${markerId}:${encodedText}-->`;
+                                updatedContent = currentContent.replace(
+                                  changeFromText,
+                                  restorationMarker
+                                );
+                                console.log('Deletion: Replaced text with marker (text search method):', markerId);
+                              } else {
+                                // Simple replacement - just replace first occurrence
+                                updatedContent = currentContent.replace(
+                                  changeFromText,
+                                  changeToText
+                                );
+                              }
                               replacementMade = true;
                             }
                           }
@@ -792,19 +884,27 @@ const OPRReviewPage = () => {
                           // Save everything to database
                           const saveToDatabase = async () => {
                             try {
-                              console.log('Saving document and feedback to database...');
+                              console.log('[APPLY] Saving document and feedback to database...');
+                              console.log('[APPLY] Updated content length:', updatedContent.length);
+                              console.log('[APPLY] Updated feedback count:', updatedFeedback.length);
+                              console.log('[APPLY] Merged feedback count:', updatedFeedback.filter(f => f.status === 'merged').length);
 
                               // Save document content and feedback status
                               const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
                                 method: 'PATCH',
                                 body: JSON.stringify({
+                                  content: updatedContent,  // Update main content field
+                                  htmlContent: updatedContent,  // Update main htmlContent field
                                   customFields: {
                                     ...documentData?.customFields,
                                     editableContent: updatedContent,
                                     htmlContent: updatedContent,
                                     content: updatedContent,
+                                    // Update ALL 4 feedback fields to keep them in sync
                                     crmComments: updatedFeedback,
                                     crmFeedback: updatedFeedback,
+                                    draftFeedback: updatedFeedback,
+                                    commentMatrix: updatedFeedback,
                                     lastModifiedAt: new Date().toISOString(),
                                     feedbackAppliedAt: new Date().toISOString(),
                                     feedbackStatus: {
@@ -818,12 +918,19 @@ const OPRReviewPage = () => {
                               });
 
                               if (response.ok) {
-                                console.log('Document and feedback saved successfully!');
+                                console.log('[APPLY] ✅ Document and feedback saved successfully!');
+                                const savedData = await response.json();
+                                console.log('[APPLY] Saved data:', savedData);
+                                alert('Feedback applied and saved to database successfully!');
                               } else {
-                                console.error('Failed to save document:', response.statusText);
+                                const errorText = await response.text();
+                                console.error('[APPLY] ❌ Failed to save document:', response.status, response.statusText);
+                                console.error('[APPLY] Error response:', errorText);
+                                alert(`Failed to save feedback to database!\nStatus: ${response.status}\nError: ${response.statusText}\n\nCheck console for details.`);
                               }
                             } catch (error) {
-                              console.error('Error saving to database:', error);
+                              console.error('[APPLY] ❌ Error saving to database:', error);
+                              alert(`Error saving feedback to database: ${error}\n\nCheck console for details.`);
                             }
                           };
 
@@ -853,6 +960,53 @@ const OPRReviewPage = () => {
                      !hasReplacementText ? 'Delete Text' :
                      'Apply This Change'}
                   </Button>
+
+                  {selectedFeedback.status === 'merged' && (
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      size="small"
+                      onClick={async () => {
+                        // Reset status to pending and save to database
+                        const updatedFeedback = feedback.map(f =>
+                          f.id === selectedFeedback.id
+                            ? { ...f, status: 'pending' as const }
+                            : f
+                        );
+                        setFeedback(updatedFeedback);
+                        setSelectedFeedback({ ...selectedFeedback, status: 'pending' });
+
+                        console.log('[RESET] Resetting feedback status to pending:', selectedFeedback.id);
+
+                        // Save to database
+                        try {
+                          const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({
+                              customFields: {
+                                ...documentData?.customFields,
+                                crmComments: updatedFeedback,
+                                crmFeedback: updatedFeedback,
+                                draftFeedback: updatedFeedback,
+                                commentMatrix: updatedFeedback,
+                              }
+                            })
+                          });
+
+                          if (response.ok) {
+                            console.log('[RESET] ✅ Status reset and saved to database');
+                            alert('Feedback status has been reset to pending');
+                          } else {
+                            console.error('[RESET] ❌ Failed to save status');
+                          }
+                        } catch (error) {
+                          console.error('[RESET] Error:', error);
+                        }
+                      }}
+                    >
+                      Reset to Pending
+                    </Button>
+                  )}
 
                   <Button
                     variant="outlined"
@@ -958,6 +1112,7 @@ const OPRReviewPage = () => {
                       }}
                     >
                       <ListItemText
+                        primaryTypographyProps={{ component: 'div' }}
                         primary={
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Chip
@@ -1271,18 +1426,179 @@ const OPRReviewPage = () => {
                       variant="outlined"
                       onClick={() => {
                         // Restore this specific change
-                        if (item.changeTo && item.changeFrom) {
-                          const restored = editableContent.replace(item.changeTo, item.changeFrom);
-                          setEditableContent(restored);
-                          setDocumentContent(restored);
+                        let restored = editableContent;
+                        let restorationMade = false;
 
-                          // Update feedback status
-                          const updatedFeedback = feedback.map(f =>
-                            f.id === item.id ? { ...f, status: 'pending' as const } : f
-                          );
-                          setFeedback(updatedFeedback);
+                        if (item.changeFrom) {
+                          // First, try to find restoration marker (for deletions)
+                          const markerId = `RESTORE_${item.id}`;
 
-                          alert('Change has been restored');
+                          // Try new marker format with encoded text
+                          const markerRegex = new RegExp(`<!--${markerId}:([^>]+)-->`, 'g');
+                          const markerMatch = editableContent.match(markerRegex);
+
+                          if (markerMatch && markerMatch[0]) {
+                            console.log('[RESTORE] Found enhanced marker:', markerId);
+                            // Extract the encoded HTML from the marker
+                            const encodedMatch = markerMatch[0].match(/<!--RESTORE_[^:]+:([^>]+)-->/);
+                            let restoredText = item.changeFrom;
+
+                            if (encodedMatch && encodedMatch[1]) {
+                              try {
+                                // Decode the full HTML structure (with indentation)
+                                const decodedHTML = decodeURIComponent(atob(encodedMatch[1]));
+                                restoredText = decodedHTML;
+                                console.log('[RESTORE] Restored full paragraph HTML with indentation');
+                              } catch (e) {
+                                console.warn('[RESTORE] Failed to decode HTML, using fallback');
+                                // Fallback: reconstruct simple paragraph
+                                if (item.paragraphNumber) {
+                                  restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                                }
+                              }
+                            } else if (item.paragraphNumber) {
+                              // Fallback: Restore as a paragraph with number but no indentation
+                              restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                              console.log('[RESTORE] Restoring paragraph with number (no indentation data):', item.paragraphNumber);
+                            }
+
+                            // Replace marker with original text from feedback item
+                            restored = editableContent.replace(markerMatch[0], restoredText);
+                            restorationMade = true;
+                            console.log('[RESTORE] Restored deletion using enhanced marker');
+                          }
+                          // Fallback: Try old marker format (for backward compatibility)
+                          else if (editableContent.includes(`<!--${markerId}-->`)) {
+                            const oldMarkerPattern = `<!--${markerId}-->`;
+                            console.log('[RESTORE] Found old marker:', markerId);
+                            // Reconstruct paragraph with number if this was a paragraph deletion
+                            let restoredText = item.changeFrom;
+                            if (item.paragraphNumber) {
+                              // Restore as a paragraph with number
+                              restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                              console.log('[RESTORE] Restoring paragraph with number:', item.paragraphNumber);
+                            }
+                            // Replace marker with original text
+                            restored = editableContent.replace(oldMarkerPattern, restoredText);
+                            restorationMade = true;
+                            console.log('[RESTORE] Restored deletion using old marker format');
+                          }
+                          // Fallback: Standard text replacement (for modifications)
+                          else if (item.changeTo) {
+                            if (editableContent.includes(item.changeTo)) {
+                              restored = editableContent.replace(item.changeTo, item.changeFrom);
+                              restorationMade = true;
+                              console.log('[RESTORE] Restored modification using text replacement');
+                            } else {
+                              console.error('[RESTORE] Could not find text to restore:', item.changeTo);
+                              alert('Could not find the changed text to restore. It may have been modified again.');
+                              return;
+                            }
+                          } else {
+                            // Fallback for old deletions without markers
+                            console.warn('[RESTORE] No marker found, attempting paragraph insertion fallback');
+
+                            if (item.paragraphNumber && item.changeFrom) {
+                              // Find where to insert by looking for adjacent paragraph
+                              const paragraphNum = item.paragraphNumber;
+                              const parts = paragraphNum.split('.').map(n => parseInt(n));
+
+                              // Try to find the next paragraph number (e.g., if deleting 1.1.1.2, look for 1.1.1.2 or 1.1.1.3)
+                              const nextParts = [...parts];
+                              nextParts[nextParts.length - 1]++; // Increment last number
+                              const nextNum = nextParts.join('.');
+
+                              // Try to find a paragraph with the next number
+                              const nextParagraphRegex = new RegExp(`<p[^>]*>\\s*${nextNum.replace(/\./g, '\\.')}\\b`, 'i');
+                              const matchNext = editableContent.match(nextParagraphRegex);
+
+                              if (matchNext) {
+                                // Insert before the next paragraph
+                                const insertPosition = editableContent.indexOf(matchNext[0]);
+                                const restoredParagraph = `<p>${paragraphNum} ${item.changeFrom}</p>\n`;
+                                restored = editableContent.slice(0, insertPosition) + restoredParagraph + editableContent.slice(insertPosition);
+                                restorationMade = true;
+                                console.log('[RESTORE] Inserted paragraph using adjacent paragraph method');
+                              } else {
+                                // Try to find previous paragraph and insert after it
+                                const prevParts = [...parts];
+                                prevParts[prevParts.length - 1]--; // Decrement last number
+                                if (prevParts[prevParts.length - 1] > 0) {
+                                  const prevNum = prevParts.join('.');
+                                  const prevParagraphRegex = new RegExp(`<p[^>]*>\\s*${prevNum.replace(/\./g, '\\.')}\\b[\\s\\S]*?</p>`, 'i');
+                                  const matchPrev = editableContent.match(prevParagraphRegex);
+
+                                  if (matchPrev) {
+                                    // Insert after the previous paragraph
+                                    const insertPosition = editableContent.indexOf(matchPrev[0]) + matchPrev[0].length;
+                                    const restoredParagraph = `\n<p>${paragraphNum} ${item.changeFrom}</p>`;
+                                    restored = editableContent.slice(0, insertPosition) + restoredParagraph + editableContent.slice(insertPosition);
+                                    restorationMade = true;
+                                    console.log('[RESTORE] Inserted paragraph using previous paragraph method');
+                                  }
+                                }
+                              }
+
+                              if (!restorationMade) {
+                                console.error('[RESTORE] Could not find adjacent paragraphs to insert');
+                                alert('Cannot restore: Unable to find the location to insert the paragraph.\n\nThe paragraph will need to be manually re-added.');
+                                return;
+                              }
+                            } else {
+                              console.error('[RESTORE] No marker found and no changeTo text available');
+                              alert('Cannot restore: This deletion was made before marker tracking was enabled and has no paragraph number.');
+                              return;
+                            }
+                          }
+
+                          if (restorationMade) {
+                            setEditableContent(restored);
+                            setDocumentContent(restored);
+
+                            // Note: Paragraph numbers may be out of sequence after restore
+                            // Use the editor's Auto button to renumber if needed
+                            if (item.paragraphNumber) {
+                              console.log('[RESTORE] Paragraph restored. Use editor Auto button to renumber if needed.');
+                            }
+
+                            // Update feedback status
+                            const updatedFeedback = feedback.map(f =>
+                              f.id === item.id ? { ...f, status: 'pending' as const } : f
+                            );
+                            setFeedback(updatedFeedback);
+
+                            // Save to database
+                            authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+                              method: 'PATCH',
+                              body: JSON.stringify({
+                                content: restored,  // Update main content field
+                                htmlContent: restored,  // Update main htmlContent field
+                                customFields: {
+                                  ...documentData?.customFields,
+                                  editableContent: restored,
+                                  htmlContent: restored,
+                                  content: restored,
+                                  // Update all feedback fields
+                                  crmComments: updatedFeedback,
+                                  crmFeedback: updatedFeedback,
+                                  draftFeedback: updatedFeedback,
+                                  commentMatrix: updatedFeedback,
+                                  lastEditedAt: new Date().toISOString()
+                                }
+                              })
+                            }).then(response => {
+                              if (response.ok) {
+                                console.log('[RESTORE] ✅ Individual change saved to database');
+                                alert('Change has been restored and saved successfully!');
+                              } else {
+                                console.error('[RESTORE] ❌ Failed to save');
+                                alert('Change restored in view but failed to save to database');
+                              }
+                            }).catch(error => {
+                              console.error('[RESTORE] ❌ Error saving:', error);
+                              alert(`Error saving restore to database: ${error}`);
+                            });
+                          }
                         }
                       }}
                     >
@@ -1300,10 +1616,69 @@ const OPRReviewPage = () => {
                         setFeedback(updatedFeedback);
 
                         // Restore original text
-                        if (item.changeTo && item.changeFrom) {
-                          const restored = editableContent.replace(item.changeTo, item.changeFrom);
+                        let restored = editableContent;
+                        if (item.changeFrom) {
+                          // First, try to find restoration marker (for deletions)
+                          const markerId = `RESTORE_${item.id}`;
+
+                          // Try new marker format with encoded text
+                          const markerRegex = new RegExp(`<!--${markerId}:([^>]+)-->`, 'g');
+                          const markerMatch = editableContent.match(markerRegex);
+
+                          if (markerMatch && markerMatch[0]) {
+                            console.log('[REJECT & RESTORE] Found enhanced marker:', markerId);
+                            // Extract the encoded HTML from the marker
+                            const encodedMatch = markerMatch[0].match(/<!--RESTORE_[^:]+:([^>]+)-->/);
+                            let restoredText = item.changeFrom;
+
+                            if (encodedMatch && encodedMatch[1]) {
+                              try {
+                                // Decode the full HTML structure (with indentation)
+                                const decodedHTML = decodeURIComponent(atob(encodedMatch[1]));
+                                restoredText = decodedHTML;
+                                console.log('[REJECT & RESTORE] Restored full paragraph HTML with indentation');
+                              } catch (e) {
+                                console.warn('[REJECT & RESTORE] Failed to decode HTML, using fallback');
+                                if (item.paragraphNumber) {
+                                  restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                                }
+                              }
+                            } else if (item.paragraphNumber) {
+                              restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                              console.log('[REJECT & RESTORE] Restoring paragraph with number:', item.paragraphNumber);
+                            }
+
+                            restored = editableContent.replace(markerMatch[0], restoredText);
+                            console.log('[REJECT & RESTORE] Restored deletion using enhanced marker');
+                          }
+                          // Fallback: Try old marker format (for backward compatibility)
+                          else if (editableContent.includes(`<!--${markerId}-->`)) {
+                            const oldMarkerPattern = `<!--${markerId}-->`;
+                            console.log('[REJECT & RESTORE] Found old marker:', markerId);
+                            // Reconstruct paragraph with number if this was a paragraph deletion
+                            let restoredText = item.changeFrom;
+                            if (item.paragraphNumber) {
+                              // Restore as a paragraph with number
+                              restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                              console.log('[REJECT & RESTORE] Restoring paragraph with number:', item.paragraphNumber);
+                            }
+                            restored = editableContent.replace(oldMarkerPattern, restoredText);
+                            console.log('[REJECT & RESTORE] Restored deletion using old marker');
+                          }
+                          // Fallback: Standard text replacement (for modifications)
+                          else if (item.changeTo && editableContent.includes(item.changeTo)) {
+                            restored = editableContent.replace(item.changeTo, item.changeFrom);
+                            console.log('[REJECT & RESTORE] Restored modification using text replacement');
+                          }
+
                           setEditableContent(restored);
                           setDocumentContent(restored);
+
+                          // Note: Paragraph numbers may be out of sequence after restore
+                          // Use the editor's Auto button to renumber if needed
+                          if (item.paragraphNumber && restored !== editableContent) {
+                            console.log('[REJECT & RESTORE] Paragraph restored. Use editor Auto button to renumber if needed.');
+                          }
                         }
                       }}
                     >
@@ -1329,19 +1704,138 @@ const OPRReviewPage = () => {
             variant="contained"
             color="error"
             onClick={() => {
+              console.log('[RESTORE ALL] Button clicked');
+              console.log('[RESTORE ALL] Total feedback:', feedback.length);
+              console.log('[RESTORE ALL] Feedback statuses:', feedback.map(f => ({ id: f.id, status: f.status })));
+
+              const mergedItems = feedback.filter(f => f.status === 'merged');
+              console.log('[RESTORE ALL] Merged items to restore:', mergedItems.length);
+
+              if (mergedItems.length === 0) {
+                alert('No changes have been applied yet. There is nothing to restore.');
+                return;
+              }
+
               if (confirm('Are you sure you want to restore all changes? This will undo all applied feedback.')) {
+                console.log('[RESTORE ALL] User confirmed, restoring...');
                 // Restore all changes
                 let restoredContent = editableContent;
-                const mergedItems = feedback.filter(f => f.status === 'merged');
+                let restoredCount = 0;
 
                 for (const item of mergedItems) {
-                  if (item.changeTo && item.changeFrom) {
-                    restoredContent = restoredContent.replace(item.changeTo, item.changeFrom);
+                  if (item.changeFrom) {
+                    // First, try to find restoration marker (for deletions)
+                    const markerId = `RESTORE_${item.id}`;
+
+                    // Try new marker format with encoded text
+                    const markerRegex = new RegExp(`<!--${markerId}:([^>]+)-->`, 'g');
+                    const markerMatch = restoredContent.match(markerRegex);
+
+                    if (markerMatch && markerMatch[0]) {
+                      console.log('[RESTORE ALL] Found enhanced marker for item:', item.id);
+                      // Extract the encoded HTML from the marker
+                      const encodedMatch = markerMatch[0].match(/<!--RESTORE_[^:]+:([^>]+)-->/);
+                      let restoredText = item.changeFrom;
+
+                      if (encodedMatch && encodedMatch[1]) {
+                        try {
+                          // Decode the full HTML structure (with indentation)
+                          const decodedHTML = decodeURIComponent(atob(encodedMatch[1]));
+                          restoredText = decodedHTML;
+                          console.log('[RESTORE ALL] Restored full paragraph HTML with indentation');
+                        } catch (e) {
+                          console.warn('[RESTORE ALL] Failed to decode HTML, using fallback');
+                          if (item.paragraphNumber) {
+                            restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                          }
+                        }
+                      } else if (item.paragraphNumber) {
+                        restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                        console.log('[RESTORE ALL] Restoring paragraph with number:', item.paragraphNumber);
+                      }
+
+                      restoredContent = restoredContent.replace(markerMatch[0], restoredText);
+                      restoredCount++;
+                      console.log('[RESTORE ALL] Restored deletion using enhanced marker:', item.id);
+                    }
+                    // Fallback: Try old marker format (for backward compatibility)
+                    else if (restoredContent.includes(`<!--${markerId}-->`)) {
+                      const oldMarkerPattern = `<!--${markerId}-->`;
+                      console.log('[RESTORE ALL] Found old marker for item:', item.id);
+                      // Reconstruct paragraph with number if this was a paragraph deletion
+                      let restoredText = item.changeFrom;
+                      if (item.paragraphNumber) {
+                        // Restore as a paragraph with number
+                        restoredText = `<p>${item.paragraphNumber} ${item.changeFrom}</p>`;
+                        console.log('[RESTORE ALL] Restoring paragraph with number:', item.paragraphNumber);
+                      }
+                      restoredContent = restoredContent.replace(oldMarkerPattern, restoredText);
+                      restoredCount++;
+                      console.log('[RESTORE ALL] Restored deletion using old marker:', item.id);
+                    }
+                    // Fallback: Standard text replacement (for modifications)
+                    else if (item.changeTo && restoredContent.includes(item.changeTo)) {
+                      restoredContent = restoredContent.replace(item.changeTo, item.changeFrom);
+                      restoredCount++;
+                      console.log('[RESTORE ALL] Restored modification:', item.id);
+                    }
+                    // Fallback for old deletions without markers
+                    else if (item.paragraphNumber && item.changeFrom && !item.changeTo) {
+                      console.warn('[RESTORE ALL] No marker found for item', item.id, 'attempting paragraph insertion fallback');
+                      const paragraphNum = item.paragraphNumber;
+                      const parts = paragraphNum.split('.').map(n => parseInt(n));
+
+                      // Try to find the next paragraph
+                      const nextParts = [...parts];
+                      nextParts[nextParts.length - 1]++;
+                      const nextNum = nextParts.join('.');
+                      const nextParagraphRegex = new RegExp(`<p[^>]*>\\s*${nextNum.replace(/\./g, '\\.')}\\b`, 'i');
+                      const matchNext = restoredContent.match(nextParagraphRegex);
+
+                      if (matchNext) {
+                        const insertPosition = restoredContent.indexOf(matchNext[0]);
+                        const restoredParagraph = `<p>${paragraphNum} ${item.changeFrom}</p>\n`;
+                        restoredContent = restoredContent.slice(0, insertPosition) + restoredParagraph + restoredContent.slice(insertPosition);
+                        restoredCount++;
+                        console.log('[RESTORE ALL] Inserted paragraph using adjacent method:', item.id);
+                      } else {
+                        // Try previous paragraph
+                        const prevParts = [...parts];
+                        prevParts[prevParts.length - 1]--;
+                        if (prevParts[prevParts.length - 1] > 0) {
+                          const prevNum = prevParts.join('.');
+                          const prevParagraphRegex = new RegExp(`<p[^>]*>\\s*${prevNum.replace(/\./g, '\\.')}\\b[\\s\\S]*?</p>`, 'i');
+                          const matchPrev = restoredContent.match(prevParagraphRegex);
+
+                          if (matchPrev) {
+                            const insertPosition = restoredContent.indexOf(matchPrev[0]) + matchPrev[0].length;
+                            const restoredParagraph = `\n<p>${paragraphNum} ${item.changeFrom}</p>`;
+                            restoredContent = restoredContent.slice(0, insertPosition) + restoredParagraph + restoredContent.slice(insertPosition);
+                            restoredCount++;
+                            console.log('[RESTORE ALL] Inserted paragraph using previous paragraph method:', item.id);
+                          } else {
+                            console.warn('[RESTORE ALL] Could not find adjacent paragraphs for item:', item.id);
+                          }
+                        }
+                      }
+                    }
+                    else {
+                      console.warn('[RESTORE ALL] Could not restore item:', item.id, '- marker or changeTo not found');
+                    }
                   }
                 }
 
+                console.log('[RESTORE ALL] Restored', restoredCount, 'out of', mergedItems.length, 'items');
+
                 setEditableContent(restoredContent);
                 setDocumentContent(restoredContent);
+
+                // Note: Paragraph numbers may be out of sequence after restore
+                // Use the editor's Auto button to renumber if needed
+                const hasParagraphs = mergedItems.some(item => item.paragraphNumber);
+                if (hasParagraphs) {
+                  console.log('[RESTORE ALL] Paragraphs restored. Use editor Auto button to renumber if needed.');
+                }
 
                 // Reset all feedback to pending
                 const updatedFeedback = feedback.map(f =>
@@ -1349,7 +1843,38 @@ const OPRReviewPage = () => {
                 );
                 setFeedback(updatedFeedback);
 
-                alert('All changes have been restored');
+                // Save the restored content to database
+                authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({
+                    content: restoredContent,  // Update main content field
+                    htmlContent: restoredContent,  // Update main htmlContent field
+                    customFields: {
+                      ...documentData?.customFields,
+                      editableContent: restoredContent,
+                      htmlContent: restoredContent,
+                      content: restoredContent,
+                      // Update all feedback fields
+                      crmComments: updatedFeedback,
+                      crmFeedback: updatedFeedback,
+                      draftFeedback: updatedFeedback,
+                      commentMatrix: updatedFeedback,
+                      lastEditedAt: new Date().toISOString()
+                    }
+                  })
+                }).then(response => {
+                  if (response.ok) {
+                    console.log('[RESTORE ALL] ✅ Content saved to database');
+                    alert(`All changes have been restored and saved successfully!\n\nRestored: ${restoredCount}/${mergedItems.length} items`);
+                  } else {
+                    console.error('[RESTORE ALL] ❌ Failed to save content');
+                    alert('Changes restored in view but failed to save to database');
+                  }
+                }).catch(error => {
+                  console.error('[RESTORE ALL] ❌ Error saving:', error);
+                  alert(`Error saving restore to database: ${error}`);
+                });
+
                 setShowDetailedHistory(false);
               }
             }}

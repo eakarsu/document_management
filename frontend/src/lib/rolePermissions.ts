@@ -31,7 +31,18 @@ export function getDocumentActionPermissions(roleType: string): DocumentActionPe
   }
 
   // AFDPO has access to all 3 buttons
-  if (normalizedRole === 'afdpo') {
+  // Handle all AFDPO/Publisher role variations (including common typo AFPDO and HQAF Approver)
+  if (
+    normalizedRole === 'afdpo' ||
+    normalizedRole === 'afpdo' ||
+    normalizedRole === 'publisher' ||
+    normalizedRole === 'afdpo_publisher' ||
+    normalizedRole === 'hqaf_approver' ||
+    normalizedRole.includes('publish') ||
+    normalizedRole.includes('afdpo') ||
+    normalizedRole.includes('afpdo') ||
+    normalizedRole.includes('hqaf')
+  ) {
     return {
       canEditDocument: true,
       canAccessReviewCRM: true,

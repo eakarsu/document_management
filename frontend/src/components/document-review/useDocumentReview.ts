@@ -134,12 +134,37 @@ export const useDocumentReview = (documentId: string) => {
             isAIDoc = true;
           }
 
-          if (customFields.crmFeedback && Array.isArray(customFields.crmFeedback)) {
-            comments = customFields.crmFeedback;
-          } else if (customFields.draftFeedback && Array.isArray(customFields.draftFeedback)) {
-            comments = customFields.draftFeedback;
+          console.log('[LOAD FEEDBACK] Document customFields:', {
+            isAIDoc,
+            hasCrmFeedback: !!customFields.crmFeedback,
+            crmFeedbackCount: customFields.crmFeedback?.length || 0,
+            hasDraftFeedback: !!customFields.draftFeedback,
+            draftFeedbackCount: customFields.draftFeedback?.length || 0,
+            customFieldsKeys: Object.keys(customFields)
+          });
+
+          // Load feedback matching save logic:
+          // - AI docs: saved to BOTH crmFeedback and draftFeedback (use crmFeedback or fallback)
+          // - Non-AI docs: saved to draftFeedback ONLY (always use draftFeedback)
+          if (isAIDoc) {
+            // For AI docs, try crmFeedback first, then draftFeedback
+            if (customFields.crmFeedback && Array.isArray(customFields.crmFeedback)) {
+              comments = customFields.crmFeedback;
+              console.log('[LOAD FEEDBACK] AI doc - Loaded from crmFeedback:', comments.length);
+            } else if (customFields.draftFeedback && Array.isArray(customFields.draftFeedback)) {
+              comments = customFields.draftFeedback;
+              console.log('[LOAD FEEDBACK] AI doc - Loaded from draftFeedback:', comments.length);
+            }
+          } else {
+            // For non-AI docs, ONLY use draftFeedback (this is where saves go)
+            if (customFields.draftFeedback && Array.isArray(customFields.draftFeedback)) {
+              comments = customFields.draftFeedback;
+              console.log('[LOAD FEEDBACK] Non-AI doc - Loaded from draftFeedback:', comments.length);
+            }
           }
         }
+
+        console.log('[LOAD FEEDBACK] Final comments count:', comments.length);
 
         setState(prev => ({
           ...prev,
@@ -165,12 +190,25 @@ export const useDocumentReview = (documentId: string) => {
         lastDraftUpdate: new Date().toISOString()
       };
 
+      // Update ALL feedback fields to keep them in sync and clear stale data
       if (state.isAIGeneratedDoc) {
         updateFields.crmFeedback = updatedComments;
         updateFields.draftFeedback = updatedComments;
+        updateFields.crmComments = updatedComments;
+        updateFields.commentMatrix = updatedComments;
       } else {
         updateFields.draftFeedback = updatedComments;
+        updateFields.crmFeedback = updatedComments; // Clear stale crmFeedback
+        updateFields.crmComments = updatedComments; // Clear stale crmComments
+        updateFields.commentMatrix = updatedComments; // Clear stale commentMatrix
       }
+
+      console.log('[SAVE FEEDBACK] Saving comments:', {
+        documentId,
+        count: updatedComments.length,
+        isAIDoc: state.isAIGeneratedDoc,
+        updateFields
+      });
 
       const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
         method: 'PATCH',
@@ -179,9 +217,19 @@ export const useDocumentReview = (documentId: string) => {
         })
       });
 
+      console.log('[SAVE FEEDBACK] Response status:', response.status, response.ok);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[SAVE FEEDBACK] Save successful:', data);
+      } else {
+        const errorText = await response.text();
+        console.error('[SAVE FEEDBACK] Save failed:', response.status, errorText);
+      }
+
       return response.ok;
     } catch (error) {
-      console.error('Error saving comments:', error);
+      console.error('[SAVE FEEDBACK] Error saving comments:', error);
       return false;
     }
   }, [documentId, state.isAIGeneratedDoc]);

@@ -18,12 +18,33 @@ test('Create AFI document using buttons correctly', async ({ page }) => {
     await page.waitForTimeout(500);
   }
 
-  // Helper: Add section using + Add Section button (cursor position determines hierarchy)
-  async function addSection(page, title) {
+  // Helper: Add section using + Add Section button with intelligent radio selection
+  // mode: 'child' (default, go deeper), 'sibling' (same level), or 'parent' (go up one level)
+  async function addSection(page, title, mode = 'child') {
     await page.keyboard.press('End'); // Go to end of current line
     await page.waitForTimeout(300);
     await page.click('button:has-text("+ Add Section")');
     await page.waitForTimeout(800);
+
+    const dialog = page.locator('div[role="dialog"]');
+
+    // Map mode to radio button index
+    // 0 = child (go deeper), 1 = sibling (same level), 2 = parent (go up)
+    const modeToIndex = {
+      'child': 0,
+      'sibling': 1,
+      'parent': 2
+    };
+
+    const radioIndex = modeToIndex[mode] || 0;
+
+    // Click the appropriate radio button
+    const radios = await dialog.locator('input[type="radio"]').all();
+    if (radios[radioIndex]) {
+      await radios[radioIndex].click();
+      await page.waitForTimeout(300);
+      console.log(`    ✓ Selected mode: ${mode} (option ${radioIndex + 1})`);
+    }
 
     const inputs = await page.locator('input[type="text"]').all();
     await inputs[inputs.length - 1].fill(title);
@@ -38,7 +59,7 @@ test('Create AFI document using buttons correctly', async ({ page }) => {
   console.log('🔐 Step 1: Logging in...');
   await page.goto('http://localhost:3000/login');
   await page.fill('input[name="email"]', 'admin@airforce.mil');
-  await page.fill('input[name="password"]', '');
+  await page.fill('input[name="password"]', '#H%YInr8hPVbctB7');
   await page.click('button[type="submit"]');
   await page.waitForURL('**/dashboard');
   console.log('✅ Logged in successfully\n');
@@ -84,17 +105,17 @@ test('Create AFI document using buttons correctly', async ({ page }) => {
   await page.waitForTimeout(2000);
   console.log('✅ Chapter 1 created');
 
-  // 1.1 Standard Operating Procedures
+  // 1.1 Standard Operating Procedures (child of Chapter 1)
   console.log('  Creating 1.1...');
-  await addSection(page, 'Standard Operating Procedures');
+  await addSection(page, 'Standard Operating Procedures'); // default: child
 
-  // 1.1.1 Initial Setup and Pre-flight Checks
+  // 1.1.1 Initial Setup and Pre-flight Checks (child of 1.1)
   console.log('  Creating 1.1.1...');
-  await addSection(page, 'Initial Setup and Pre-flight Checks');
+  await addSection(page, 'Initial Setup and Pre-flight Checks'); // default: child
 
-  // 1.1.1.1 Equipment Inspection
+  // 1.1.1.1 Equipment Inspection (child of 1.1.1)
   console.log('  Creating 1.1.1.1...');
-  await addSection(page, 'Equipment Inspection');
+  await addSection(page, 'Equipment Inspection'); // default: child
 
   // Add paragraphs to 1.1.1.1
   await addParagraph(page, 'Before each flight operation, a thorough inspection of all UAS equipment must be conducted to ensure airworthiness and operational readiness. This inspection involves checking the structural integrity of the airframe, verifying the functionality of control surfaces, and ensuring all components are properly secured.');
@@ -102,40 +123,40 @@ test('Create AFI document using buttons correctly', async ({ page }) => {
 
   // 1.1.1.2 Calibration Procedures (sibling to 1.1.1.1)
   console.log('  Creating 1.1.1.2...');
-  await addSection(page, 'Calibration Procedures');
+  await addSection(page, 'Calibration Procedures', 'sibling');
 
   await addParagraph(page, 'All sensors, navigation systems, and communication equipment must undergo calibration according to manufacturer specifications and Air Force technical orders. Calibration intervals shall not exceed 90 days unless otherwise specified by technical data.');
   await addParagraph(page, 'Calibration records must document the equipment serial number, calibration date, technician identification, and results of all calibration checks. Any equipment failing calibration must be removed from service immediately and tagged accordingly.');
 
-  // 1.1.2 Flight Operations (sibling to 1.1.1)
+  // 1.1.2 Flight Operations (parent level from 1.1.1.x)
   console.log('  Creating 1.1.2...');
-  await addSection(page, 'Flight Operations');
+  await addSection(page, 'Flight Operations', 'parent');
 
-  // 1.1.2.1 Mission Planning
+  // 1.1.2.1 Mission Planning (child of 1.1.2)
   console.log('  Creating 1.1.2.1...');
-  await addSection(page, 'Mission Planning');
+  await addSection(page, 'Mission Planning'); // default: child
 
   await addParagraph(page, 'Comprehensive mission planning must be completed for all UAS operations. Planning considerations include airspace coordination, weather analysis, risk assessment, and contingency procedures. Mission commanders must approve all flight plans prior to execution.');
   await addParagraph(page, 'Flight plans must be filed in accordance with FAA regulations and military airspace procedures. Coordination with air traffic control and adjacent units must be completed not less than 24 hours prior to mission execution.');
 
-  // 1.1.2.2 Flight Execution
+  // 1.1.2.2 Flight Execution (sibling to 1.1.2.1)
   console.log('  Creating 1.1.2.2...');
-  await addSection(page, 'Flight Execution');
+  await addSection(page, 'Flight Execution', 'sibling');
 
   await addParagraph(page, 'During flight operations, pilots must maintain continuous situational awareness and adhere to established procedures. All deviations from the approved flight plan must be coordinated with air traffic control and mission command.');
   await addParagraph(page, 'Emergency procedures must be followed in the event of equipment malfunction or unexpected flight conditions. Abort procedures must be executed immediately upon determination that safe mission completion is not possible.');
 
-  // 1.2 Maintenance Protocols (sibling to 1.1)
+  // 1.2 Maintenance Protocols (parent level from 1.1.2.x)
   console.log('  Creating 1.2...');
-  await addSection(page, 'Maintenance Protocols');
+  await addSection(page, 'Maintenance Protocols', 'parent');
 
-  // 1.2.1 Routine Maintenance
+  // 1.2.1 Routine Maintenance (child of 1.2)
   console.log('  Creating 1.2.1...');
-  await addSection(page, 'Routine Maintenance');
+  await addSection(page, 'Routine Maintenance'); // default: child
 
-  // 1.2.1.1 Scheduled Inspections
+  // 1.2.1.1 Scheduled Inspections (child of 1.2.1)
   console.log('  Creating 1.2.1.1...');
-  await addSection(page, 'Scheduled Inspections');
+  await addSection(page, 'Scheduled Inspections'); // default: child
 
   await addParagraph(page, 'Scheduled maintenance inspections must be performed at intervals specified in applicable technical orders. These inspections include pre-flight, post-flight, periodic, and phase inspections as required by the maintenance schedule.');
   await addParagraph(page, 'Maintenance personnel must document all inspection findings and corrective actions taken. Aircraft forms must be completed accurately and reviewed by quality assurance before returning equipment to operational status.');
@@ -157,57 +178,57 @@ test('Create AFI document using buttons correctly', async ({ page }) => {
   await page.waitForTimeout(2000);
   console.log('✅ Chapter 2 created');
 
-  // 2.1 Risk Management
+  // 2.1 Risk Management (child of Chapter 2)
   console.log('  Creating 2.1...');
-  await addSection(page, 'Risk Management');
+  await addSection(page, 'Risk Management'); // default: child
 
-  // 2.1.1 Hazard Identification
+  // 2.1.1 Hazard Identification (child of 2.1)
   console.log('  Creating 2.1.1...');
-  await addSection(page, 'Hazard Identification');
+  await addSection(page, 'Hazard Identification'); // default: child
 
-  // 2.1.1.1 Risk Assessment Procedures
+  // 2.1.1.1 Risk Assessment Procedures (child of 2.1.1)
   console.log('  Creating 2.1.1.1...');
-  await addSection(page, 'Risk Assessment Procedures');
+  await addSection(page, 'Risk Assessment Procedures'); // default: child
 
   await addParagraph(page, 'All operations must undergo comprehensive risk assessment using the Air Force Risk Management process. Hazards must be identified, assessed, and controlled to an acceptable level before mission execution.');
   await addParagraph(page, 'Risk assessments must consider all phases of the operation including planning, preparation, execution, and recovery. Higher headquarters approval is required for operations assessed as high risk.');
 
-  // 2.1.1.2 Mitigation Strategies
+  // 2.1.1.2 Mitigation Strategies (sibling to 2.1.1.1)
   console.log('  Creating 2.1.1.2...');
-  await addSection(page, 'Mitigation Strategies');
+  await addSection(page, 'Mitigation Strategies', 'sibling');
 
   await addParagraph(page, 'Risk mitigation strategies must be developed for all identified hazards. Control measures must reduce risk to the lowest practical level while maintaining mission effectiveness.');
   await addParagraph(page, 'Residual risk must be formally accepted by the appropriate authority level. Documentation of risk decisions must be maintained for all operations.');
 
-  // 2.1.2 Safety Protocols
+  // 2.1.2 Safety Protocols (parent level from 2.1.1.x)
   console.log('  Creating 2.1.2...');
-  await addSection(page, 'Safety Protocols');
+  await addSection(page, 'Safety Protocols', 'parent');
 
-  // 2.1.2.1 Personal Protective Equipment
+  // 2.1.2.1 Personal Protective Equipment (child of 2.1.2)
   console.log('  Creating 2.1.2.1...');
-  await addSection(page, 'Personal Protective Equipment');
+  await addSection(page, 'Personal Protective Equipment'); // default: child
 
   await addParagraph(page, 'All personnel must wear appropriate personal protective equipment as specified by technical orders and local safety requirements. PPE must be inspected regularly and replaced when damaged or expired.');
   await addParagraph(page, 'Unit commanders are responsible for ensuring adequate PPE inventory and enforcement of wear requirements. Non-compliance with PPE requirements may result in removal from flight operations.');
 
-  // 2.1.2.2 Safety Drills and Training
+  // 2.1.2.2 Safety Drills and Training (sibling to 2.1.2.1)
   console.log('  Creating 2.1.2.2...');
-  await addSection(page, 'Safety Drills and Training');
+  await addSection(page, 'Safety Drills and Training', 'sibling');
 
   await addParagraph(page, 'Emergency response drills must be conducted quarterly to maintain crew proficiency in emergency procedures. Drills must cover all credible emergency scenarios including equipment failure, fire, and personnel injury.');
   await addParagraph(page, 'Training records must document participation in all required drills and exercises. Personnel who miss required training must complete makeup training before returning to operational duties.');
 
-  // 2.2 Compliance and Audits
+  // 2.2 Compliance and Audits (parent level from 2.1.2.x)
   console.log('  Creating 2.2...');
-  await addSection(page, 'Compliance and Audits');
+  await addSection(page, 'Compliance and Audits', 'parent');
 
-  // 2.2.1 Regulatory Compliance
+  // 2.2.1 Regulatory Compliance (child of 2.2)
   console.log('  Creating 2.2.1...');
-  await addSection(page, 'Regulatory Compliance');
+  await addSection(page, 'Regulatory Compliance'); // default: child
 
-  // 2.2.1.1 Adherence to Standards
+  // 2.2.1.1 Adherence to Standards (child of 2.2.1)
   console.log('  Creating 2.2.1.1...');
-  await addSection(page, 'Adherence to Standards');
+  await addSection(page, 'Adherence to Standards'); // default: child
 
   await addParagraph(page, 'All operations must comply with applicable Air Force instructions, Federal Aviation Administration regulations, and Department of Defense directives. Compliance is verified through periodic inspections and audits.');
   await addParagraph(page, 'Non-compliance findings must be addressed immediately with corrective action plans submitted to higher headquarters. Repeat findings may result in operational restrictions or unit decertification.');
@@ -229,42 +250,42 @@ test('Create AFI document using buttons correctly', async ({ page }) => {
   await page.waitForTimeout(2000);
   console.log('✅ Chapter 3 created');
 
-  // 3.1 Communication Protocols
+  // 3.1 Communication Protocols (child of Chapter 3)
   console.log('  Creating 3.1...');
-  await addSection(page, 'Communication Protocols');
+  await addSection(page, 'Communication Protocols'); // default: child
 
-  // 3.1.1 Internal Communications
+  // 3.1.1 Internal Communications (child of 3.1)
   console.log('  Creating 3.1.1...');
-  await addSection(page, 'Internal Communications');
+  await addSection(page, 'Internal Communications'); // default: child
 
-  // 3.1.1.1 Communication Systems
+  // 3.1.1.1 Communication Systems (child of 3.1.1)
   console.log('  Creating 3.1.1.1...');
-  await addSection(page, 'Communication Systems');
+  await addSection(page, 'Communication Systems'); // default: child
 
   await addParagraph(page, 'All operational communications must utilize approved secure communication systems. Communication equipment must be properly maintained and operators must be certified on all systems they operate.');
   await addParagraph(page, 'Backup communication systems must be available for all critical operations. Communication plans must identify primary, alternate, contingency, and emergency communication methods.');
 
-  // 3.1.1.2 Coordination Meetings
+  // 3.1.1.2 Coordination Meetings (sibling to 3.1.1.1)
   console.log('  Creating 3.1.1.2...');
-  await addSection(page, 'Coordination Meetings');
+  await addSection(page, 'Coordination Meetings', 'sibling');
 
   await addParagraph(page, 'Regular coordination meetings must be conducted to ensure effective communication among all operational elements. Meeting schedules must be published and attendance is mandatory for designated personnel.');
   await addParagraph(page, 'Meeting minutes must be documented and distributed to all stakeholders within 24 hours. Action items must be tracked to completion with responsible parties and due dates identified.');
 
-  // 3.1.2 External Communications
+  // 3.1.2 External Communications (parent level from 3.1.1.x)
   console.log('  Creating 3.1.2...');
-  await addSection(page, 'External Communications');
+  await addSection(page, 'External Communications', 'parent');
 
-  // 3.1.2.1 Liaison with External Agencies
+  // 3.1.2.1 Liaison with External Agencies (child of 3.1.2)
   console.log('  Creating 3.1.2.1...');
-  await addSection(page, 'Liaison with External Agencies');
+  await addSection(page, 'Liaison with External Agencies'); // default: child
 
   await addParagraph(page, 'Coordination with external agencies including FAA, local authorities, and joint service partners must be maintained through designated liaison officers. Liaison activities must be documented and reported through command channels.');
   await addParagraph(page, 'Memorandums of agreement or understanding must be established with external agencies as required. These agreements must be reviewed annually and updated as necessary.');
 
-  // 3.1.2.2 Public Relations
+  // 3.1.2.2 Public Relations (sibling to 3.1.2.1)
   console.log('  Creating 3.1.2.2...');
-  await addSection(page, 'Public Relations');
+  await addSection(page, 'Public Relations', 'sibling');
 
   await addParagraph(page, 'All public affairs activities must be coordinated through the wing public affairs office. Personnel are prohibited from discussing operational details with media or public without proper authorization.');
   await addParagraph(page, 'Public affairs guidance must be followed for all community outreach events and media engagements. Operations security must be maintained in all public communications.');

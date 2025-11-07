@@ -20,6 +20,7 @@ import {
   PictureAsPdf as PdfIcon,
   TextFields as TextIcon,
   Code as HtmlIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 
 interface OPRReviewHeaderProps {
@@ -34,6 +35,7 @@ interface OPRReviewHeaderProps {
   onExport: (format: string, includeTrackChanges?: boolean) => void;
   onExportMenuOpen: (event: React.MouseEvent<HTMLElement>) => void;
   onExportMenuClose: () => void;
+  onRefresh?: () => void;
 }
 
 const OPRReviewHeader: React.FC<OPRReviewHeaderProps> = ({
@@ -48,6 +50,7 @@ const OPRReviewHeader: React.FC<OPRReviewHeaderProps> = ({
   onExport,
   onExportMenuOpen,
   onExportMenuClose,
+  onRefresh,
 }) => {
   const router = useRouter();
 
@@ -88,9 +91,19 @@ const OPRReviewHeader: React.FC<OPRReviewHeaderProps> = ({
           onClick={onExportMenuOpen}
           disabled={exporting}
           startIcon={exporting ? <CircularProgress size={20} /> : <DownloadIcon />}
+          sx={{ mr: 2 }}
         >
           Export
         </Button>
+        {onRefresh && (
+          <IconButton
+            color="inherit"
+            onClick={onRefresh}
+            title="Refresh feedback from database"
+          >
+            <RefreshIcon />
+          </IconButton>
+        )}
         <Menu
           anchorEl={exportAnchorEl}
           open={Boolean(exportAnchorEl)}

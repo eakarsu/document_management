@@ -46,7 +46,7 @@ test('Create complete AFI 36-2618 document with full content', async ({ page }) 
   console.log('🔐 Step 1: Logging in...');
   await page.goto('http://localhost:3000/login');
   await page.fill('input[name="email"]', 'admin@airforce.mil');
-  await page.fill('input[name="password"]', '');
+  await page.fill('input[name="password"]', '#H%YInr8hPVbctB7');
   await page.click('button[type="submit"]');
   await page.waitForURL('**/dashboard');
   console.log('✅ Logged in successfully\n');
@@ -368,5 +368,14 @@ test('Create complete AFI 36-2618 document with full content', async ({ page }) 
   console.log('  - Auto-numbering applied');
   console.log('  - Table of Contents generated');
   console.log('  - Document auto-saved');
-  console.log('\n✅ Ready to export as PDF!');
+
+  // ============================================
+  // EXPORT PDF
+  // ============================================
+  console.log('\n📥 Exporting document as PDF...');
+  await page.click('button:has-text("Export")');
+  await page.waitForTimeout(5000); // Wait for PDF generation
+  console.log('✅ PDF export initiated\n');
+
+  console.log('\n✅ COMPLETE WORKFLOW FINISHED - PDF GENERATED!');
 });

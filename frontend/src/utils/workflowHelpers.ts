@@ -74,10 +74,29 @@ export const filterWorkflowActions = (
   if (currentStage.id !== '1') {
     const returnAction = createReturnAction(currentStage, workflowDef);
     if (returnAction) {
-      // Return to previous stage is allowed for the role assigned to current stage
-      const isAllowedForRole = checkActionPermission({ type: 'RETURN' }, currentStage, userRole);
-      returnAction.disabled = !isAllowedForRole;
-      returnAction.disabledReason = !isAllowedForRole ? `This action requires ${currentStage.assignedRole || 'appropriate'} role` : undefined;
+      // Check if this is the last stage
+      const sortedStages = workflowDef.stages.slice().sort((a: any, b: any) => a.order - b.order);
+      const isLastStage = currentStage.id === sortedStages[sortedStages.length - 1]?.id;
+
+      // Check if user has current stage's role permission
+      const hasStagePermission = checkActionPermission({ type: 'RETURN' }, currentStage, userRole);
+
+      // Check if all other action buttons are disabled (user has no permissions for this stage)
+      const allOtherActionsDisabled = actions.length > 0 && actions.every(a => a.disabled);
+
+      if (isLastStage || allOtherActionsDisabled || !hasStagePermission) {
+        // Always enable return button if:
+        // 1. It's the last stage, OR
+        // 2. All other actions are disabled, OR
+        // 3. User doesn't have permission for current stage
+        // This prevents users from being stuck
+        returnAction.disabled = false;
+        returnAction.disabledReason = undefined;
+      } else {
+        // User has permissions at this stage, enforce role-based security for return
+        returnAction.disabled = !hasStagePermission;
+        returnAction.disabledReason = !hasStagePermission ? `This action requires ${currentStage.assignedRole || 'appropriate'} role` : undefined;
+      }
       actions.push(returnAction);
     }
   }
@@ -151,9 +170,9 @@ export const checkActionPermission = (
           (userRoleLower.includes('leader') || userRoleLower.includes('commander') ||
            userRoleLower === 'opr.leadership')) return true;
 
-      // AFDPO matching - handle all AFDPO/Publisher role variations
+      // AFDPO matching - handle all AFDPO/Publisher role variations (including common typo AFPDO)
       if ((roleLower === 'afdpo' || roleLower === 'publisher' || roleLower === 'afdpo_publisher' || roleLower === 'hqaf_approver') &&
-          (userRoleLower.includes('publish') || userRoleLower.includes('afdpo') ||
+          (userRoleLower.includes('publish') || userRoleLower.includes('afdpo') || userRoleLower.includes('afpdo') ||
            userRoleLower === 'hqaf_approver' || userRoleLower.includes('hqaf'))) {
         return true;
       }

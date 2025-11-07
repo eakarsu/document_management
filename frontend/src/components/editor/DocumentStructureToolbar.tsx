@@ -41,8 +41,9 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
   const [sectionLevel, setSectionLevel] = useState(1);
   const [sectionNumber, setSectionNumber] = useState('');
   const [sectionTitle, setSectionTitle] = useState('');
-  const [sectionMode, setSectionMode] = useState<'child' | 'sibling'>('child'); // child = go deeper, sibling = same level
+  const [sectionMode, setSectionMode] = useState<'child' | 'sibling' | 'parent'>('child'); // child = go deeper, sibling = same level, parent = parent level
   const [siblingNumber, setSiblingNumber] = useState(''); // Store the sibling alternative
+  const [parentNumber, setParentNumber] = useState(''); // Store the parent level number
   const [chapterDialog, setChapterDialog] = useState(false);
   const [chapterNumber, setChapterNumber] = useState('');
   const [chapterTitle, setChapterTitle] = useState('');
@@ -126,33 +127,6 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
           break;
         }
       }
-      // Check for P with numbered paragraph (e.g., "1.1.1.1. Text" or "1.1.1.1 General Guidelines")
-      else if (searchNode.tagName === 'P') {
-        const strong = searchNode.querySelector('strong');
-        const pText = searchNode.textContent || '';
-
-        if (strong) {
-          const fullNumber = strong.textContent || '';
-          // Match any number pattern like "1.1.1.1." or "1.1.1.1"
-          const match = fullNumber.match(/^(\d+(?:\.\d+)*)\./);
-          if (match) {
-            const baseNumber = match[1];
-            // Go one level deeper: "1.1.1.1" -> "1.1.1.1.1"
-            sectionNumber = `${baseNumber}.1`;
-            referenceSectionStyle = (searchNode as HTMLElement).getAttribute('style') || '';
-            break;
-          }
-        }
-
-        // Also check if paragraph starts with a number pattern without strong tag
-        const directMatch = pText.match(/^(\d+(?:\.\d+)+)\s/);
-        if (directMatch) {
-          const baseNumber = directMatch[1];
-          sectionNumber = `${baseNumber}.1`;
-          referenceSectionStyle = (searchNode as HTMLElement).getAttribute('style') || '';
-          break;
-        }
-      }
       // Check for H1 chapter
       else if (searchNode.tagName === 'H1') {
         const match = searchNode.textContent?.match(/CHAPTER\s+(\d+)/i);
@@ -196,12 +170,41 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
       }
     }
 
+    // Calculate parent number (remove last segment and increment second-to-last)
+    let calculatedParentNumber = '1.2';
+    let searchNode3 = currentNode.nodeType === 3 ? currentNode.parentElement : currentNode;
+    while (searchNode3) {
+      if (['H3', 'H4', 'H5', 'H6'].includes(searchNode3.tagName)) {
+        const match = searchNode3.textContent?.match(/^(\d+(?:\.\d+)*)\.?\s/);
+        if (match) {
+          const baseNumber = match[1];
+          const parts = baseNumber.split('.');
+          // Need at least 2 levels to go to parent (e.g., 1.1.2.1 has parent 1.1.3)
+          if (parts.length >= 2) {
+            // Remove last segment and increment second-to-last
+            // e.g., 1.1.2.1 → [1, 1, 2, 1] → [1, 1, 2] → [1, 1, 3]
+            const parentParts = parts.slice(0, -1);
+            const parentLastNum = parseInt(parentParts[parentParts.length - 1]);
+            parentParts[parentParts.length - 1] = (parentLastNum + 1).toString();
+            calculatedParentNumber = parentParts.join('.');
+          }
+          break;
+        }
+      }
+      if (searchNode3.previousElementSibling) {
+        searchNode3 = searchNode3.previousElementSibling;
+      } else {
+        searchNode3 = searchNode3.parentElement;
+      }
+    }
+
     // Store reference style for later use when inserting
     (window as any).__sectionReferenceStyle = referenceSectionStyle;
 
     // Open dialog with pre-populated section number (default to child)
     setSectionNumber(sectionNumber); // Child number
     setSiblingNumber(calculatedSiblingNumber); // Sibling number
+    setParentNumber(calculatedParentNumber); // Parent number
     setSectionMode('child'); // Default to child mode
     setSectionTitle('');
     setSectionDialog(true);
@@ -757,10 +760,8 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
             <RadioGroup
               value={sectionMode}
               onChange={(e) => {
-                const mode = e.target.value as 'child' | 'sibling';
+                const mode = e.target.value as 'child' | 'sibling' | 'parent';
                 setSectionMode(mode);
-                // Update section number based on mode
-                setSectionNumber(mode === 'child' ? sectionNumber : siblingNumber);
               }}
             >
               <FormControlLabel
@@ -791,6 +792,20 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
                   </Box>
                 }
               />
+              <FormControlLabel
+                value="parent"
+                control={<Radio />}
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      <strong>Add to parent level (go up one level)</strong>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Creates: {parentNumber} (one level up from current section)
+                    </Typography>
+                  </Box>
+                }
+              />
             </RadioGroup>
           </FormControl>
 
@@ -798,7 +813,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
             fullWidth
             label="Section Number"
             placeholder="e.g., 1.1, 2.3"
-            value={sectionMode === 'child' ? sectionNumber : siblingNumber}
+            value={sectionMode === 'child' ? sectionNumber : sectionMode === 'sibling' ? siblingNumber : parentNumber}
             disabled
             sx={{ mb: 2, bgcolor: 'grey.50' }}
             helperText="Auto-generated based on your selection above"
@@ -817,7 +832,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
           <Button
             variant="contained"
             onClick={() => {
-              const finalNumber = sectionMode === 'child' ? sectionNumber : siblingNumber;
+              const finalNumber = sectionMode === 'child' ? sectionNumber : sectionMode === 'sibling' ? siblingNumber : parentNumber;
 
               if (finalNumber && sectionTitle) {
                 // Get the reference style from the previous section
@@ -829,6 +844,23 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
 
                 // Calculate margin: each level adds 20px (level 1=0px, level 2=20px, level 3=40px, etc.)
                 let marginLeft = (levels - 1) * 20;
+
+                // IMPORTANT: For sibling sections, use the SAME margin as the reference section
+                if (sectionMode === 'sibling' && refStyle) {
+                  const marginMatch = refStyle.match(/margin-left:\s*(\d+)px/);
+                  if (marginMatch) {
+                    marginLeft = parseInt(marginMatch[1]);
+                  }
+                }
+
+                // IMPORTANT: For parent sections, reduce margin by one level (go up)
+                if (sectionMode === 'parent' && refStyle) {
+                  const marginMatch = refStyle.match(/margin-left:\s*(\d+)px/);
+                  if (marginMatch) {
+                    // Parent is one level up, so subtract 20px from reference margin
+                    marginLeft = Math.max(0, parseInt(marginMatch[1]) - 20);
+                  }
+                }
 
                 if (levels === 2) {
                   headingTag = 'h3'; // 1.1, 1.2 (section level)
@@ -842,13 +874,11 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
 
                 // Use margin-left for indentation (matching template sections)
                 const finalStyle = `margin-left: ${marginLeft}px;`;
-                console.log(`Creating section ${finalNumber} with ${levels} levels, indent=${marginLeft}px`);
 
                 const styleAttr = ` style="${finalStyle}"`;
 
                 // Extract margin for the paragraph placeholder
                 const paragraphStyle = ` style="margin-left: ${marginLeft}px;"`;
-                console.log(`Paragraph style: ${paragraphStyle}`);
 
                 // Move cursor to end of document or after current block to avoid nesting
                 const { $to } = editor.state.selection;
@@ -862,6 +892,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
                 setSectionDialog(false);
                 setSectionNumber('');
                 setSiblingNumber('');
+                setParentNumber('');
                 setSectionTitle('');
                 setSectionMode('child');
 

@@ -131,24 +131,31 @@ const DocumentsPage: React.FC = () => {
 
   const confirmBulkDelete = async () => {
     try {
+      // Immediately remove from UI for better UX
+      const deletedIds = Array.from(selectedDocuments);
+      setDocuments(prevDocs => prevDocs.filter(doc => !deletedIds.includes(doc.id)));
+
       // Delete all selected documents from database
-      const deletePromises = Array.from(selectedDocuments).map(docId =>
-        fetch(`/api/documents/${docId}`, {
+      const deletePromises = deletedIds.map(async (docId) => {
+        const response = await fetch(`/api/documents/${docId}`, {
           method: 'DELETE',
           credentials: 'include'
-        })
-      );
+        });
+        return await response.json();
+      });
 
       await Promise.all(deletePromises);
 
       // Refresh documents list
-      const response = await fetch('/api/documents/search', {
-        credentials: 'include'
+      const response = await fetch('/api/documents/search?t=' + Date.now(), {
+        credentials: 'include',
+        cache: 'no-cache'
       });
 
       if (response.ok) {
         const data = await response.json();
-        setDocuments(data.documents || []);
+        const filteredDocs = (data.documents || []).filter((doc: Document) => !deletedIds.includes(doc.id));
+        setDocuments(filteredDocs);
       }
 
       setSelectedDocuments(new Set());

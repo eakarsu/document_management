@@ -17,8 +17,9 @@ export const useOPRDocument = (documentId: string) => {
     try {
       let allFeedback: CRMComment[] = [];
 
-      // Fetch document
-      const docResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`);
+      // Fetch document with cache-busting timestamp to ensure fresh data
+      const timestamp = Date.now();
+      const docResponse = await authTokenService.authenticatedFetch(`/api/documents/${documentId}?_=${timestamp}`);
       if (docResponse.ok) {
         const data = await docResponse.json();
         const doc = data.document || data;
@@ -46,26 +47,42 @@ export const useOPRDocument = (documentId: string) => {
         // Collect feedback from all possible sources
         console.log('Checking for feedback in document customFields:', doc.customFields);
 
+        console.log('[OPR LOAD] Raw customFields feedback data:', {
+          crmComments: doc.customFields?.crmComments?.length || 0,
+          crmFeedback: doc.customFields?.crmFeedback?.length || 0,
+          draftFeedback: doc.customFields?.draftFeedback?.length || 0,
+          commentMatrix: doc.customFields?.commentMatrix?.length || 0
+        });
+
         // Check crmComments
         if (doc.customFields?.crmComments && Array.isArray(doc.customFields.crmComments)) {
           const crmComments = doc.customFields.crmComments.filter((c: any) => c && c.id);
-          console.log('Found crmComments in document:', crmComments.length);
+          console.log('[OPR LOAD] Found crmComments in document:', crmComments.length);
           allFeedback = [...allFeedback, ...crmComments];
         }
 
         // Check crmFeedback field
         if (doc.customFields?.crmFeedback && Array.isArray(doc.customFields.crmFeedback)) {
           const crmFeedback = doc.customFields.crmFeedback.filter((c: any) => c && c.id);
-          console.log('Found crmFeedback in document:', crmFeedback.length);
+          console.log('[OPR LOAD] Found crmFeedback in document:', crmFeedback.length);
           allFeedback = [...allFeedback, ...crmFeedback];
+        }
+
+        // Check draftFeedback field (where most recent feedback is saved)
+        if (doc.customFields?.draftFeedback && Array.isArray(doc.customFields.draftFeedback)) {
+          const draftFeedback = doc.customFields.draftFeedback.filter((c: any) => c && c.id);
+          console.log('[OPR LOAD] Found draftFeedback in document:', draftFeedback.length);
+          allFeedback = [...allFeedback, ...draftFeedback];
         }
 
         // Check commentMatrix field (used by Submit Review)
         if (doc.customFields?.commentMatrix && Array.isArray(doc.customFields.commentMatrix)) {
           const commentMatrix = doc.customFields.commentMatrix.filter((c: any) => c && c.id);
-          console.log('Found commentMatrix in document:', commentMatrix.length);
+          console.log('[OPR LOAD] Found commentMatrix in document:', commentMatrix.length);
           allFeedback = [...allFeedback, ...commentMatrix];
         }
+
+        console.log('[OPR LOAD] Total feedback before deduplication:', allFeedback.length);
 
         // Deduplicate feedback by ID
         if (allFeedback.length > 0) {
@@ -191,8 +208,9 @@ export const useOPRDocument = (documentId: string) => {
   }, [editableContent, feedback, documentData]);
 
   useEffect(() => {
+    console.log('[OPR DOCUMENT] Component mounted/updated, fetching fresh data for:', documentId);
     fetchDocumentAndFeedback();
-  }, [fetchDocumentAndFeedback]);
+  }, [fetchDocumentAndFeedback, documentId]); // Added documentId to ensure refetch on navigation
 
   return {
     documentData,
