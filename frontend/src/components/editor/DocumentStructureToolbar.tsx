@@ -257,7 +257,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
         // First, try to find <strong> tag
         const strong = p.querySelector('strong');
         if (strong) {
-          num = strong.textContent || '';
+          num = (strong.textContent || '').trim(); // Trim to remove trailing spaces
         } else {
           // No strong tag, check if paragraph starts with a number pattern
           // Match patterns like "1.1.1.1.1.1." or "1.1.1.1.1.1 " (with dot or space after)
@@ -302,7 +302,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
 
       paragraphs.forEach((info, idx) => {
         const p = info.element;
-        const newNum = `${prefix}.${idx + 1}.`;
+        const newNum = `${prefix}.${idx + 1}`;
 
         // Get text content without the number
         const textWithoutNumber = p.textContent?.replace(/^[\d.]+\s*/, '').trim() || '';
@@ -407,10 +407,10 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
     } else if (beforeCursor.type === 'section') {
       // After section/heading → go one level deeper (1.1 → 1.1.1, 1.1.1.1 → 1.1.1.1.1)
       const fullNumber = (beforeCursor.fullNumber || '').replace(/\.+$/, ''); // Remove ALL trailing dots
-      const newNumber = `${fullNumber}.1.`;
+      const newNumber = `${fullNumber}.1`;
 
       // Calculate indent based on depth - same formula as sections
-      const parts = newNumber.replace(/\.$/, '').split('.').filter(p => p); // Filter out empty strings
+      const parts = newNumber.split('.').filter(p => p); // Filter out empty strings
       const marginLeft = (parts.length - 1) * 20; // level 1=0px, level 2=20px, level 3=40px, etc.
       const styleAttr = marginLeft > 0 ? ` style="margin-left: ${marginLeft}px;"` : '';
 
@@ -423,7 +423,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
       if (parts.length > 0) {
         // Increment the last part
         parts[parts.length - 1] = (parseInt(parts[parts.length - 1]) + 1).toString();
-        const newNumber = parts.join('.') + '.';
+        const newNumber = parts.join('.');
 
         // Calculate indent based on depth - same formula as sections
         const marginLeft = (parts.length - 1) * 20; // level 1=0px, level 2=20px, level 3=40px, etc.

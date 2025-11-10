@@ -1064,11 +1064,13 @@ router.patch('/:id', authMiddleware,
       // Remove content field if present - it should be stored separately
       const { content, ...documentUpdateData } = updateData;
 
-      logger.info('PATCH document request:', {
+      logger.info('🔵 PATCH document request received:', {
         documentId,
         userId: req.user.id,
         userRole,
-        updateData: Object.keys(documentUpdateData)
+        updateDataKeys: Object.keys(documentUpdateData),
+        hasCustomFields: !!documentUpdateData.customFields,
+        customFieldsKeys: documentUpdateData.customFields ? Object.keys(documentUpdateData.customFields) : []
       });
 
       // Special handling for OPR - they should have full access to their documents
@@ -1095,14 +1097,36 @@ router.patch('/:id', authMiddleware,
         }
 
         // Update the document with all provided fields (except content)
+        // If updating customFields, merge with existing customFields
+        let dataToUpdate = documentUpdateData;
+        if (documentUpdateData.customFields) {
+          dataToUpdate = {
+            ...documentUpdateData,
+            customFields: {
+              ...(existingDoc.customFields as any || {}),
+              ...documentUpdateData.customFields
+            }
+          };
+
+          logger.info('📝 OPR updating customFields:', {
+            documentId,
+            hasEditableContent: !!dataToUpdate.customFields.editableContent,
+            editableContentLength: dataToUpdate.customFields.editableContent?.length || 0,
+            customFieldsKeys: Object.keys(dataToUpdate.customFields)
+          });
+        }
+
         const updatedDoc = await prisma.document.update({
           where: { id: documentId },
-          data: documentUpdateData
+          data: dataToUpdate
         });
 
-        logger.info('Document updated successfully by OPR:', {
+        logger.info('✅ Document updated successfully by OPR:', {
           documentId: updatedDoc.id,
-          title: updatedDoc.title
+          title: updatedDoc.title,
+          customFieldsKeys: Object.keys((updatedDoc.customFields as any) || {}),
+          hasEditableContent: !!(updatedDoc.customFields as any)?.editableContent,
+          editableContentLength: (updatedDoc.customFields as any)?.editableContent?.length || 0
         });
 
         return res.json({
@@ -1156,15 +1180,25 @@ router.patch('/:id', authMiddleware,
         }
 
         // Update only the customFields for feedback
+        const newCustomFields = {
+          ...(existingDoc.customFields as any || {}),
+          ...documentUpdateData.customFields,
+          lastFeedbackAt: new Date().toISOString(),
+          lastFeedbackBy: req.user.email
+        };
+
+        logger.info('📝 Updating customFields:', {
+          documentId,
+          hasEditableContent: !!newCustomFields.editableContent,
+          editableContentLength: newCustomFields.editableContent?.length || 0,
+          feedbackCount: newCustomFields.crmFeedback?.length || 0,
+          customFieldsKeys: Object.keys(newCustomFields)
+        });
+
         const updatedDoc = await prisma.document.update({
           where: { id: documentId },
           data: {
-            customFields: {
-              ...(existingDoc.customFields as any || {}),
-              ...documentUpdateData.customFields,
-              lastFeedbackAt: new Date().toISOString(),
-              lastFeedbackBy: req.user.email
-            },
+            customFields: newCustomFields,
             updatedAt: new Date()
           },
           include: {

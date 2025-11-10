@@ -12,6 +12,7 @@ import { useOPRDocument } from '@/components/opr-review/useOPRDocument';
 import { useOPRReviewHistory } from '@/components/opr-review/useOPRReviewHistory';
 import { useOPRFeedbackHandlers } from '@/components/opr-review/useOPRFeedbackHandlers';
 import { CRMComment, CommentThread } from '@/components/opr-review/types';
+import { autoRenumberParagraphs } from '@/utils/autoRenumberParagraphs';
 import {
   Container,
   Box,
@@ -29,6 +30,7 @@ import {
   ListItemText,
   Divider,
   Chip,
+  Checkbox,
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -82,9 +84,116 @@ const OPRReviewPage = () => {
     setFeedback,
     editableContent,
     setEditableContent,
+    setDocumentContent,
     saveToHistory: historyProps.saveToHistory,
     setDocumentData,
   });
+
+  // AUTO-NUMBER ALL PARAGRAPHS - Fix duplicates and renumber sequentially
+  const autoNumberAllParagraphs = (content: string): string => {
+    console.log('=== AUTO-NUMBERING ALL PARAGRAPHS ===');
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    // Get all elements (headings and paragraphs) to understand structure
+    const allElements = Array.from(tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6, p'));
+
+    // Track all paragraphs with their positions in document
+    interface ParagraphInfo {
+      element: HTMLParagraphElement;
+      position: number;
+      prefix: string;
+      oldNumber: string;
+    }
+
+    const paragraphGroups = new Map<string, ParagraphInfo[]>();
+
+    allElements.forEach((elem, position) => {
+      if (elem.tagName === 'P') {
+        const p = elem as HTMLParagraphElement;
+
+        // Try to find number in multiple ways:
+        // 1. Inside a <strong> tag
+        // 2. At the start of paragraph text (plain text)
+        let num = '';
+        const pText = p.textContent || '';
+
+        // First, try to find <strong> tag
+        const strong = p.querySelector('strong');
+        if (strong) {
+          num = strong.textContent || '';
+        } else {
+          // No strong tag, check if paragraph starts with a number pattern
+          // Match patterns like "1.1.1.1.1.1." or "1.1.1.1.1.1 " (with dot or space after)
+          const textMatch = pText.match(/^(\d+(?:\.\d+){2,})\.?\s/);
+          if (textMatch) {
+            num = textMatch[1] + '.';
+          }
+        }
+
+        if (num) {
+          // Match any valid number pattern (1.1.1, 1.1.1.1, 1.1.1.1.1, etc.)
+          const match = num.match(/^(\d+(?:\.\d+)+)\.?$/);
+          if (match) {
+            const fullNumber = match[1];
+            const parts = fullNumber.split('.');
+
+            // Must have at least 3 levels (e.g., 1.1.1)
+            if (parts.length >= 3 && parts.every(part => /^\d+$/.test(part))) {
+              // Prefix is everything except the last number
+              const prefix = parts.slice(0, -1).join('.');
+
+              if (!paragraphGroups.has(prefix)) {
+                paragraphGroups.set(prefix, []);
+              }
+
+              paragraphGroups.get(prefix)!.push({
+                element: p,
+                position: position,
+                prefix: prefix,
+                oldNumber: num
+              });
+            }
+          }
+        }
+      }
+    });
+
+    // Renumber each group sequentially, ensuring document order
+    let totalRenumbered = 0;
+    paragraphGroups.forEach((paragraphs, prefix) => {
+      // Sort by position to ensure document order
+      paragraphs.sort((a, b) => a.position - b.position);
+
+      paragraphs.forEach((info, idx) => {
+        const p = info.element;
+        const newNum = `${prefix}.${idx + 1}.`;
+
+        // Get text content without the number
+        const textWithoutNumber = p.textContent?.replace(/^[\d.]+\s*/, '').trim() || '';
+
+        // Preserve existing style attributes
+        const existingStyle = p.getAttribute('style') || '';
+
+        // Update paragraph with new number
+        p.innerHTML = `<strong>${newNum}</strong> ${textWithoutNumber}`;
+
+        // Restore style if it existed
+        if (existingStyle) {
+          p.setAttribute('style', existingStyle);
+        }
+
+        if (info.oldNumber !== newNum) {
+          console.log(`✓ Renumbered: ${info.oldNumber} → ${newNum}`);
+          totalRenumbered++;
+        }
+      });
+    });
+
+    console.log(`Auto-numbering complete. Renumbered ${totalRenumbered} paragraphs.`);
+    return tempDiv.innerHTML;
+  };
 
   // Helper function to renumber paragraphs after deletion
   const renumberParagraphs = (content: string, deletedParagraphNum: string): string => {
@@ -176,18 +285,243 @@ const OPRReviewPage = () => {
   const [isGeneratingAIResponse, setIsGeneratingAIResponse] = useState(false);
   const [criticalBlockedItem, setCriticalBlockedItem] = useState<CRMComment | null>(null);
   const [criticalResolution, setCriticalResolution] = useState('');
+  const [showRejectedItems, setShowRejectedItems] = useState(false);
+
+  // Update change markers - use ALL feedback items (not just merged)
+  // This allows Prev/Next navigation through all feedback locations
+  useEffect(() => {
+    const markers = feedback.map((f, idx) => ({
+      id: f.id || `marker-${idx}`,
+      start: 0,
+      end: 0,
+      location: f.changeFrom?.substring(0, 50) || f.changeTo?.substring(0, 50) || '',
+      type: f.changeTo ? 'modification' : 'deletion',
+      changeFrom: f.changeFrom || '',
+      changeTo: f.changeTo || ''
+    }));
+    historyProps.setChangeMarkers(markers);
+  }, [feedback]);
+
+  // Toggle individual feedback selection
+  const toggleFeedbackSelection = (feedbackId: string) => {
+    setFeedback(feedback.map(item =>
+      item.id === feedbackId ? { ...item, selected: !item.selected } : item
+    ));
+  };
+
+  // Handle select all toggle
+  const handleSelectAllToggle = () => {
+    const newSelectAll = !selectAll;
+    setSelectAll(newSelectAll);
+    setFeedback(feedback.map(item => ({ ...item, selected: newSelectAll })));
+  };
 
   // Apply selected feedback
   const applySelectedFeedback = async () => {
-    const selected = feedback.filter((item: any) => item.selected);
-    if (selected.length === 0) {
-      alert('No feedback items selected');
+    const selected = feedback.filter((item: any) => item.selected && (!item.status || item.status === 'pending'));
+
+    let updatedContent = editableContent;
+    let updatedFeedbackList = [...feedback];
+    const newAppliedChanges = new Map(appliedChanges);
+
+    console.log('[APPLY SELECTED] Processing', selected.length, 'feedback items');
+
+    for (const item of selected) {
+      const isDeletion = !item.changeTo || !item.changeTo.trim();
+
+      if (isDeletion && item.changeFrom) {
+        console.log('[APPLY SELECTED] Processing deletion for item:', item.id);
+
+        // Create restoration marker
+        const markerId = `RESTORE_${item.id || Date.now()}`;
+        const encodedText = btoa(encodeURIComponent(item.changeFrom.substring(0, 500)));
+
+        let replacementMade = false;
+        let deletedParagraphHTML = '';
+
+        // Search by TEXT CONTENT (generic approach - same as Apply All and Accept All)
+        const textToFind = item.changeFrom.trim();
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = updatedContent;
+        const allParagraphs = tempDiv.querySelectorAll('p');
+
+        for (const p of allParagraphs) {
+          const pText = p.textContent?.trim() || '';
+          const pTextWithoutNumber = pText.replace(/^\d+(?:\.\d+)*\s*/, '').trim();
+
+          if (pTextWithoutNumber === textToFind || pText.includes(textToFind)) {
+            deletedParagraphHTML = p.outerHTML;
+            const fullHtmlEncoded = btoa(encodeURIComponent(deletedParagraphHTML));
+            const enhancedMarker = `<!--${markerId}:${fullHtmlEncoded}-->`;
+            updatedContent = updatedContent.replace(deletedParagraphHTML, enhancedMarker);
+            replacementMade = true;
+            console.log('[APPLY SELECTED] ✅ Deleted by text content');
+            break;
+          }
+        }
+
+        if (replacementMade) {
+          newAppliedChanges.set(item.id || String(Date.now()), {
+            original: item.changeFrom,
+            changed: '',
+            feedbackId: item.id || ''
+          });
+
+          updatedFeedbackList = updatedFeedbackList.map(f =>
+            f.id === item.id ? { ...f, status: 'merged' as const, selected: false } : f
+          );
+        } else {
+          console.error('[APPLY SELECTED] ❌ Could not find content to delete for item:', item.id);
+        }
+      } else if (item.changeTo && item.changeFrom) {
+        // Text replacement
+        console.log('[APPLY SELECTED] Processing text change for item:', item.id);
+
+        if (updatedContent.includes(item.changeFrom)) {
+          updatedContent = updatedContent.replace(item.changeFrom, item.changeTo);
+
+          newAppliedChanges.set(item.id || String(Date.now()), {
+            original: item.changeFrom,
+            changed: item.changeTo,
+            feedbackId: item.id || ''
+          });
+
+          updatedFeedbackList = updatedFeedbackList.map(f =>
+            f.id === item.id ? { ...f, status: 'merged' as const, selected: false } : f
+          );
+
+          console.log('[APPLY SELECTED] ✅ Applied text change for item:', item.id);
+        } else {
+          console.error('[APPLY SELECTED] ❌ Could not find text to replace:', item.changeFrom.substring(0, 50));
+          alert(`Could not find text to replace. Item: ${item.coordinatorComment?.substring(0, 50)}`);
+        }
+      }
+    }
+
+    // Renumber ALL paragraphs once at the end (not after each deletion)
+    console.log('[APPLY SELECTED] Renumbering all paragraphs...');
+    const tempDiv2 = document.createElement('div');
+    tempDiv2.innerHTML = updatedContent;
+    const allParas = tempDiv2.querySelectorAll('p');
+
+    // Group paragraphs by prefix
+    const paraGroups = new Map<string, Array<{elem: HTMLParagraphElement, idx: number}>>();
+    allParas.forEach((p, idx) => {
+      const strong = p.querySelector('strong');
+      if (strong) {
+        // Extract only the digits and dots, ignore any other characters
+        const rawNum = (strong.textContent || '').trim();
+        const cleanedNum = rawNum.replace(/[^\d.]/g, '').replace(/\.+$/, ''); // Remove trailing periods and non-numeric chars
+        const match = cleanedNum.match(/^(\d+(?:\.\d+)+)$/);
+        if (match) {
+          const parts = match[1].split('.');
+          if (parts.length >= 3) {
+            const prefix = parts.slice(0, -1).join('.');
+            if (!paraGroups.has(prefix)) paraGroups.set(prefix, []);
+            paraGroups.get(prefix)!.push({elem: p as HTMLParagraphElement, idx});
+          }
+        }
+      }
+    });
+
+    // Renumber each group
+    paraGroups.forEach((paras, prefix) => {
+      paras.forEach((info, newIdx) => {
+        const newNum = `${prefix}.${newIdx + 1}`;
+        const text = info.elem.textContent?.replace(/^[\d.\s]+/, '').trim() || '';
+        const style = info.elem.getAttribute('style') || '';
+        info.elem.innerHTML = `<strong>${newNum}</strong> ${text}`;
+        if (style) info.elem.setAttribute('style', style);
+      });
+    });
+
+    updatedContent = tempDiv2.innerHTML;
+    console.log('[APPLY SELECTED] ✅ Renumbering complete');
+
+    // Update state
+    setEditableContent(updatedContent);
+    setDocumentContent(updatedContent);
+    setFeedback(updatedFeedbackList);
+    setAppliedChanges(newAppliedChanges);
+
+    console.log('[APPLY SELECTED] ✅ Updated content, length:', updatedContent.length);
+
+    // Save to database
+    try {
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            editableContent: updatedContent,
+            htmlContent: updatedContent,
+            content: updatedContent
+          }
+        })
+      });
+
+      if (response.ok) {
+        console.log('[APPLY SELECTED] ✅ Saved to database');
+        // Save to history after successful save
+        setTimeout(() => {
+          historyProps.saveToHistory(newAppliedChanges);
+        }, 100);
+      } else {
+        console.error('[APPLY SELECTED] ❌ Failed to save:', response.status);
+      }
+    } catch (error) {
+      console.error('[APPLY SELECTED] ❌ Error saving:', error);
+    }
+  };
+
+  // Restore selected rejected feedback items back to pending
+  const restoreSelectedFeedback = async () => {
+    const selectedRejected = feedback.filter((item: any) => item.selected && item.status === 'rejected');
+
+    if (selectedRejected.length === 0) {
       return;
     }
 
-    for (const item of selected) {
-      feedbackHandlers.setSelectedFeedback(item);
-      await feedbackHandlers.handleMergeFeedback();
+    console.log('[RESTORE SELECTED] Restoring', selectedRejected.length, 'rejected items back to pending');
+
+    // Update feedback list - restore selected rejected items to pending
+    const updatedFeedback = feedback.map(f =>
+      (f.selected && f.status === 'rejected') ? { ...f, status: 'pending' as const, selected: false } : f
+    );
+
+    setFeedback(updatedFeedback);
+
+    // Save to database
+    try {
+      const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          customFields: {
+            crmComments: updatedFeedback,
+            crmFeedback: updatedFeedback,
+            draftFeedback: updatedFeedback,
+            commentMatrix: updatedFeedback,
+            lastModifiedAt: new Date().toISOString(),
+          }
+        })
+      });
+
+      if (response.ok) {
+        console.log('[RESTORE SELECTED] ✅ Restored items saved to database');
+        setDocumentData((prevData: any) => ({
+          ...prevData,
+          customFields: {
+            ...prevData?.customFields,
+            crmComments: updatedFeedback,
+            crmFeedback: updatedFeedback,
+            draftFeedback: updatedFeedback,
+            commentMatrix: updatedFeedback,
+          },
+        }));
+      } else {
+        console.error('[RESTORE SELECTED] ❌ Failed to save restoration');
+      }
+    } catch (error) {
+      console.error('[RESTORE SELECTED] Error:', error);
     }
   };
 
@@ -196,35 +530,83 @@ const OPRReviewPage = () => {
     const applicableFeedback = feedback.filter(f =>
       (!f.status || f.status === 'pending') &&
       f.commentType !== 'C' &&
-      f.changeTo
+      (f.changeTo || f.changeFrom)  // Include deletions (changeFrom only)
     );
-
-    if (applicableFeedback.length === 0) {
-      const criticalCount = feedback.filter(f =>
-        (!f.status || f.status === 'pending') && f.commentType === 'C'
-      ).length;
-
-      if (criticalCount > 0) {
-        alert(`Cannot apply all: ${criticalCount} critical feedback item(s) require manual review.`);
-      } else {
-        alert('No applicable feedback items to apply');
-      }
-      return;
-    }
-
-    if (!confirm(`Apply all ${applicableFeedback.length} non-critical feedback items?`)) {
-      return;
-    }
 
     let updatedContent = editableContent;
     let updatedFeedbackList = [...feedback];
     const newAppliedChanges = new Map(appliedChanges);
 
+    console.log('[APPLY ALL] Processing', applicableFeedback.length, 'feedback items');
+    console.log('[APPLY ALL] Current content length:', updatedContent.length);
+    console.log('[APPLY ALL] Feedback items:', applicableFeedback.map(f => ({
+      id: f.id,
+      changeTo: f.changeTo?.substring(0, 50),
+      changeFrom: f.changeFrom?.substring(0, 50),
+      paragraphNumber: f.paragraphNumber
+    })));
+
     for (const item of applicableFeedback) {
-      if (item.changeFrom && item.changeTo) {
+      const isDeletion = !item.changeTo || !item.changeTo.trim();
+
+      console.log('[APPLY ALL] Item:', item.id, 'isDeletion:', isDeletion, 'hasChangeFrom:', !!item.changeFrom, 'hasChangeTo:', !!item.changeTo);
+
+      if (isDeletion && item.changeFrom) {
+        console.log('[APPLY ALL] Processing deletion for item:', item.id);
+        console.log('[APPLY ALL] changeFrom:', item.changeFrom.substring(0, 100));
+
+        // Auto-detect paragraph number if not set
+        let detectedParagraphNum = item.paragraphNumber;
+        if (!detectedParagraphNum) {
+          const paragraphMatch = item.changeFrom.match(/^(\d+(?:\.\d+)+)/);
+          if (paragraphMatch) {
+            detectedParagraphNum = paragraphMatch[1];
+            console.log('[APPLY ALL] Auto-detected paragraph number:', detectedParagraphNum);
+          }
+        }
+
+        // Create restoration marker
+        const markerId = `RESTORE_${item.id || Date.now()}`;
+        const encodedText = btoa(encodeURIComponent(item.changeFrom.substring(0, 500)));
+
+        let replacementMade = false;
+        let deletedParagraphHTML = '';
+
+        // Search by TEXT CONTENT (generic approach)
+        const textToFind = item.changeFrom.trim();
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = updatedContent;
+        const allParagraphs = tempDiv.querySelectorAll('p');
+
+        for (const p of allParagraphs) {
+          const pText = p.textContent?.trim() || '';
+          const pTextWithoutNumber = pText.replace(/^\d+(?:\.\d+)*\s*/, '').trim();
+
+          if (pTextWithoutNumber === textToFind || pText.includes(textToFind)) {
+            deletedParagraphHTML = p.outerHTML;
+            const fullHtmlEncoded = btoa(encodeURIComponent(deletedParagraphHTML));
+            const enhancedMarker = `<!--${markerId}:${fullHtmlEncoded}-->`;
+            updatedContent = updatedContent.replace(deletedParagraphHTML, enhancedMarker);
+            replacementMade = true;
+            console.log('[APPLY ALL] ✅ Deleted by text content');
+            break;
+          }
+        }
+
+        if (replacementMade) {
+          const changeId = `bulk_${Date.now()}_${item.id}`;
+          newAppliedChanges.set(changeId, {
+            original: item.changeFrom,
+            changed: '',
+            feedbackId: item.id || ''
+          });
+        }
+      } else if (item.changeFrom && item.changeTo) {
+        // Handle modifications/replacements
+        console.log('[APPLY ALL] Processing modification for item:', item.id);
         updatedContent = updatedContent.replace(item.changeFrom, item.changeTo);
 
-        const changeId = `bulk_${Date.now()}`;
+        const changeId = `bulk_${Date.now()}_${item.id}`;
         newAppliedChanges.set(changeId, {
           original: item.changeFrom,
           changed: item.changeTo,
@@ -237,7 +619,48 @@ const OPRReviewPage = () => {
       );
     }
 
+    // Renumber ALL paragraphs once at the end (not after each deletion)
+    console.log('[APPLY ALL] Renumbering all paragraphs...');
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = updatedContent;
+    const allParas = tempDiv.querySelectorAll('p');
+
+    // Group paragraphs by prefix
+    const paraGroups = new Map<string, Array<{elem: HTMLParagraphElement, idx: number}>>();
+    allParas.forEach((p, idx) => {
+      const strong = p.querySelector('strong');
+      if (strong) {
+        // Extract only the digits and dots, ignore any other characters
+        const rawNum = (strong.textContent || '').trim();
+        const cleanedNum = rawNum.replace(/[^\d.]/g, '').replace(/\.+$/, ''); // Remove trailing periods and non-numeric chars
+        const match = cleanedNum.match(/^(\d+(?:\.\d+)+)$/);
+        if (match) {
+          const parts = match[1].split('.');
+          if (parts.length >= 3) {
+            const prefix = parts.slice(0, -1).join('.');
+            if (!paraGroups.has(prefix)) paraGroups.set(prefix, []);
+            paraGroups.get(prefix)!.push({elem: p as HTMLParagraphElement, idx});
+          }
+        }
+      }
+    });
+
+    // Renumber each group
+    paraGroups.forEach((paras, prefix) => {
+      paras.forEach((info, newIdx) => {
+        const newNum = `${prefix}.${newIdx + 1}`;
+        const text = info.elem.textContent?.replace(/^[\d.\s]+/, '').trim() || '';
+        const style = info.elem.getAttribute('style') || '';
+        info.elem.innerHTML = `<strong>${newNum}</strong> ${text}`;
+        if (style) info.elem.setAttribute('style', style);
+      });
+    });
+
+    updatedContent = tempDiv.innerHTML;
+    console.log('[APPLY ALL] ✅ Renumbering complete');
+
     setEditableContent(updatedContent);
+    setDocumentContent(updatedContent);
     setFeedback(updatedFeedbackList);
     setAppliedChanges(newAppliedChanges);
 
@@ -245,9 +668,12 @@ const OPRReviewPage = () => {
       await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
         method: 'PATCH',
         body: JSON.stringify({
+          content: updatedContent,  // Update main content field
+          htmlContent: updatedContent,  // Update main htmlContent field
           customFields: {
             editableContent: updatedContent,
             htmlContent: updatedContent,
+            content: updatedContent,
             // Update ALL feedback fields to keep them in sync
             crmFeedback: updatedFeedbackList,
             draftFeedback: updatedFeedbackList,
@@ -257,9 +683,9 @@ const OPRReviewPage = () => {
           }
         })
       });
-      console.log('[APPLY FEEDBACK] Saved to database - feedback count:', updatedFeedbackList.length);
+      console.log('[APPLY ALL] ✅ Saved to database - feedback count:', updatedFeedbackList.length);
     } catch (error) {
-      console.error('Error saving bulk changes:', error);
+      console.error('[APPLY ALL] ❌ Error saving bulk changes:', error);
     }
 
     historyProps.saveToHistory(newAppliedChanges);
@@ -453,9 +879,10 @@ const OPRReviewPage = () => {
             onRejectAll={feedbackHandlers.handleRejectAllChanges}
             onApplyAll={applyAllFeedback}
             onApplySelected={applySelectedFeedback}
-            onSelectAll={() => setSelectAll(!selectAll)}
+            onSelectAll={handleSelectAllToggle}
             onSaveDocument={handleSaveDocument}
             onShowHistory={() => setShowDetailedHistory(true)}
+            onRestoreSelected={restoreSelectedFeedback}
           />
 
           {/* Spacer to push feedback to bottom */}
@@ -1057,6 +1484,52 @@ const OPRReviewPage = () => {
                   >
                     {selectedFeedback.status === 'rejected' ? 'Rejected' : 'Reject'}
                   </Button>
+
+                  {selectedFeedback.status === 'rejected' && (
+                    <Button
+                      variant="outlined"
+                      color="success"
+                      size="small"
+                      onClick={async () => {
+                        // Restore rejected feedback back to pending
+                        const updatedFeedback = feedback.map(f =>
+                          f.id === selectedFeedback.id
+                            ? { ...f, status: 'pending' as const }
+                            : f
+                        );
+                        setFeedback(updatedFeedback);
+                        setSelectedFeedback({ ...selectedFeedback, status: 'pending' });
+
+                        console.log('[RESTORE] Restoring rejected feedback to pending:', selectedFeedback.id);
+
+                        // Save to database
+                        try {
+                          const response = await authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({
+                              customFields: {
+                                ...documentData?.customFields,
+                                crmComments: updatedFeedback,
+                                crmFeedback: updatedFeedback,
+                                draftFeedback: updatedFeedback,
+                                lastModifiedAt: new Date().toISOString(),
+                              }
+                            })
+                          });
+
+                          if (response.ok) {
+                            console.log('[RESTORE] ✅ Feedback restored to pending and saved to database');
+                          } else {
+                            console.error('[RESTORE] ❌ Failed to save restoration');
+                          }
+                        } catch (error) {
+                          console.error('[RESTORE] Error:', error);
+                        }
+                      }}
+                    >
+                      Restore to Pending
+                    </Button>
+                  )}
                 </Box>
                 ) : null;
               })()}
@@ -1072,10 +1545,29 @@ const OPRReviewPage = () => {
             flexDirection: 'column',
             maxHeight: '350px'
           }}>
-            <Box sx={{ p: 1, bgcolor: 'primary.dark', color: 'white' }}>
+            <Box sx={{ p: 1, bgcolor: 'primary.dark', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="subtitle2">
-                Feedback Items ({feedback.length})
+                Feedback Items ({feedback.filter(f => f.status !== 'rejected').length})
               </Typography>
+              {feedback.filter(f => f.status === 'rejected').length > 0 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    color: 'white',
+                    borderColor: 'white',
+                    fontSize: '0.7rem',
+                    py: 0.25,
+                    '&:hover': {
+                      borderColor: 'white',
+                      bgcolor: 'rgba(255,255,255,0.1)'
+                    }
+                  }}
+                  onClick={() => setShowRejectedItems(!showRejectedItems)}
+                >
+                  {showRejectedItems ? 'Hide' : 'Show'} Rejected ({feedback.filter(f => f.status === 'rejected').length})
+                </Button>
+              )}
             </Box>
             <Box sx={{
               flex: 1,
@@ -1098,20 +1590,30 @@ const OPRReviewPage = () => {
             }}>
               {feedback && feedback.length > 0 ? (
                 <List dense sx={{ py: 0 }}>
-                  {feedback.map((item, index) => (
+                  {feedback.filter(item => showRejectedItems || item.status !== 'rejected').map((item, index) => (
                     <ListItem
                       key={item.id || index}
-                      button
-                      onClick={() => setSelectedFeedback(item)}
-                      selected={selectedFeedback?.id === item.id}
                       sx={{
                         borderBottom: 1,
                         borderColor: 'divider',
                         '&:hover': { bgcolor: 'action.hover' },
-                        '&.Mui-selected': { bgcolor: 'action.selected' }
+                        bgcolor: selectedFeedback?.id === item.id ? 'action.selected' : 'transparent',
                       }}
                     >
+                      <Checkbox
+                        checked={!!item.selected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleFeedbackSelection(item.id);
+                        }}
+                        sx={{
+                          mr: 1,
+                          opacity: item.status === 'rejected' ? 0.6 : 1
+                        }}
+                      />
                       <ListItemText
+                        onClick={() => setSelectedFeedback(item)}
+                        sx={{ cursor: 'pointer' }}
                         primaryTypographyProps={{ component: 'div' }}
                         primary={
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1124,6 +1626,19 @@ const OPRReviewPage = () => {
                                      item.commentType === 'S' ? 'warning' : 'default'}
                               sx={{ minWidth: 24, height: 20 }}
                             />
+                            {item.status === 'rejected' && (
+                              <Chip
+                                label="REJECTED"
+                                size="small"
+                                sx={{
+                                  bgcolor: 'error.main',
+                                  color: 'white',
+                                  height: 20,
+                                  fontSize: '0.65rem',
+                                  fontWeight: 'bold'
+                                }}
+                              />
+                            )}
                             <Typography variant="body2" noWrap>
                               {item.component || 'General'}
                             </Typography>
@@ -1307,15 +1822,35 @@ const OPRReviewPage = () => {
                 let comparisonHtml = editableContent;
 
                 // Apply all merged changes to show strikethrough and replacements
-                feedback.filter(f => f.status === 'merged' && f.changeFrom && f.changeTo).forEach(item => {
-                  const from = item.changeFrom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                  const to = item.changeTo;
+                feedback.filter(f => f.status === 'merged').forEach(item => {
+                  const isDeletion = !item.changeTo || !item.changeTo.trim();
+                  const isAddition = !item.changeFrom || !item.changeFrom.trim();
 
-                  // Replace original text with strikethrough original + highlighted new text
-                  comparisonHtml = comparisonHtml.replace(
-                    new RegExp(to, 'g'),
-                    `<del>${item.changeFrom}</del><ins>${to}</ins>`
-                  );
+                  if (isDeletion && item.changeFrom) {
+                    // For deletions, look for the restoration marker
+                    const markerId = `RESTORE_${item.id}`;
+                    const markerRegex = new RegExp(`<!--${markerId}:([^>]+)-->`, 'g');
+
+                    // Show the deletion as strikethrough at the marker location
+                    comparisonHtml = comparisonHtml.replace(
+                      markerRegex,
+                      `<del style="display: block; margin: 8px 0;">${item.changeFrom}</del>`
+                    );
+                  } else if (isAddition && item.changeTo) {
+                    // For additions, show the new text as highlighted
+                    const to = item.changeTo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    comparisonHtml = comparisonHtml.replace(
+                      new RegExp(to, 'g'),
+                      `<ins>${item.changeTo}</ins>`
+                    );
+                  } else if (item.changeFrom && item.changeTo) {
+                    // For modifications, replace with strikethrough + highlighted new text
+                    const to = item.changeTo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    comparisonHtml = comparisonHtml.replace(
+                      new RegExp(to, 'g'),
+                      `<del>${item.changeFrom}</del><ins>${item.changeTo}</ins>`
+                    );
+                  }
                 });
 
                 return comparisonHtml;
@@ -1503,10 +2038,21 @@ const OPRReviewPage = () => {
                               const paragraphNum = item.paragraphNumber;
                               const parts = paragraphNum.split('.').map(n => parseInt(n));
 
+                              console.log('[RESTORE] Looking for location to insert paragraph:', paragraphNum);
+                              console.log('[RESTORE] Current document has', (editableContent.match(/<p[^>]*>\s*\d+(?:\.\d+)+/g) || []).length, 'numbered paragraphs');
+
+                              // Show all paragraph numbers in document for debugging
+                              const allParaNumbers = editableContent.match(/<p[^>]*>\s*(\d+(?:\.\d+)+)/g);
+                              if (allParaNumbers) {
+                                const numbers = allParaNumbers.map(m => m.match(/(\d+(?:\.\d+)+)/)?.[1]).filter(Boolean);
+                                console.log('[RESTORE] Existing paragraph numbers:', numbers.join(', '));
+                              }
+
                               // Try to find the next paragraph number (e.g., if deleting 1.1.1.2, look for 1.1.1.2 or 1.1.1.3)
                               const nextParts = [...parts];
                               nextParts[nextParts.length - 1]++; // Increment last number
                               const nextNum = nextParts.join('.');
+                              console.log('[RESTORE] Looking for next paragraph:', nextNum);
 
                               // Try to find a paragraph with the next number
                               const nextParagraphRegex = new RegExp(`<p[^>]*>\\s*${nextNum.replace(/\./g, '\\.')}\\b`, 'i');
@@ -1540,9 +2086,15 @@ const OPRReviewPage = () => {
                               }
 
                               if (!restorationMade) {
-                                console.error('[RESTORE] Could not find adjacent paragraphs to insert');
-                                alert('Cannot restore: Unable to find the location to insert the paragraph.\n\nThe paragraph will need to be manually re-added.');
-                                return;
+                                console.warn('[RESTORE] Could not find adjacent paragraphs, trying end of document fallback');
+                                // Ultimate fallback: Just append at the end of the document
+                                const restoredParagraph = item.paragraphNumber
+                                  ? `\n<p>${item.paragraphNumber} ${item.changeFrom}</p>`
+                                  : `\n<p>${item.changeFrom}</p>`;
+                                restored = editableContent + restoredParagraph;
+                                restorationMade = true;
+                                console.log('[RESTORE] Appended paragraph at end of document');
+                                alert('Restored paragraph at the end of the document.\n\nUse the editor\'s Auto button to renumber if needed.');
                               }
                             } else {
                               console.error('[RESTORE] No marker found and no changeTo text available');
@@ -1552,14 +2104,12 @@ const OPRReviewPage = () => {
                           }
 
                           if (restorationMade) {
+                            // Auto-number all paragraphs after restore
+                            restored = autoNumberAllParagraphs(restored);
+                            console.log('[RESTORE] Auto-numbered paragraphs after restore');
+
                             setEditableContent(restored);
                             setDocumentContent(restored);
-
-                            // Note: Paragraph numbers may be out of sequence after restore
-                            // Use the editor's Auto button to renumber if needed
-                            if (item.paragraphNumber) {
-                              console.log('[RESTORE] Paragraph restored. Use editor Auto button to renumber if needed.');
-                            }
 
                             // Update feedback status
                             const updatedFeedback = feedback.map(f =>
@@ -1671,14 +2221,44 @@ const OPRReviewPage = () => {
                             console.log('[REJECT & RESTORE] Restored modification using text replacement');
                           }
 
+                          // Auto-number all paragraphs after restore
+                          restored = autoNumberAllParagraphs(restored);
+                          console.log('[REJECT & RESTORE] Auto-numbered paragraphs after restore');
+
                           setEditableContent(restored);
                           setDocumentContent(restored);
 
-                          // Note: Paragraph numbers may be out of sequence after restore
-                          // Use the editor's Auto button to renumber if needed
-                          if (item.paragraphNumber && restored !== editableContent) {
-                            console.log('[REJECT & RESTORE] Paragraph restored. Use editor Auto button to renumber if needed.');
-                          }
+                          // Save to database
+                          authTokenService.authenticatedFetch(`/api/documents/${documentId}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({
+                              content: restored,  // Update main content field
+                              htmlContent: restored,  // Update main htmlContent field
+                              customFields: {
+                                ...documentData?.customFields,
+                                editableContent: restored,
+                                htmlContent: restored,
+                                content: restored,
+                                // Update all feedback fields
+                                crmComments: updatedFeedback,
+                                crmFeedback: updatedFeedback,
+                                draftFeedback: updatedFeedback,
+                                commentMatrix: updatedFeedback,
+                                lastEditedAt: new Date().toISOString()
+                              }
+                            })
+                          }).then(response => {
+                            if (response.ok) {
+                              console.log('[REJECT & RESTORE] ✅ Saved to database');
+                              alert('Change has been rejected and original text restored successfully!');
+                            } else {
+                              console.error('[REJECT & RESTORE] ❌ Failed to save');
+                              alert('Change rejected and restored in view but failed to save to database');
+                            }
+                          }).catch(error => {
+                            console.error('[REJECT & RESTORE] ❌ Error saving:', error);
+                            alert(`Error saving restore to database: ${error}`);
+                          });
                         }
                       }}
                     >
@@ -1814,8 +2394,20 @@ const OPRReviewPage = () => {
                             restoredCount++;
                             console.log('[RESTORE ALL] Inserted paragraph using previous paragraph method:', item.id);
                           } else {
-                            console.warn('[RESTORE ALL] Could not find adjacent paragraphs for item:', item.id);
+                            // Ultimate fallback: append at end
+                            console.warn('[RESTORE ALL] Could not find adjacent paragraphs, appending at end for item:', item.id);
+                            const restoredParagraph = `\n<p>${paragraphNum} ${item.changeFrom}</p>`;
+                            restoredContent = restoredContent + restoredParagraph;
+                            restoredCount++;
+                            console.log('[RESTORE ALL] Appended paragraph at end of document:', item.id);
                           }
+                        } else {
+                          // Ultimate fallback: append at end
+                          console.warn('[RESTORE ALL] Could not find previous paragraph, appending at end for item:', item.id);
+                          const restoredParagraph = `\n<p>${paragraphNum} ${item.changeFrom}</p>`;
+                          restoredContent = restoredContent + restoredParagraph;
+                          restoredCount++;
+                          console.log('[RESTORE ALL] Appended paragraph at end of document:', item.id);
                         }
                       }
                     }
@@ -1827,15 +2419,12 @@ const OPRReviewPage = () => {
 
                 console.log('[RESTORE ALL] Restored', restoredCount, 'out of', mergedItems.length, 'items');
 
+                // Auto-number all paragraphs after restore
+                restoredContent = autoNumberAllParagraphs(restoredContent);
+                console.log('[RESTORE ALL] Auto-numbered paragraphs after restore');
+
                 setEditableContent(restoredContent);
                 setDocumentContent(restoredContent);
-
-                // Note: Paragraph numbers may be out of sequence after restore
-                // Use the editor's Auto button to renumber if needed
-                const hasParagraphs = mergedItems.some(item => item.paragraphNumber);
-                if (hasParagraphs) {
-                  console.log('[RESTORE ALL] Paragraphs restored. Use editor Auto button to renumber if needed.');
-                }
 
                 // Reset all feedback to pending
                 const updatedFeedback = feedback.map(f =>

@@ -90,6 +90,7 @@ export const useOPRDocument = (documentId: string) => {
             new Map(allFeedback.map(item => [item.id, item])).values()
           );
           console.log(`Total feedback items before deduplication: ${allFeedback.length}, after: ${uniqueFeedback.length}`);
+          console.log('[OPR LOAD] Feedback statuses:', uniqueFeedback.map(f => ({ id: f.id, status: f.status || 'undefined' })));
           setFeedback(uniqueFeedback);
         }
       }

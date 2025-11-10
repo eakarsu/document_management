@@ -94,9 +94,23 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       if (!paragraphNumber) {
         // Look for common paragraph numbering patterns (e.g., "1.", "1.1", "1.1.1", etc.)
         const textBefore = documentContent?.substring(0, documentContent.indexOf(selectedText)) || '';
-        const paragraphMatch = textBefore.match(/(\d+(?:\.\d+)*\.?)\s*[^\d\n]*$/);
-        if (paragraphMatch) {
-          paragraphNumber = paragraphMatch[1].replace(/\.$/, ''); // Remove trailing dot
+
+        // Try multiple patterns to find paragraph numbers
+        // Pattern 1: Look for <strong>1.1.1.4</strong> or <strong>1.1.1.4 </strong> before selected text
+        const strongMatch = textBefore.match(/<strong>(\d+(?:\.\d+)+)\s*<\/strong>\s*[^<]*$/);
+        if (strongMatch) {
+          paragraphNumber = strongMatch[1];
+          console.log('[PARAGRAPH DETECTION] Found via <strong> tag:', paragraphNumber);
+        } else {
+          // Pattern 2: Look for plain number pattern at end of textBefore (at least 3 levels like 1.1.1)
+          const paragraphMatch = textBefore.match(/(\d+(?:\.\d+){2,})\s*[^\d<]*$/);
+          if (paragraphMatch) {
+            paragraphNumber = paragraphMatch[1];
+            console.log('[PARAGRAPH DETECTION] Found via plain text:', paragraphNumber);
+          } else {
+            console.log('[PARAGRAPH DETECTION] Could not detect paragraph number');
+            console.log('[PARAGRAPH DETECTION] Last 200 chars before selection:', textBefore.substring(textBefore.length - 200));
+          }
         }
       }
 

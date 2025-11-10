@@ -377,18 +377,9 @@ export const useDocumentReview = (documentId: string) => {
   }, [state.comments, state.selectedComment, saveComments]);
 
   const handleClearAllFeedback = useCallback(async () => {
-    if (!confirm(`Are you sure you want to clear all ${state.comments.length} feedback items? This action cannot be undone.`)) {
-      return;
-    }
-
     setState(prev => ({ ...prev, comments: [], selectedComment: null }));
-
-    const saved = await saveComments([]);
-    const message = saved
-      ? 'All feedback has been cleared successfully.'
-      : 'Failed to clear feedback from database.';
-    window.alert(message);
-  }, [state.comments.length, saveComments]);
+    await saveComments([]);
+  }, [saveComments]);
 
   const handleSubmitFeedbackToOPR = useCallback(async () => {
     if (state.comments.length === 0) {

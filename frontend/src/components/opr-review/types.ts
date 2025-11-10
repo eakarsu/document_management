@@ -32,6 +32,10 @@ export interface ChangeMarker {
   id: string;
   start: number;
   end: number;
+  location?: string;
+  type?: string;
+  changeFrom?: string;
+  changeTo?: string;
 }
 
 export interface HistoryEntry {

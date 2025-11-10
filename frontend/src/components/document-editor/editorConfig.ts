@@ -106,12 +106,13 @@ const AutoNumbering = Extension.create({
         }
 
         // Try to extract number from the text (works with or without strong tag)
-        let numberMatch = paraText.match(/^(\d+(?:\.\d+)+)\.\s/);
+        // Match all number parts: 1.1.1.1 or 1.1.1 etc
+        let numberMatch = paraText.match(/^(\d+(?:\.\d+)+?)\.?\s/);
         console.log('🔍 Number match (with space):', numberMatch);
 
         if (!numberMatch) {
-          // Try without requiring space after period
-          numberMatch = paraText.match(/^(\d+(?:\.\d+)+)\./);
+          // Try matching number followed by any non-digit
+          numberMatch = paraText.match(/^(\d+(?:\.\d+)+)/);
           console.log('🔍 Number match (no space required):', numberMatch);
         }
 
@@ -157,8 +158,8 @@ const AutoNumbering = Extension.create({
         // Use TipTap's insertContent with HTML
         editor.commands.splitBlock();
 
-        // Insert the numbered paragraph content
-        const htmlContent = `<strong>${nextNumber}.</strong> `;
+        // Insert the numbered paragraph content (no period after number)
+        const htmlContent = `<strong>${nextNumber}</strong> `;
 
         console.log('📝 Inserting HTML content:', htmlContent);
 

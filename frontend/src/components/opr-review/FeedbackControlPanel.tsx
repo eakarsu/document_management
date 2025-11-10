@@ -17,7 +17,6 @@ import {
   Redo as RedoIcon,
   NavigateNext as NextIcon,
   NavigateBefore as PrevIcon,
-  Compare as CompareIcon,
   CheckCircleOutline as AcceptAllIcon,
   HighlightOff as RejectAllIcon,
   TrackChanges as TrackChangesIcon,
@@ -42,7 +41,7 @@ interface FeedbackControlPanelProps {
   onMergeModeChange: (event: React.MouseEvent<HTMLElement>, newMode: 'manual' | 'ai' | 'hybrid' | null) => void;
   onUndo: () => void;
   onRedo: () => void;
-  onCompareToggle: () => void;
+  onCompareToggle?: () => void;
   onNavigatePrevious: () => void;
   onNavigateNext: () => void;
   onAcceptAll: () => void;
@@ -52,6 +51,7 @@ interface FeedbackControlPanelProps {
   onSelectAll: () => void;
   onSaveDocument: () => void;
   onShowHistory: () => void;
+  onRestoreSelected: () => void;
 }
 
 const FeedbackControlPanel: React.FC<FeedbackControlPanelProps> = ({
@@ -77,12 +77,15 @@ const FeedbackControlPanel: React.FC<FeedbackControlPanelProps> = ({
   onSelectAll,
   onSaveDocument,
   onShowHistory,
+  onRestoreSelected,
 }) => {
   const pendingCount = feedback.filter(f => !f.status || f.status === 'pending').length;
+  // Match the same criteria as applyAllFeedback function: include items with changeTo OR changeFrom
   const nonCriticalPendingCount = feedback.filter(
-    f => (!f.status || f.status === 'pending') && f.commentType !== 'C' && f.changeTo
+    f => (!f.status || f.status === 'pending') && f.commentType !== 'C' && (f.changeTo || f.changeFrom)
   ).length;
   const selectedCount = feedback.filter((i: any) => i.selected).length;
+  const selectedRejectedCount = feedback.filter((i: any) => i.selected && i.status === 'rejected').length;
 
   return (
     <Box sx={{ p: 1 }}>
@@ -134,16 +137,6 @@ const FeedbackControlPanel: React.FC<FeedbackControlPanelProps> = ({
             title="Redo last undone change"
           >
             Redo
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<CompareIcon />}
-            onClick={onCompareToggle}
-            color={showComparisonView ? 'primary' : 'inherit'}
-            title="Toggle side-by-side comparison"
-          >
-            Compare
           </Button>
         </Stack>
         <Stack direction="row" spacing={0.5}>
@@ -263,6 +256,19 @@ const FeedbackControlPanel: React.FC<FeedbackControlPanelProps> = ({
             History
           </Button>
         </Grid>
+        {selectedRejectedCount > 0 && (
+          <Grid item xs={12}>
+            <Button
+              fullWidth
+              variant="contained"
+              color="success"
+              size="small"
+              onClick={onRestoreSelected}
+            >
+              Restore Selected ({selectedRejectedCount})
+            </Button>
+          </Grid>
+        )}
       </Grid>
     </Box>
   );
