@@ -183,7 +183,7 @@ export const useOPRReviewHistory = ({
   const scrollToChange = useCallback((marker: ChangeMarker) => {
     // Find and show inline diff: strikethrough original + highlighted new text
     if (marker.location && marker.changeFrom) {
-      const paragraphs = document.querySelectorAll('p');
+      const paragraphs = Array.from(document.querySelectorAll('p'));
       for (const p of paragraphs) {
         const text = p.textContent?.trim() || '';
         if (text.includes(marker.location)) {

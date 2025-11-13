@@ -441,3 +441,4 @@ site/
 
 # Note: Keep .env.example, package.json, and other template files
 # This .gitignore is comprehensive for a full-stack Node.js/TypeScript project
+.aider*

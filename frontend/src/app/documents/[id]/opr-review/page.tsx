@@ -343,7 +343,7 @@ const OPRReviewPage = () => {
         const textToFind = item.changeFrom.trim();
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = updatedContent;
-        const allParagraphs = tempDiv.querySelectorAll('p');
+        const allParagraphs = Array.from(tempDiv.querySelectorAll('p'));
 
         for (const p of allParagraphs) {
           const pText = p.textContent?.trim() || '';
@@ -402,7 +402,7 @@ const OPRReviewPage = () => {
     console.log('[APPLY SELECTED] Renumbering all paragraphs...');
     const tempDiv2 = document.createElement('div');
     tempDiv2.innerHTML = updatedContent;
-    const allParas = tempDiv2.querySelectorAll('p');
+    const allParas = Array.from(tempDiv2.querySelectorAll('p'));
 
     // Group paragraphs by prefix
     const paraGroups = new Map<string, Array<{elem: HTMLParagraphElement, idx: number}>>();
@@ -576,7 +576,7 @@ const OPRReviewPage = () => {
         const textToFind = item.changeFrom.trim();
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = updatedContent;
-        const allParagraphs = tempDiv.querySelectorAll('p');
+        const allParagraphs = Array.from(tempDiv.querySelectorAll('p'));
 
         for (const p of allParagraphs) {
           const pText = p.textContent?.trim() || '';
@@ -623,7 +623,7 @@ const OPRReviewPage = () => {
     console.log('[APPLY ALL] Renumbering all paragraphs...');
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = updatedContent;
-    const allParas = tempDiv.querySelectorAll('p');
+    const allParas = Array.from(tempDiv.querySelectorAll('p'));
 
     // Group paragraphs by prefix
     const paraGroups = new Map<string, Array<{elem: HTMLParagraphElement, idx: number}>>();

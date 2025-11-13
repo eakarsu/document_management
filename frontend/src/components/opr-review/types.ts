@@ -26,6 +26,7 @@ export interface CRMComment {
   resolution: string;
   originatorJustification: string;
   status?: 'pending' | 'accepted' | 'rejected' | 'merged';
+  selected?: boolean;
 }
 
 export interface ChangeMarker {
