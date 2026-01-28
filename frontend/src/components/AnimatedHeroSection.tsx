@@ -96,31 +96,6 @@ export const AnimatedHeroSection: React.FC = () => {
       />
       <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 2 }}>
         <Box>
-          {/* Animated Badge */}
-          <Box
-            sx={{
-              display: 'inline-block',
-              mb: 3,
-              opacity: isVisible ? 1 : 0,
-              transform: isVisible ? 'translateY(0)' : 'translateY(30px)',
-              transition: 'all 0.8s ease-out'
-            }}
-          >
-            <Chip
-              icon={<CheckCircle />}
-              label="Trusted by 500+ Military Organizations"
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                fontWeight: 600,
-                fontSize: '0.9rem',
-                py: 2.5,
-                px: 1,
-                boxShadow: '0 4px 20px rgba(102, 126, 234, 0.4)'
-              }}
-            />
-          </Box>
-
           {/* Main Title with Typing Effect - VISIBLE NOW */}
           <Box sx={{ minHeight: '200px', mb: 3 }}>
             <Typography
@@ -253,77 +228,6 @@ export const AnimatedHeroSection: React.FC = () => {
             ))}
           </Stack>
 
-          {/* Animated CTA Buttons */}
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={2}
-            sx={{
-              opacity: isVisible ? 1 : 0,
-              transform: isVisible ? 'translateY(0)' : 'translateY(30px)',
-              transition: 'all 1s ease-out',
-              transitionDelay: '3.1s'
-            }}
-          >
-            <Button
-              variant="contained"
-              size="large"
-              endIcon={<ArrowForward />}
-              onClick={() => router.push('/dashboard')}
-              sx={{
-                py: 2,
-                px: 4,
-                fontSize: '1.1rem',
-                fontWeight: 600,
-                textTransform: 'none',
-                borderRadius: 3,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 6px 20px 0 rgba(102, 126, 234, 0.6)'
-                }
-              }}
-            >
-              Start 14-Day Free Trial
-            </Button>
-            <Button
-              variant="outlined"
-              size="large"
-              startIcon={<PlayCircle />}
-              sx={{
-                py: 2,
-                px: 4,
-                fontSize: '1.1rem',
-                fontWeight: 600,
-                textTransform: 'none',
-                borderRadius: 3,
-                borderWidth: 2,
-                borderColor: '#667eea',
-                color: '#667eea',
-                '&:hover': {
-                  borderColor: '#764ba2',
-                  color: '#764ba2'
-                }
-              }}
-            >
-              Watch Demo
-            </Button>
-          </Stack>
-
-          {/* Animated Caption */}
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              mt: 2,
-              display: 'block',
-              opacity: isVisible ? 1 : 0,
-              transform: isVisible ? 'translateY(0)' : 'translateY(30px)',
-              transition: 'all 1s ease-out',
-              transitionDelay: '3.3s'
-            }}
-          >
-            ✓ No credit card required  ✓ Setup in 5 minutes  ✓ Cancel anytime
-          </Typography>
         </Box>
       </Container>
     </Box>

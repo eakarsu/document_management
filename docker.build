@@ -6,6 +6,7 @@ docker exec richmond-dms-app npx ts-node /app/backend/prisma/seed-production.ts
 docker cp richmond-dms-app:/app/PRODUCTION_CREDENTIALS.txt ./
 
 520  docker pull eakarsun4/richmond-dms:latest
+  544  docker-compose -f docker-compose.aws.yml down
   521  docker-compose -f docker-compose.aws.yml up -d
   522  docker exec richmond-dms-app npx ts-node /app/backend/prisma/seed-production.ts
   523  rm PRODUCTION_CREDENTIALS.txt

@@ -71,7 +71,6 @@ export const Footer: React.FC = () => {
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               <Link href="/features" style={footerLinkStyle}>Features</Link>
-              <Link href="/pricing" style={footerLinkStyle}>Pricing</Link>
               <Link href="/security" style={footerLinkStyle}>Security</Link>
               <Link href="/roadmap" style={footerLinkStyle}>Roadmap</Link>
               <Link href="/changelog" style={footerLinkStyle}>Changelog</Link>

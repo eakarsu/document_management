@@ -13,7 +13,6 @@ export const Header: React.FC = () => {
   const navItems = [
     { label: 'Home', href: '/' },
     { label: 'Features', href: '/features' },
-    { label: 'Pricing', href: '/pricing' },
     { label: 'About', href: '/about' },
     { label: 'Contact', href: '/contact' },
   ];
@@ -78,20 +77,6 @@ export const Header: React.FC = () => {
                 Request Demo
               </Button>
             </Link>
-            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-              <Button
-                variant="contained"
-                sx={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
-                  }
-                }}
-              >
-                Get Started
-              </Button>
-            </Link>
           </Box>
 
           {/* Mobile Menu Button */}
@@ -143,19 +128,6 @@ export const Header: React.FC = () => {
                   }}
                 >
                   Request Demo
-                </Button>
-              </ListItem>
-            </Link>
-            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-              <ListItem>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  sx={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                  }}
-                >
-                  Get Started
                 </Button>
               </ListItem>
             </Link>

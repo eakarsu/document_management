@@ -283,7 +283,6 @@ const ProfessionalLandingPage: React.FC = () => {
         <MenuItem onClick={() => { setSolutionsMenuAnchor(null); }}>Joint Operations</MenuItem>
       </Menu>
 
-      <Button color="inherit" sx={{ mx: 1, textTransform: 'none' }}>Pricing</Button>
       <Button color="inherit" sx={{ mx: 1, textTransform: 'none' }}>Resources</Button>
       <Button color="inherit" sx={{ mx: 1, textTransform: 'none' }}>Company</Button>
     </>
@@ -342,54 +341,13 @@ const ProfessionalLandingPage: React.FC = () => {
               <IconButton onClick={toggleColorMode} sx={{ mx: 1 }}>
                 {darkMode ? <LightMode /> : <DarkMode />}
               </IconButton>
-              {process.env.NEXT_PUBLIC_ENABLE_LOGIN === 'true' ? (
-                <>
-                  <Button
-                    color="inherit"
-                    sx={{ mx: 1, textTransform: 'none' }}
-                    onClick={() => router.push('/login')}
-                  >
-                    Sign In
-                  </Button>
-                  <Button
-                    variant="contained"
-                    sx={{
-                      ml: 1,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      textTransform: 'none',
-                      px: 3,
-                      py: 1,
-                      borderRadius: 2,
-                      boxShadow: '0 4px 14px 0 rgba(102, 126, 234, 0.4)',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 6px 20px 0 rgba(102, 126, 234, 0.4)',
-                      }
-                    }}
-                    onClick={() => router.push('/login')}
-                  >
-                    Start Free Trial
-                  </Button>
-                </>
-              ) : (
+              {process.env.NEXT_PUBLIC_ENABLE_LOGIN === 'true' && (
                 <Button
-                  variant="contained"
-                  sx={{
-                    ml: 1,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    textTransform: 'none',
-                    px: 3,
-                    py: 1,
-                    borderRadius: 2,
-                    boxShadow: '0 4px 14px 0 rgba(102, 126, 234, 0.4)',
-                    '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: '0 6px 20px 0 rgba(102, 126, 234, 0.4)',
-                    }
-                  }}
-                  onClick={() => router.push('/contact')}
+                  color="inherit"
+                  sx={{ mx: 1, textTransform: 'none' }}
+                  onClick={() => router.push('/login')}
                 >
-                  Request Demo
+                  Sign In
                 </Button>
               )}
             </>
@@ -410,9 +368,6 @@ const ProfessionalLandingPage: React.FC = () => {
       <Box sx={{ py: 10, bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
         <Container maxWidth="lg">
           <Box sx={{ textAlign: 'center', mb: 6 }}>
-            <Typography variant="h3" sx={{ fontWeight: 800, mb: 2 }}>
-              Trusted by Military Personnel Worldwide
-            </Typography>
             <Typography variant="h6" color="text.secondary">
               See how Mission Sync AI is transforming military documentation
             </Typography>
@@ -514,51 +469,6 @@ const ProfessionalLandingPage: React.FC = () => {
                 </Box>
               </Paper>
             </Grid>
-          </Grid>
-        </Container>
-      </Box>
-
-      {/* Stats Section */}
-      <Box ref={statsRef} sx={{ py: 10 }}>
-        <Container maxWidth="lg">
-          <Grid container spacing={4}>
-            {stats.map((stat, index) => (
-              <Grid item xs={6} md={3} key={index}>
-                <Fade in={statsInView} timeout={1000 + index * 200}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 3,
-                      textAlign: 'center',
-                      background: darkMode
-                        ? alpha(theme.palette.grey[800], 0.5)
-                        : 'white',
-                      borderRadius: 3,
-                      transition: 'all 0.3s',
-                      '&:hover': {
-                        transform: 'translateY(-8px)',
-                        boxShadow: '0 12px 24px rgba(102, 126, 234, 0.15)'
-                      }
-                    }}
-                  >
-                    <Box sx={{ color: '#667eea', mb: 2 }}>{stat.icon}</Box>
-                    <Typography variant="h3" fontWeight={800}>
-                      {statsInView && (
-                        <CountUp
-                          end={stat.value}
-                          duration={2.5}
-                          decimals={stat.value % 1 !== 0 ? 1 : 0}
-                          suffix={stat.suffix}
-                        />
-                      )}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      {stat.label}
-                    </Typography>
-                  </Paper>
-                </Fade>
-              </Grid>
-            ))}
           </Grid>
         </Container>
       </Box>
@@ -716,111 +626,6 @@ const ProfessionalLandingPage: React.FC = () => {
         </Container>
       </Box>
 
-      {/* Pricing Section */}
-      <Box sx={{ py: 10 }}>
-        <Container maxWidth="lg">
-          <Box sx={{ textAlign: 'center', mb: 8 }}>
-            <Chip label="PRICING" sx={{ mb: 2 }} />
-            <Typography variant="h2" sx={{ fontWeight: 800, mb: 2 }}>
-              Simple, Transparent Pricing
-            </Typography>
-            <Typography variant="h6" color="text.secondary">
-              Choose the plan that fits your organization's needs
-            </Typography>
-          </Box>
-
-          <Grid container spacing={4} alignItems="stretch">
-            {pricingPlans.map((plan, index) => (
-              <Grid item xs={12} md={4} key={index}>
-                <Card
-                  sx={{
-                    height: '100%',
-                    borderRadius: 3,
-                    position: 'relative',
-                    border: plan.highlighted
-                      ? `2px solid ${theme.palette.primary.main}`
-                      : `1px solid ${alpha(theme.palette.divider, 0.2)}`,
-                    transform: plan.highlighted ? 'scale(1.05)' : 'none',
-                    transition: 'all 0.3s',
-                    '&:hover': {
-                      transform: plan.highlighted ? 'scale(1.08)' : 'translateY(-8px)',
-                      boxShadow: '0 20px 40px rgba(102, 126, 234, 0.15)'
-                    }
-                  }}
-                >
-                  {plan.badge && (
-                    <Chip
-                      label={plan.badge}
-                      color="primary"
-                      sx={{
-                        position: 'absolute',
-                        top: -12,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        fontWeight: 600
-                      }}
-                    />
-                  )}
-                  <CardContent sx={{ p: 4 }}>
-                    <Typography variant="h5" fontWeight={700} gutterBottom>
-                      {plan.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                      {plan.description}
-                    </Typography>
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="h3" fontWeight={800} component="span">
-                        {typeof plan.price === 'number' ? `$${plan.price}` : plan.price}
-                      </Typography>
-                      {plan.period && (
-                        <Typography variant="body1" component="span" color="text.secondary">
-                          {' '}{plan.period}
-                        </Typography>
-                      )}
-                    </Box>
-                    <List>
-                      {plan.features.map((feature, i) => (
-                        <ListItem key={i} disableGutters>
-                          <ListItemIcon sx={{ minWidth: 36 }}>
-                            <CheckCircleOutline color="primary" fontSize="small" />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={feature}
-                            primaryTypographyProps={{ variant: 'body2' }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                    <Button
-                      fullWidth
-                      variant={plan.highlighted ? 'contained' : 'outlined'}
-                      size="large"
-                      onClick={() => router.push('/login')}
-                      sx={{
-                        mt: 3,
-                        py: 1.5,
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        borderRadius: 2,
-                        ...(plan.highlighted && {
-                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                          boxShadow: '0 4px 14px 0 rgba(102, 126, 234, 0.4)',
-                          '&:hover': {
-                            boxShadow: '0 6px 20px 0 rgba(102, 126, 234, 0.4)',
-                          }
-                        })
-                      }}
-                    >
-                      {plan.name === 'Enterprise' ? 'Contact Sales' : 'Start Free Trial'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </Container>
-      </Box>
-
       {/* CTA Section */}
       <Box
         sx={{
@@ -839,29 +644,6 @@ const ProfessionalLandingPage: React.FC = () => {
               Join 500+ military organizations already using Mission Sync AI
             </Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
-              <Button
-                variant="contained"
-                size="large"
-                endIcon={<ArrowForward />}
-                onClick={() => router.push('/login')}
-                sx={{
-                  py: 2,
-                  px: 5,
-                  bgcolor: 'white',
-                  color: '#667eea',
-                  fontSize: '1.1rem',
-                  fontWeight: 700,
-                  borderRadius: 3,
-                  textTransform: 'none',
-                  '&:hover': {
-                    bgcolor: 'rgba(255,255,255,0.9)',
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
-                  }
-                }}
-              >
-                Start Your Free Trial
-              </Button>
               <Button
                 variant="outlined"
                 size="large"
@@ -885,9 +667,6 @@ const ProfessionalLandingPage: React.FC = () => {
                 Schedule Demo
               </Button>
             </Stack>
-            <Typography variant="body2" sx={{ mt: 3, color: 'rgba(255,255,255,0.8)' }}>
-              ✓ No credit card required ✓ 14-day free trial ✓ Cancel anytime
-            </Typography>
           </Box>
         </Container>
       </Box>
