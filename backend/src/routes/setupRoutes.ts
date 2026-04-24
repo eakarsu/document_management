@@ -17,6 +17,14 @@ import distributionRouter from './distribution';
 import usersRouter from './users';
 import attachmentsRouter from './attachments';
 import versionsRouter from './versions';
+import passwordResetsRouter from './password-resets';
+import passwordChangesRouter from './password-changes';
+import csvExportsRouter from './csv-exports';
+import pdfExportsRouter from './pdf-exports';
+import confirmationDialogsRouter from './confirmation-dialogs';
+import emailVerificationsRouter from './email-verifications';
+import passwordStrengthRulesRouter from './password-strength-rules';
+import inputSanitizationRulesRouter from './input-sanitization-rules';
 import { authController } from '../controllers/auth/authController';
 import { versionController } from '../controllers/documents/versionController';
 import { documentController } from '../controllers/documents/documentController';
@@ -81,6 +89,16 @@ export function setupRoutes(app: Express) {
 
   // Version control routes
   app.use('/api', versionsRouter);
+
+  // 8 System Feature routes
+  app.use('/api', passwordResetsRouter);
+  app.use('/api', passwordChangesRouter);
+  app.use('/api', csvExportsRouter);
+  app.use('/api', pdfExportsRouter);
+  app.use('/api', confirmationDialogsRouter);
+  app.use('/api', emailVerificationsRouter);
+  app.use('/api', passwordStrengthRulesRouter);
+  app.use('/api', inputSanitizationRulesRouter);
 
   // Workflow instances routes
   app.use('/api/workflow-instances', workflowInstancesRouter);

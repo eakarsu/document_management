@@ -1,0 +1,2 @@
+in OPR review page, we added refresh after deleting one sentence or whole paaragraph. cqn we run it witouth
+refresh after feedbak apply button clcickoed?

@@ -70,6 +70,11 @@ model User {
   workflow_stage_history                                           workflow_stage_history[]
   assignedTasks                                                    WorkflowTask[]                @relation("TaskAssignee")
   createdTasks                                                     WorkflowTask[]                @relation("TaskCreator")
+  passwordResets                                                   PasswordReset[]
+  passwordChanges                                                  PasswordChange[]
+  csvExports                                                       CsvExport[]
+  pdfExports                                                       PdfExport[]
+  emailVerifications                                               EmailVerification[]
 
   @@map("users")
 }
@@ -1528,4 +1533,244 @@ enum WorkflowStage {
   LEGAL_COORDINATION
   OPR_FINAL_UPDATE
   AFDPO_PUBLISHING
+}
+
+// ========================================
+// 8 SYSTEM FEATURES
+// ========================================
+
+enum PasswordResetStatus {
+  PENDING
+  USED
+  EXPIRED
+  CANCELLED
+}
+
+enum PasswordChangeType {
+  USER_INITIATED
+  ADMIN_RESET
+  FORCED_CHANGE
+  RECOVERY
+}
+
+enum PasswordChangeStatus {
+  SUCCESS
+  FAILED
+  PENDING
+  REVERTED
+}
+
+enum ExportStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum DialogType {
+  INFO
+  WARNING
+  DANGER
+  SUCCESS
+}
+
+enum DialogSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EmailVerificationStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  FAILED
+}
+
+enum PasswordRuleType {
+  MIN_LENGTH
+  MAX_LENGTH
+  REQUIRE_UPPERCASE
+  REQUIRE_LOWERCASE
+  REQUIRE_NUMBER
+  REQUIRE_SPECIAL
+  NO_COMMON_PASSWORDS
+  NO_REPEATING_CHARS
+  NO_SEQUENTIAL_CHARS
+  NO_USERNAME
+  CUSTOM_REGEX
+  MIN_UNIQUE_CHARS
+  NO_DICTIONARY_WORDS
+  EXPIRATION_DAYS
+  HISTORY_CHECK
+}
+
+enum SanitizationRuleType {
+  XSS_PREVENTION
+  SQL_INJECTION
+  HTML_ESCAPE
+  PATH_TRAVERSAL
+  COMMAND_INJECTION
+  LDAP_INJECTION
+  XML_INJECTION
+  EMAIL_VALIDATION
+  URL_VALIDATION
+  FILE_TYPE_CHECK
+  SIZE_LIMIT
+  RATE_LIMIT
+  ENCODING_CHECK
+  CUSTOM_REGEX
+  CONTENT_TYPE_CHECK
+}
+
+model PasswordReset {
+  id        String              @id @default(cuid())
+  email     String
+  token     String              @unique
+  status    PasswordResetStatus @default(PENDING)
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  userId    String?
+  user      User?               @relation(fields: [userId], references: [id])
+
+  @@index([email])
+  @@index([token])
+  @@map("password_resets")
+}
+
+model PasswordChange {
+  id         String               @id @default(cuid())
+  changeType PasswordChangeType
+  status     PasswordChangeStatus @default(PENDING)
+  ipAddress  String?
+  userAgent  String?
+  reason     String?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  userId     String
+  user       User                 @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("password_changes")
+}
+
+model CsvExport {
+  id          String       @id @default(cuid())
+  fileName    String
+  exportType  String
+  recordCount Int          @default(0)
+  fileSize    Int          @default(0)
+  filePath    String?
+  status      ExportStatus @default(PENDING)
+  filters     Json         @default("{}")
+  errorMessage String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("csv_exports")
+}
+
+model PdfExport {
+  id           String       @id @default(cuid())
+  fileName     String
+  exportType   String
+  pageCount    Int          @default(0)
+  fileSize     Int          @default(0)
+  filePath     String?
+  status       ExportStatus @default(PENDING)
+  templateUsed String?
+  orientation  String       @default("portrait")
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("pdf_exports")
+}
+
+model ConfirmationDialog {
+  id           String         @id @default(cuid())
+  name         String         @unique
+  title        String
+  message      String
+  confirmText  String         @default("Confirm")
+  cancelText   String         @default("Cancel")
+  dialogType   DialogType     @default(INFO)
+  severity     DialogSeverity @default(MEDIUM)
+  icon         String?
+  requireInput Boolean        @default(false)
+  inputLabel   String?
+  isActive     Boolean        @default(true)
+  usageCount   Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("confirmation_dialogs")
+}
+
+model EmailVerification {
+  id        String                  @id @default(cuid())
+  email     String
+  token     String                  @unique
+  status    EmailVerificationStatus @default(PENDING)
+  attempts  Int                     @default(0)
+  maxAttempts Int                   @default(3)
+  ipAddress String?
+  expiresAt DateTime
+  verifiedAt DateTime?
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  userId    String?
+  user      User?                   @relation(fields: [userId], references: [id])
+
+  @@index([email])
+  @@index([token])
+  @@map("email_verifications")
+}
+
+model PasswordStrengthRule {
+  id           String           @id @default(cuid())
+  name         String           @unique
+  description  String
+  ruleType     PasswordRuleType
+  value        String
+  isActive     Boolean          @default(true)
+  priority     Int              @default(0)
+  errorMessage String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@map("password_strength_rules")
+}
+
+model InputSanitizationRule {
+  id           String               @id @default(cuid())
+  name         String               @unique
+  description  String
+  ruleType     SanitizationRuleType
+  pattern      String
+  replacement  String               @default("")
+  fieldTarget  String               @default("*")
+  isActive     Boolean              @default(true)
+  priority     Int                  @default(0)
+  blockedCount Int                  @default(0)
+  errorMessage String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@map("input_sanitization_rules")
 }

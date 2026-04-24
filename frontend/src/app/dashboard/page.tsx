@@ -68,7 +68,15 @@ import {
   ExpandLess as ExpandLessIcon,
   ArrowBack as ArrowBackIcon,
   ArrowForward as ArrowForwardIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  LockReset as LockResetIcon,
+  VpnKey as VpnKeyIcon,
+  TableChart as TableChartIcon,
+  PictureAsPdf as PictureAsPdfIcon,
+  QuestionAnswer as QuestionAnswerIcon,
+  MarkEmailRead as MarkEmailReadIcon,
+  Security as SecurityIcon,
+  Shield as ShieldIcon
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import WorkflowTasks from '../../components/WorkflowTasks';
@@ -1109,6 +1117,48 @@ const DashboardPage: React.FC = () => {
           <Box sx={{ mt: 3 }}>
             <ReviewerTasks />
           </Box>
+
+        {/* System Features */}
+        <Box sx={{ mt: 4 }}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SecurityIcon />
+              System Features
+            </Typography>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              {[
+                { label: 'Password Resets', icon: <LockResetIcon sx={{ fontSize: 36 }} />, route: '/password-resets', color: '#e53e3e' },
+                { label: 'Password Changes', icon: <VpnKeyIcon sx={{ fontSize: 36 }} />, route: '/password-changes', color: '#dd6b20' },
+                { label: 'CSV Exports', icon: <TableChartIcon sx={{ fontSize: 36 }} />, route: '/csv-exports', color: '#38a169' },
+                { label: 'PDF Exports', icon: <PictureAsPdfIcon sx={{ fontSize: 36 }} />, route: '/pdf-exports', color: '#d53f8c' },
+                { label: 'Confirmation Dialogs', icon: <QuestionAnswerIcon sx={{ fontSize: 36 }} />, route: '/confirmation-dialogs', color: '#805ad5' },
+                { label: 'Email Verifications', icon: <MarkEmailReadIcon sx={{ fontSize: 36 }} />, route: '/email-verifications', color: '#3182ce' },
+                { label: 'Password Strength', icon: <SecurityIcon sx={{ fontSize: 36 }} />, route: '/password-strength-rules', color: '#2b6cb0' },
+                { label: 'Input Sanitization', icon: <ShieldIcon sx={{ fontSize: 36 }} />, route: '/input-sanitization-rules', color: '#276749' },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} md={3} key={item.route}>
+                  <Card
+                    sx={{
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: 4,
+                      },
+                      borderTop: `3px solid ${item.color}`,
+                    }}
+                    onClick={() => router.push(item.route)}
+                  >
+                    <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                      <Box sx={{ color: item.color, mb: 1 }}>{item.icon}</Box>
+                      <Typography variant="subtitle2">{item.label}</Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        </Box>
 
         {/* System Status */}
         <Box sx={{ mt: 4 }}>

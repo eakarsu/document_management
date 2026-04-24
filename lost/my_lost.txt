@@ -1,0 +1,540 @@
+diff --git a/.gitignore b/.gitignore
+index 27122fd..5fac97b 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -350,6 +350,11 @@ private/
+ # JWT tokens
+ *.jwt
+ 
++# Production credentials (NEVER commit!)
++PRODUCTION_CREDENTIALS.txt
++*CREDENTIALS*.txt
++*credentials*.txt
++
+ # ============================================================================
+ # Backup Files
+ # ============================================================================
+diff --git a/backend/package.json b/backend/package.json
+index b8faca0..8307b4e 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -12,7 +12,9 @@
+     "test:watch": "jest --watch --detectOpenHandles",
+     "lint": "eslint src --ext .ts",
+     "lint:fix": "eslint src --ext .ts --fix",
+-    "typecheck": "tsc --noEmit"
++    "typecheck": "tsc --noEmit",
++    "seed:dev": "ts-node prisma/seed-all.ts",
++    "seed:production": "ts-node prisma/seed-production.ts"
+   },
+   "dependencies": {
+     "@apollo/server": "^4.9.5",
+diff --git a/backend/src/routes/feedbackProcessor.ts b/backend/src/routes/feedbackProcessor.ts
+index daa6dda..a770039 100644
+--- a/backend/src/routes/feedbackProcessor.ts
++++ b/backend/src/routes/feedbackProcessor.ts
+@@ -1,9 +1,197 @@
+-import { Router } from 'express';
++import { Router, Request, Response } from 'express';
++import { PrismaClient } from '@prisma/client';
++import { authMiddleware } from '../middleware/auth';
+ 
+ const router = Router();
++const prisma = new PrismaClient();
+ 
+-// Routes have been modularized into controllers
+-// See src/controllers/ for implementation
+-// Original file backed up as .original.ts
++/**
++ * Get count of critical feedback for a document
++ * GET /api/feedback-processor/feedback/critical/:documentId
++ */
++router.get('/feedback/critical/:documentId', authMiddleware, async (req: Request, res: Response) => {
++  try {
++    const { documentId } = req.params;
++
++    // Get all publishings for this document
++    const publishings = await prisma.document_publishings.findMany({
++      where: { documentId },
++      include: {
++        approvals: {
++          include: {
++            reviewer_feedback: true
++          }
++        }
++      }
++    });
++
++    if (!publishings || publishings.length === 0) {
++      return res.json({ count: 0, documentId });
++    }
++
++    // Count critical feedback across all approvals
++    let criticalCount = 0;
++
++    for (const publishing of publishings) {
++      for (const approval of publishing.approvals) {
++        for (const feedback of approval.reviewer_feedback) {
++          const sectionFeedback = feedback.sectionFeedback as any;
++
++          // Check if feedback is critical (type 'C' or severity 'CRITICAL')
++          if (
++            sectionFeedback?.type === 'C' ||
++            sectionFeedback?.severity === 'CRITICAL'
++          ) {
++            criticalCount++;
++          }
++        }
++      }
++    }
++
++    res.json({
++      count: criticalCount,
++      documentId,
++      message: `Found ${criticalCount} critical feedback item(s)`
++    });
++  } catch (error: any) {
++    console.error('Error fetching critical feedback count:', error);
++    res.status(500).json({
++      error: error.message || 'Failed to fetch critical feedback count',
++      count: 0
++    });
++  }
++});
++
++/**
++ * Get all feedback for a document, optionally grouped by location
++ * GET /api/feedback-processor/document/:documentId/feedback?groupByLocation=true
++ */
++router.get('/document/:documentId/feedback', authMiddleware, async (req: Request, res: Response) => {
++  try {
++    const { documentId } = req.params;
++    const groupByLocation = req.query.groupByLocation === 'true';
++
++    // Get all publishings for this document
++    const publishings = await prisma.document_publishings.findMany({
++      where: { documentId },
++      include: {
++        approvals: {
++          include: {
++            reviewer_feedback: {
++              include: {
++                users: {
++                  select: {
++                    id: true,
++                    firstName: true,
++                    lastName: true,
++                    email: true
++                  }
++                }
++              }
++            }
++          }
++        }
++      }
++    });
++
++    if (!publishings || publishings.length === 0) {
++      return res.json({
++        feedback: [],
++        grouped: [],
++        total: 0,
++        documentId
++      });
++    }
++
++    // Collect all feedback items
++    const allFeedback: any[] = [];
++
++    for (const publishing of publishings) {
++      for (const approval of publishing.approvals) {
++        for (const feedback of approval.reviewer_feedback) {
++          const sectionFeedback = feedback.sectionFeedback as any;
++
++          allFeedback.push({
++            id: feedback.id,
++            approvalId: feedback.approvalId,
++            reviewer: {
++              id: feedback.users.id,
++              name: `${feedback.users.firstName} ${feedback.users.lastName}`,
++              email: feedback.users.email
++            },
++            type: sectionFeedback?.type || feedback.feedbackType,
++            severity: sectionFeedback?.severity || 'NORMAL',
++            page: sectionFeedback?.page || 1,
++            line: sectionFeedback?.line || 0,
++            paragraph: sectionFeedback?.paragraph || null,
++            section: sectionFeedback?.section || null,
++            originalPhrase: sectionFeedback?.originalPhrase || '',
++            improvedPhrase: sectionFeedback?.improvedPhrase || '',
++            comment: feedback.detailedComments || feedback.summary || '',
++            justification: sectionFeedback?.justification || '',
++            poc: sectionFeedback?.poc || null,
++            component: sectionFeedback?.component || null,
++            createdAt: feedback.createdAt,
++            updatedAt: feedback.updatedAt
++          });
++        }
++      }
++    }
++
++    // If grouping by location, organize feedback by page
++    if (groupByLocation) {
++      const grouped = new Map<number, any[]>();
++
++      for (const item of allFeedback) {
++        const page = item.page || 1;
++        if (!grouped.has(page)) {
++          grouped.set(page, []);
++        }
++        grouped.get(page)!.push(item);
++      }
++
++      // Sort feedback within each page by line number
++      for (const [page, items] of grouped.entries()) {
++        items.sort((a, b) => (a.line || 0) - (b.line || 0));
++      }
++
++      // Convert to array format
++      const groupedArray = Array.from(grouped.entries())
++        .map(([page, items]) => ({
++          page,
++          count: items.length,
++          feedback: items
++        }))
++        .sort((a, b) => a.page - b.page);
++
++      return res.json({
++        grouped: groupedArray,
++        total: allFeedback.length,
++        documentId,
++        pages: groupedArray.length
++      });
++    }
++
++    // Return flat list, sorted by page and line
++    allFeedback.sort((a, b) => {
++      if (a.page !== b.page) return a.page - b.page;
++      return (a.line || 0) - (b.line || 0);
++    });
++
++    res.json({
++      feedback: allFeedback,
++      total: allFeedback.length,
++      documentId
++    });
++  } catch (error: any) {
++    console.error('Error fetching document feedback:', error);
++    res.status(500).json({
++      error: error.message || 'Failed to fetch document feedback',
++      feedback: [],
++      grouped: [],
++      total: 0
++    });
++  }
++});
+ 
+ export default router;
+diff --git a/frontend/src/app/documents/[id]/edit/page.tsx b/frontend/src/app/documents/[id]/edit/page.tsx
+index e5e29ee..166e6f8 100644
+--- a/frontend/src/app/documents/[id]/edit/page.tsx
++++ b/frontend/src/app/documents/[id]/edit/page.tsx
+@@ -58,6 +58,8 @@ export default function EditDocumentPage() {
+   const params = useParams();
+   const router = useRouter();
+   const documentId = params?.id as string;
++
++  console.log('📄 Edit Page Loaded - Document ID:', documentId, 'Params:', params);
+   
+   const [documentData, setDocumentData] = useState<Document | null>(null);
+   const [loading, setLoading] = useState(true);
+@@ -194,6 +196,8 @@ export default function EditDocumentPage() {
+   };
+ 
+   const handleCancel = () => {
++    console.log('🔙 Cancel clicked - navigating to document:', documentId);
++    console.log('🔙 Full path:', `/documents/${documentId}`);
+     router.push(`/documents/${documentId}`);
+   };
+ 
+@@ -478,7 +482,7 @@ export default function EditDocumentPage() {
+             <IconButton
+               edge="start"
+               color="inherit"
+-              onClick={() => router.push('/dashboard')}
++              onClick={() => router.push(`/documents/${documentId}`)}
+               sx={{ mr: 2 }}
+             >
+               <ArrowBack />
+diff --git a/frontend/src/app/documents/[id]/page.tsx b/frontend/src/app/documents/[id]/page.tsx
+index b96aaef..f8afb09 100644
+--- a/frontend/src/app/documents/[id]/page.tsx
++++ b/frontend/src/app/documents/[id]/page.tsx
+@@ -149,8 +149,9 @@ const DocumentViewPage: React.FC = () => {
+           <IconButton
+             edge="start"
+             color="inherit"
+-            onClick={() => router.push('/dashboard')}
++            onClick={() => router.back()}
+             sx={{ mr: 2 }}
++            title="Go back to previous page"
+           >
+             <ArrowBack />
+           </IconButton>
+diff --git a/frontend/src/app/documents/[id]/review/page.tsx b/frontend/src/app/documents/[id]/review/page.tsx
+index 374439c..6c4b39b 100644
+--- a/frontend/src/app/documents/[id]/review/page.tsx
++++ b/frontend/src/app/documents/[id]/review/page.tsx
+@@ -50,7 +50,7 @@ const DocumentReviewPage = () => {
+     <>
+       <AppBar position="sticky" color="primary">
+         <Toolbar>
+-          <IconButton edge="start" color="inherit" onClick={() => router.push('/dashboard')}>
++          <IconButton edge="start" color="inherit" onClick={() => router.push(`/documents/${documentId}`)}>
+             <ArrowBack />
+           </IconButton>
+           <DocumentIcon sx={{ ml: 2, mr: 1 }} />
+diff --git a/frontend/src/app/editor/[id]/page.tsx b/frontend/src/app/editor/[id]/page.tsx
+index 60d6e21..a8a63a3 100644
+--- a/frontend/src/app/editor/[id]/page.tsx
++++ b/frontend/src/app/editor/[id]/page.tsx
+@@ -205,6 +205,42 @@ const DocumentEditor: React.FC = () => {
+       hasHeadings: /<h[1-6]/i.test(content)
+     });
+ 
++    // Remove duplicate header/TOC but keep Introduction and Summary
++    if (customFields?.headerHtml) {
++      // Look for the Introduction paragraph - try multiple search terms
++      let introStart = content.indexOf('This Air Force technical manual');
++
++      if (introStart === -1) {
++        introStart = content.indexOf('This technical manual');
++      }
++
++      if (introStart === -1) {
++        // Look for SUMMARY OF CHANGES as fallback
++        introStart = content.indexOf('SUMMARY OF CHANGES');
++      }
++
++      console.log('🔍 EDITOR - Looking for Introduction/Summary, found at index:', introStart);
++
++      if (introStart > 100) { // Only remove if there's content before it (the duplicate header)
++        // Find the opening div or p tag before this text
++        const searchArea = content.substring(Math.max(0, introStart - 300), introStart);
++        let cutIndex = searchArea.lastIndexOf('<div');
++
++        if (cutIndex === -1) {
++          cutIndex = searchArea.lastIndexOf('<p');
++        }
++
++        if (cutIndex !== -1) {
++          const actualCutIndex = Math.max(0, introStart - 300) + cutIndex;
++          console.log('✂️ EDITOR - Removing duplicate header/TOC, keeping from index:', actualCutIndex);
++          content = content.substring(actualCutIndex);
++          console.log('✅ EDITOR - Kept Introduction, Summary, and all content');
++        }
++      } else {
++        console.log('ℹ️ EDITOR - No duplicate detected, keeping all content');
++      }
++    }
++
+     return content;
+   };
+ 
+@@ -215,20 +251,24 @@ const DocumentEditor: React.FC = () => {
+ 
+   // Check if content already has a header
+   const contentHasHeader = () => {
+-    // If we have headerHtml in customFields, the content shouldn't have the header
+-    // So we can always show the formatted header from headerHtml
++    // If we have headerHtml in customFields, we're removing the duplicate header from content
++    // So always return false to show the formatted header from headerHtml
+     const customFields = documentData?.customFields as any;
+     if (customFields?.headerHtml) {
+-      return false; // Always show the header from headerHtml
++      console.log('📌 contentHasHeader: Returning false because we have headerHtml (header removed from content)');
++      return false; // Always show the header from headerHtml since we remove it from content
+     }
+ 
++    // If no headerHtml, check if content has header elements
+     const content = getActualContent();
+-    // Check for Air Force header elements
+-    return content.includes('BY ORDER OF THE') ||
++    const hasHeader = content.includes('BY ORDER OF THE') ||
+            content.includes('DEPARTMENT OF THE AIR FORCE') ||
+            content.includes('air-force-document-header') ||
+            content.includes('classification-header') ||
+            content.includes('UNCLASSIFIED');
++
++    console.log('📌 contentHasHeader: No headerHtml, checking content -', hasHeader ? 'has header' : 'no header');
++    return hasHeader;
+   };
+ 
+   // Initialize TipTap editor
+diff --git a/frontend/src/components/document-review/useDocumentReview.ts b/frontend/src/components/document-review/useDocumentReview.ts
+index 1107845..5082c10 100644
+--- a/frontend/src/components/document-review/useDocumentReview.ts
++++ b/frontend/src/components/document-review/useDocumentReview.ts
+@@ -124,6 +124,42 @@ export const useDocumentReview = (documentId: string) => {
+           `;
+         }
+ 
++        // Remove duplicate header/TOC but keep Introduction and Summary
++        if (doc.customFields?.headerHtml) {
++          // Look for the Introduction paragraph - try multiple search terms
++          let introStart = content.indexOf('This Air Force technical manual');
++
++          if (introStart === -1) {
++            introStart = content.indexOf('This technical manual');
++          }
++
++          if (introStart === -1) {
++            // Look for SUMMARY OF CHANGES as fallback
++            introStart = content.indexOf('SUMMARY OF CHANGES');
++          }
++
++          console.log('🔍 DOCUMENT REVIEW - Looking for Introduction/Summary, found at index:', introStart);
++
++          if (introStart > 100) { // Only remove if there's content before it (the duplicate header)
++            // Find the opening div or p tag before this text
++            const searchArea = content.substring(Math.max(0, introStart - 300), introStart);
++            let cutIndex = searchArea.lastIndexOf('<div');
++
++            if (cutIndex === -1) {
++              cutIndex = searchArea.lastIndexOf('<p');
++            }
++
++            if (cutIndex !== -1) {
++              const actualCutIndex = Math.max(0, introStart - 300) + cutIndex;
++              console.log('✂️ DOCUMENT REVIEW - Removing duplicate header/TOC, keeping from index:', actualCutIndex);
++              content = content.substring(actualCutIndex);
++              console.log('✅ DOCUMENT REVIEW - Kept Introduction, Summary, and all content');
++            }
++          } else {
++            console.log('ℹ️ DOCUMENT REVIEW - No duplicate detected, keeping all content');
++          }
++        }
++
+         let isAIDoc = false;
+         let comments: CRMComment[] = [];
+ 
+diff --git a/frontend/src/components/editor/DocumentStructureToolbar.tsx b/frontend/src/components/editor/DocumentStructureToolbar.tsx
+index 5667446..eefed38 100644
+--- a/frontend/src/components/editor/DocumentStructureToolbar.tsx
++++ b/frontend/src/components/editor/DocumentStructureToolbar.tsx
+@@ -452,7 +452,7 @@ export const DocumentStructureToolbar: React.FC<DocumentStructureToolbarProps> =
+         </Tooltip>
+         <Tooltip title="Auto-Number All Paragraphs - Renumber entire document">
+           <Button
+-            onClick={autoNumberAllParagraphs}
++            onClick={() => autoNumberAllParagraphs()}
+             sx={{
+               bgcolor: 'primary.light',
+               color: 'white',
+diff --git a/frontend/src/components/opr-review/DocumentViewer.tsx b/frontend/src/components/opr-review/DocumentViewer.tsx
+index 38b0581..a85b8ae 100644
+--- a/frontend/src/components/opr-review/DocumentViewer.tsx
++++ b/frontend/src/components/opr-review/DocumentViewer.tsx
+@@ -189,6 +189,14 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
+               </Box>
+             )}
+ 
++            {/* Render formatted header if exists */}
++            {!isEditingDocument && documentData?.customFields?.headerHtml && (
++              <Box
++                sx={{ mb: 3 }}
++                dangerouslySetInnerHTML={{ __html: documentData.customFields.headerHtml }}
++              />
++            )}
++
+             {/* Document Content */}
+             {isEditingDocument ? (
+               <>
+diff --git a/frontend/src/components/opr-review/useOPRDocument.ts b/frontend/src/components/opr-review/useOPRDocument.ts
+index 9a0b9b1..deabdf8 100644
+--- a/frontend/src/components/opr-review/useOPRDocument.ts
++++ b/frontend/src/components/opr-review/useOPRDocument.ts
+@@ -26,20 +26,82 @@ export const useOPRDocument = (documentId: string) => {
+         console.log('Loaded document. Has version history?', !!(doc.customFields?.versionHistory),
+                     'History length:', doc.customFields?.versionHistory?.length || 0);
+ 
+-        // Get content - use editableContent to avoid duplicate header
++        // Get content - CHECK ALL FIELDS to find Introduction/Summary
++        console.log('🔍 OPR REVIEW - Checking all content fields:');
++        console.log('editableContent length:', doc.customFields?.editableContent?.length || 0);
++        console.log('editableContent has "This technical manual"?', doc.customFields?.editableContent?.includes('This technical manual') || false);
++        console.log('editableContent has "SUMMARY OF CHANGES"?', doc.customFields?.editableContent?.includes('SUMMARY OF CHANGES') || false);
++
++        console.log('htmlContent length:', doc.customFields?.htmlContent?.length || 0);
++        console.log('htmlContent has "This technical manual"?', doc.customFields?.htmlContent?.includes('This technical manual') || false);
++        console.log('htmlContent has "SUMMARY OF CHANGES"?', doc.customFields?.htmlContent?.includes('SUMMARY OF CHANGES') || false);
++
++        console.log('content length:', doc.customFields?.content?.length || 0);
++        console.log('content has "This technical manual"?', doc.customFields?.content?.includes('This technical manual') || false);
++        console.log('content has "SUMMARY OF CHANGES"?', doc.customFields?.content?.includes('SUMMARY OF CHANGES') || false);
++
+         let content = '';
++        let contentSource = '';
+         if (doc.customFields?.editableContent) {
+           content = doc.customFields.editableContent;
++          contentSource = 'editableContent';
+         } else if (doc.customFields?.htmlContent) {
+           content = doc.customFields.htmlContent;
++          contentSource = 'htmlContent';
+         } else if (doc.customFields?.content) {
+           content = doc.customFields.content;
++          contentSource = 'content';
+         } else if (doc.content) {
+           content = doc.content;
++          contentSource = 'doc.content';
+         } else if (doc.description) {
+           content = `<p>${doc.description}</p>`;
++          contentSource = 'description';
++        }
++
++        console.log('✅ Using content from:', contentSource);
++        console.log('Content length:', content.length);
++
++        // Remove duplicate header/TOC but keep Introduction and Summary
++        if (doc.customFields?.headerHtml) {
++          // Look for the Introduction paragraph - try multiple search terms
++          let introStart = content.indexOf('This Air Force technical manual');
++
++          if (introStart === -1) {
++            introStart = content.indexOf('This technical manual');
++          }
++
++          if (introStart === -1) {
++            // Look for SUMMARY OF CHANGES as fallback
++            introStart = content.indexOf('SUMMARY OF CHANGES');
++          }
++
++          console.log('🔍 Looking for Introduction/Summary, found at index:', introStart);
++
++          if (introStart > 100) { // Only remove if there's content before it (the duplicate header)
++            // Find the opening div or p tag before this text
++            const searchArea = content.substring(Math.max(0, introStart - 300), introStart);
++            let cutIndex = searchArea.lastIndexOf('<div');
++
++            if (cutIndex === -1) {
++              cutIndex = searchArea.lastIndexOf('<p');
++            }
++
++            if (cutIndex !== -1) {
++              const actualCutIndex = Math.max(0, introStart - 300) + cutIndex;
++              console.log('✂️ Removing duplicate header/TOC, keeping from index:', actualCutIndex);
++              const before = content.substring(0, Math.min(100, actualCutIndex));
++              console.log('Removed content preview:', before);
++              content = content.substring(actualCutIndex);
++              console.log('✅ Kept Introduction, Summary, and all content');
++            }
++          } else {
++            console.log('ℹ️ No duplicate detected (introStart <= 100), keeping all content');
++          }
+         }
+ 
++        console.log('Final content length:', content.length);
++
+         setDocumentContent(content);
+         setEditableContent(content);
+ 

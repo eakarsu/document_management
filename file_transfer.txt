@@ -1,0 +1,35 @@
+ Using scp (Secure Copy)
+
+  # Copy file TO remote server
+  scp -i "food.pem" /path/to/local/file ubuntu@13.218.38.39:/path/to/remote/destination
+
+  # Copy file FROM remote server
+  scp -i "food.pem" ubuntu@13.218.38.39:/path/to/remote/file /path/to/local/destination
+
+  # Copy entire directory (recursive)
+  scp -i "food.pem" -r /path/to/local/directory ubuntu@13.218.38.39:/path/to/remote/destination
+
+  Using rsync (More efficient, especially for large transfers)
+
+  # Sync file or directory TO remote server
+  rsync -avz -e "ssh -i food.pem" /path/to/local/file ubuntu@13.218.38.39:/path/to/remote/destination
+
+  # Sync FROM remote server
+  rsync -avz -e "ssh -i food.pem" ubuntu@13.218.38.39:/path/to/remote/file /path/to/local/destination
+
+  Using sftp (Interactive file transfer)
+
+  sftp -i "food.pem" ubuntu@13.218.38.39
+
+  # Then use commands like:
+  # put /path/to/local/file          (upload)
+  # get /path/to/remote/file         (download)
+  # ls, cd, mkdir, etc.
+
+  Key differences:
+  - scp: Simple, straightforward for single transfers
+  - rsync: Better for syncing directories, resumes interrupted transfers, only transfers differences
+  - sftp: Interactive, good for browsing and multiple operations
+
+  Important: Make sure your PEM file has correct permissions:
+  chmod 400 food.pem

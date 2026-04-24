@@ -1,0 +1,429 @@
+{
+  "id": "hierarchical-distributed-workflow",
+  "name": "Hierarchical Distributed Review Workflow",
+  "version": "2.0.0",
+  "description": "Enhanced Air Force document review with organizational hierarchy, gatekeepers, and ownership transfer",
+  "type": "distributed-hierarchical",
+  "stageCount": 11,
+  "features": {
+    "ownershipTransfer": true,
+    "organizationalGatekeepers": true,
+    "multiLevelApprovals": true,
+    "distributedReview": true
+  },
+  "roles": {
+    "ACTION_OFFICER": {
+      "name": "Action Officer (AO)",
+      "description": "Person responsible for working the draft",
+      "permissions": ["draft:create", "draft:edit", "ownership:transfer", "feedback:incorporate"]
+    },
+    "PCM": {
+      "name": "Program Control Manager",
+      "description": "OPR top-level gatekeeper",
+      "permissions": ["document:approve", "document:reject", "document:forward"]
+    },
+    "FRONT_OFFICE": {
+      "name": "Organization Front Office",
+      "description": "Controls organization inbox and routing",
+      "permissions": ["document:route", "document:approve", "document:distribute"]
+    },
+    "COORDINATOR": {
+      "name": "Coordinator",
+      "description": "Manages distribution to sub-reviewers",
+      "permissions": ["document:distribute", "feedback:collect"]
+    },
+    "SUB_REVIEWER": {
+      "name": "Sub-Reviewer",
+      "description": "Department-level reviewer",
+      "permissions": ["document:review", "feedback:submit"]
+    },
+    "LEGAL": {
+      "name": "Legal Reviewer",
+      "description": "Legal compliance review",
+      "permissions": ["document:review", "compliance:certify"]
+    },
+    "LEADERSHIP": {
+      "name": "OPR Leadership",
+      "description": "Final approval and signature authority",
+      "permissions": ["document:approve", "document:sign", "document:reject"]
+    },
+    "AFDPO": {
+      "name": "AFDPO Publisher",
+      "description": "Final publication authority",
+      "permissions": ["document:publish", "document:archive"]
+    }
+  },
+  "stages": [
+    {
+      "id": "1",
+      "order": 1,
+      "name": "Initial Draft Preparation",
+      "description": "Action Officer creates and refines initial draft",
+      "assignedRole": "ACTION_OFFICER",
+      "actions": [
+        {
+          "id": "create_draft",
+          "name": "Create Draft",
+          "type": "CREATE"
+        },
+        {
+          "id": "transfer_ownership",
+          "name": "Transfer to Another AO",
+          "type": "TRANSFER",
+          "optional": true,
+          "description": "Transfer ownership to another Action Officer if needed"
+        },
+        {
+          "id": "submit_to_pcm",
+          "name": "Submit to PCM",
+          "type": "SUBMIT",
+          "nextStage": "2"
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "order": 2,
+      "name": "PCM Review (OPR Gatekeeper)",
+      "description": "Program Control Manager reviews before coordination",
+      "assignedRole": "PCM",
+      "gatekeeper": true,
+      "actions": [
+        {
+          "id": "review",
+          "name": "Review Document",
+          "type": "REVIEW"
+        },
+        {
+          "id": "approve",
+          "name": "Approve for Coordination",
+          "type": "APPROVE",
+          "nextStage": "3"
+        },
+        {
+          "id": "reject",
+          "name": "Return to AO",
+          "type": "REJECT",
+          "nextStage": "1"
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "order": 3,
+      "name": "First Coordination - Distribution Phase",
+      "description": "Coordinator distributes to organization reviewers",
+      "assignedRole": "COORDINATOR",
+      "actions": [
+        {
+          "id": "distribute_to_reviewers",
+          "name": "Distribute to Reviewers",
+          "type": "DISTRIBUTE",
+          "nextStage": "3.5"
+        }
+      ]
+    },
+    {
+      "id": "3.5",
+      "order": 4,
+      "name": "Review Collection Phase",
+      "description": "Collecting reviews from distributed reviewers",
+      "roles": ["SUB_REVIEWER", "OPR", "COORDINATOR", "ACTION_OFFICER"],
+      "distributed": true,
+      "actions": [
+        {
+          "id": "submit_review",
+          "name": "Submit Review",
+          "type": "REVIEW_SUBMIT",
+          "target": "3.5"
+        },
+        {
+          "id": "complete_reviews",
+          "name": "All Reviews Complete",
+          "type": "COLLECTION_COMPLETE",
+          "nextStage": "4",
+          "condition": "all_reviews_submitted"
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "order": 5,
+      "name": "OPR Feedback Incorporation & Draft Creation",
+      "description": "Action Officer combines all feedback, creates updated draft document, and prepares for second coordination",
+      "assignedRole": "ACTION_OFFICER",
+      "actions": [
+        {
+          "id": "review_feedback",
+          "name": "Review All Feedback",
+          "type": "REVIEW"
+        },
+        {
+          "id": "incorporate_changes",
+          "name": "Incorporate Changes",
+          "type": "EDIT"
+        },
+        {
+          "id": "create_draft_document",
+          "name": "Create Draft Document",
+          "type": "CREATE_DRAFT",
+          "description": "Generate formal draft document incorporating all reviewer feedback"
+        },
+        {
+          "id": "submit_for_second_coordination",
+          "name": "Submit for Second Coordination",
+          "type": "SUBMIT",
+          "nextStage": "5",
+          "description": "Submit updated draft document for second round of review"
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "order": 6,
+      "name": "Second Coordination - Distribution Phase",
+      "description": "Coordinator distributes updated draft document to organization reviewers for second review",
+      "assignedRole": "COORDINATOR",
+      "actions": [
+        {
+          "id": "distribute_draft_to_reviewers",
+          "name": "Distribute Draft to Reviewers",
+          "type": "DISTRIBUTE",
+          "nextStage": "5.5",
+          "description": "Distribute the updated draft document to reviewers for second round of feedback"
+        }
+      ]
+    },
+    {
+      "id": "5.5",
+      "order": 7,
+      "name": "Second Review Collection Phase",
+      "description": "Collecting reviews from distributed reviewers for the draft document",
+      "roles": ["SUB_REVIEWER", "OPR", "COORDINATOR", "ACTION_OFFICER", "LEADERSHIP"],
+      "distributed": true,
+      "actions": [
+        {
+          "id": "submit_draft_review",
+          "name": "Submit Draft Review",
+          "type": "REVIEW_SUBMIT",
+          "target": "5.5",
+          "description": "Submit review feedback for the draft document"
+        },
+        {
+          "id": "complete_draft_reviews",
+          "name": "All Draft Reviews Complete",
+          "type": "COLLECTION_COMPLETE",
+          "nextStage": "6",
+          "condition": "all_reviews_submitted",
+          "description": "Mark when all draft reviews have been collected"
+        }
+      ]
+    },
+    {
+      "id": "6",
+      "order": 8,
+      "name": "Second OPR Feedback Incorporation",
+      "description": "Action Officer incorporates second round feedback",
+      "assignedRole": "ACTION_OFFICER",
+      "actions": [
+        {
+          "id": "review_second_feedback",
+          "name": "Review Second Round Feedback",
+          "type": "REVIEW"
+        },
+        {
+          "id": "final_updates",
+          "name": "Make Final Updates",
+          "type": "EDIT"
+        },
+        {
+          "id": "submit_to_legal",
+          "name": "Submit to Legal",
+          "type": "SUBMIT",
+          "nextStage": "7"
+        }
+      ]
+    },
+    {
+      "id": "7",
+      "order": 9,
+      "name": "Legal Review & Approval",
+      "description": "Legal team reviews for compliance and regulatory issues",
+      "assignedRole": "LEGAL",
+      "actions": [
+        {
+          "id": "legal_review",
+          "name": "Legal Review",
+          "type": "REVIEW"
+        },
+        {
+          "id": "approve",
+          "name": "Approve",
+          "type": "APPROVE",
+          "nextStage": "8"
+        },
+        {
+          "id": "reject",
+          "name": "Reject with Legal Concerns",
+          "type": "REJECT",
+          "nextStage": "6"
+        }
+      ]
+    },
+    {
+      "id": "8",
+      "order": 10,
+      "name": "Post-Legal OPR Update",
+      "description": "Action Officer addresses any legal concerns",
+      "assignedRole": "ACTION_OFFICER",
+      "actions": [
+        {
+          "id": "address_legal",
+          "name": "Address Legal Feedback",
+          "type": "EDIT"
+        },
+        {
+          "id": "prepare_for_leadership",
+          "name": "Prepare for Leadership Review",
+          "type": "PREPARE"
+        },
+        {
+          "id": "submit_to_leadership",
+          "name": "Submit to OPR Leadership",
+          "type": "SUBMIT",
+          "nextStage": "9"
+        }
+      ]
+    },
+    {
+      "id": "9",
+      "order": 11,
+      "name": "OPR Leadership Final Review & Signature",
+      "description": "OPR organization leadership provides final approval and signature",
+      "assignedRole": "LEADERSHIP",
+      "signatureRequired": true,
+      "actions": [
+        {
+          "id": "final_review",
+          "name": "Final Leadership Review",
+          "type": "REVIEW"
+        },
+        {
+          "id": "sign_and_approve",
+          "name": "Sign and Approve",
+          "type": "SIGN",
+          "nextStage": "10"
+        },
+        {
+          "id": "reject",
+          "name": "Reject",
+          "type": "REJECT",
+          "nextStage": "8"
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "order": 12,
+      "name": "AFDPO Publication",
+      "description": "Final publication and distribution",
+      "assignedRole": "AFDPO",
+      "actions": [
+        {
+          "id": "final_check",
+          "name": "Final Publication Check",
+          "type": "REVIEW"
+        },
+        {
+          "id": "publish",
+          "name": "Publish Document",
+          "type": "PUBLISH"
+        },
+        {
+          "id": "archive",
+          "name": "Archive",
+          "type": "ARCHIVE"
+        }
+      ]
+    }
+  ],
+  "transitions": [
+    {
+      "from": "1",
+      "to": "2",
+      "condition": "draft_complete"
+    },
+    {
+      "from": "2",
+      "to": "3",
+      "condition": "pcm_approved"
+    },
+    {
+      "from": "2",
+      "to": "1",
+      "condition": "pcm_rejected"
+    },
+    {
+      "from": "3",
+      "to": "3.5",
+      "condition": "distributed_to_reviewers"
+    },
+    {
+      "from": "3.5",
+      "to": "4",
+      "condition": "all_reviews_complete"
+    },
+    {
+      "from": "4",
+      "to": "5",
+      "condition": "feedback_incorporated"
+    },
+    {
+      "from": "5",
+      "to": "5.5",
+      "condition": "distributed_to_reviewers"
+    },
+    {
+      "from": "5.5",
+      "to": "6",
+      "condition": "all_draft_reviews_complete"
+    },
+    {
+      "from": "6",
+      "to": "7",
+      "condition": "ready_for_legal"
+    },
+    {
+      "from": "7",
+      "to": "8",
+      "condition": "legal_approved"
+    },
+    {
+      "from": "7",
+      "to": "6",
+      "condition": "legal_rejected"
+    },
+    {
+      "from": "8",
+      "to": "9",
+      "condition": "ready_for_leadership"
+    },
+    {
+      "from": "9",
+      "to": "10",
+      "condition": "leadership_signed"
+    },
+    {
+      "from": "9",
+      "to": "8",
+      "condition": "leadership_rejected"
+    }
+  ],
+  "notifications": {
+    "stageComplete": true,
+    "assignmentCreated": true,
+    "documentRejected": true,
+    "ownershipTransferred": true,
+    "gatekeeperApproval": true
+  }
+}
