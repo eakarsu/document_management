@@ -1490,4 +1490,150 @@ router.put('/:id/update-supplement',
   }
 );
 
+// ============================================================
+// POST /api/documents/:id/summarize
+// AI-powered document summarization
+// ============================================================
+router.post('/:id/summarize', async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { force = false } = req.body;
+
+    // Fetch document
+    const document = await prisma.document.findFirst({
+      where: { id, organizationId: req.user.organizationId }
+    });
+
+    if (!document) {
+      return res.status(404).json({ success: false, error: 'Document not found' });
+    }
+
+    // Return cached summary if available and not forcing regeneration
+    const existingFields = (document.customFields as any) || {};
+    if (existingFields.aiSummary && !force) {
+      return res.json({
+        success: true,
+        summary: existingFields.aiSummary,
+        cached: true,
+        documentId: id
+      });
+    }
+
+    // Extract text content from the document
+    let textContent = document.ocrText || document.content || '';
+
+    // If no text content, try reading from storage
+    if (!textContent && document.storagePath) {
+      try {
+        const fs = await import('fs');
+        if (fs.existsSync(document.storagePath)) {
+          const rawBuffer = fs.readFileSync(document.storagePath);
+          // For plain text or known text-based files, convert to string
+          if (
+            document.mimeType?.includes('text') ||
+            document.mimeType === 'application/json'
+          ) {
+            textContent = rawBuffer.toString('utf-8');
+          }
+        }
+      } catch (readErr: any) {
+        logger.warn('Could not read document from storage for summarization', { id, error: readErr.message });
+      }
+    }
+
+    if (!textContent || textContent.trim().length < 50) {
+      return res.status(422).json({
+        success: false,
+        error: 'Document has insufficient text content for summarization. Ensure OCR has been run or document contains extractable text.'
+      });
+    }
+
+    // Truncate to ~8000 chars to stay within token limits
+    const truncatedContent = textContent.length > 8000
+      ? textContent.slice(0, 8000) + '\n...[content truncated for summarization]'
+      : textContent;
+
+    // Call OpenRouter for summarization
+    const axios = await import('axios');
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    if (!openrouterKey) {
+      return res.status(503).json({ success: false, error: 'AI service not configured (OPENROUTER_API_KEY missing)' });
+    }
+
+    const aiResponse = await axios.default.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a document intelligence system. Generate concise, accurate summaries of documents. Include: key points, main purpose, important entities, and action items if any. Format your response as structured markdown.'
+          },
+          {
+            role: 'user',
+            content: `Please summarize the following document titled "${document.title}":\n\n${truncatedContent}`
+          }
+        ],
+        max_tokens: 1500,
+        temperature: 0.3
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${openrouterKey}`,
+          'HTTP-Referer': process.env.APP_URL || 'http://localhost:4000',
+          'X-Title': 'Document Management System',
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    const summaryContent = aiResponse.data?.choices?.[0]?.message?.content;
+    if (!summaryContent) {
+      return res.status(502).json({ success: false, error: 'AI service returned empty summary' });
+    }
+
+    const summaryRecord = {
+      content: summaryContent,
+      model: aiResponse.data?.model,
+      tokensUsed: aiResponse.data?.usage?.total_tokens,
+      generatedAt: new Date().toISOString(),
+      documentLength: textContent.length
+    };
+
+    // Persist summary back to document customFields
+    await prisma.document.update({
+      where: { id },
+      data: {
+        customFields: {
+          ...existingFields,
+          aiSummary: summaryRecord
+        },
+        updatedAt: new Date()
+      }
+    });
+
+    logger.info('Document summarized successfully', {
+      documentId: id,
+      model: summaryRecord.model,
+      tokensUsed: summaryRecord.tokensUsed
+    });
+
+    res.json({
+      success: true,
+      documentId: id,
+      documentTitle: document.title,
+      summary: summaryRecord,
+      cached: false
+    });
+
+  } catch (error: any) {
+    logger.error('Document summarization failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Summarization failed'
+    });
+  }
+});
+
 export { router as documentsRouter };

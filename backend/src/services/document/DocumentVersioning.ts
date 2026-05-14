@@ -49,12 +49,55 @@ export class DocumentVersioning {
       const checksum = calculateChecksum(fileBuffer);
       const fileSize = fileBuffer.length;
 
-      // Calculate diff if there's a previous version
-      let diffData = null;
+      // Calculate binary diff if there's a previous version
+      let diffData: Awaited<ReturnType<typeof this.binaryDiffService.generateBinaryDiff>> | null = null;
       if (latestVersion && latestVersion.storagePath) {
-        // For now, skip diff calculation as it needs Buffer retrieval
-        // TODO: Implement proper diff calculation with file retrieval
-        diffData = null;
+        try {
+          // Retrieve the previous version's file from storage
+          const { StorageService } = await import('../StorageService');
+          const storageService = new StorageService();
+          const oldBuffer = await storageService.downloadDocument(latestVersion.storagePath);
+
+          if (oldBuffer && oldBuffer.length > 0) {
+            this.logger.info('Computing binary diff for new version', {
+              documentId,
+              fromVersion: latestVersion.versionNumber,
+              toVersion: newVersionNumber,
+              oldSize: oldBuffer.length,
+              newSize: fileBuffer.length
+            });
+
+            diffData = await this.binaryDiffService.generateBinaryDiff(
+              oldBuffer,
+              fileBuffer,
+              documentId,
+              newVersionNumber,
+              organizationId
+            );
+
+            this.logger.info('Binary diff computed successfully', {
+              documentId,
+              toVersion: newVersionNumber,
+              diffSize: diffData.diffSize,
+              compressionRatio: diffData.compressionRatio,
+              changeCategory: diffData.changeAnalysis.changeCategory,
+              similarity: diffData.changeAnalysis.similarity
+            });
+          } else {
+            this.logger.warn('Could not retrieve previous version file for diff', {
+              documentId,
+              storagePath: latestVersion.storagePath
+            });
+          }
+        } catch (diffError: any) {
+          // Diff failure is non-fatal — log and continue without diff metrics
+          this.logger.error('Binary diff generation failed (non-fatal), proceeding without diff', {
+            documentId,
+            toVersion: newVersionNumber,
+            error: diffError instanceof Error ? diffError.message : 'Unknown error'
+          });
+          diffData = null;
+        }
       }
 
       // Create new version
@@ -71,13 +114,15 @@ export class DocumentVersioning {
           changeType: input.changeType || 'MINOR',
           documentId,
           createdById: userId,
-          // Binary diff metrics (will be null for now)
-          bytesChanged: null,
-          percentChanged: null,
-          changeCategory: null,
-          similarity: null,
-          diffSize: null,
-          compressionRatio: null
+          // Binary diff metrics (populated if diff was computed)
+          bytesChanged: diffData ? diffData.changeAnalysis.bytesChanged : null,
+          percentChanged: diffData ? diffData.changeAnalysis.percentChanged : null,
+          changeCategory: diffData ? diffData.changeAnalysis.changeCategory : null,
+          similarity: diffData ? diffData.changeAnalysis.similarity : null,
+          diffSize: diffData ? diffData.diffSize : null,
+          compressionRatio: diffData ? diffData.compressionRatio : null,
+          diffPath: diffData ? diffData.diffPath : null,
+          patchAlgorithm: diffData ? diffData.patchAlgorithm : null
         }
       });
 
@@ -172,22 +217,50 @@ export class DocumentVersioning {
       throw new Error('One or both versions not found');
     }
 
-    // Get diff between versions
-    // TODO: Need to retrieve actual file buffers from storage
-    // For now, return a placeholder diff
-    const diff = {
+    // Get diff between versions using actual file buffers
+    let diff: { diffSize: number; diffBuffer: Buffer } = {
       diffSize: 0,
       diffBuffer: Buffer.from([])
     };
 
+    try {
+      const { StorageService } = await import('../StorageService');
+      const storageService = new StorageService();
+
+      const [oldBuffer, newBuffer] = await Promise.all([
+        versionFrom.storagePath ? storageService.downloadDocument(versionFrom.storagePath) : Promise.resolve(null),
+        versionTo.storagePath ? storageService.downloadDocument(versionTo.storagePath) : Promise.resolve(null)
+      ]);
+
+      if (oldBuffer && newBuffer) {
+        diff = await this.binaryDiffService.getDiffBetweenVersions(oldBuffer, newBuffer);
+        this.logger.info('Live binary diff computed for comparison', {
+          documentId,
+          fromVersion,
+          toVersion,
+          diffSize: diff.diffSize
+        });
+      }
+    } catch (diffError: any) {
+      this.logger.warn('Could not compute live diff for comparison (returning metadata only)', {
+        documentId,
+        fromVersion,
+        toVersion,
+        error: diffError instanceof Error ? diffError.message : 'Unknown error'
+      });
+    }
+
     return {
       from: versionFrom,
       to: versionTo,
-      diff,
+      diff: { diffSize: diff.diffSize },
       changesSummary: {
         bytesChanged: versionTo.bytesChanged,
         percentChanged: versionTo.percentChanged,
-        changeCategory: versionTo.changeCategory
+        changeCategory: versionTo.changeCategory,
+        similarity: versionTo.similarity,
+        diffPath: versionTo.diffPath,
+        compressionRatio: versionTo.compressionRatio
       }
     };
   }

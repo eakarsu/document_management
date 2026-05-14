@@ -50,7 +50,8 @@ export class OpenRouterService {
 
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY || '';
-    this.defaultModel = 'anthropic/claude-3.5-sonnet';
+    // Cross-project standardized model. Override via env for cost tuning.
+    this.defaultModel = process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022';
     
     this.client = axios.create({
       baseURL: 'https://openrouter.ai/api/v1',
@@ -65,10 +66,10 @@ export class OpenRouterService {
     // Model priority based on feedback severity and task complexity
     // Using Claude 3.5 Sonnet as primary model for all severities (cost-effective)
     this.modelPriority = new Map([
-      ['CRITICAL', ['anthropic/claude-3.5-sonnet', 'openai/gpt-4-turbo', 'openai/gpt-4']],
-      ['MAJOR', ['anthropic/claude-3.5-sonnet', 'openai/gpt-4', 'google/gemini-pro']],
-      ['SUBSTANTIVE', ['anthropic/claude-3.5-sonnet', 'openai/gpt-3.5-turbo', 'google/gemini-pro']],
-      ['ADMINISTRATIVE', ['anthropic/claude-3.5-sonnet', 'openai/gpt-3.5-turbo', 'mistralai/mistral-medium']]
+      ['CRITICAL', ['anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-4-turbo', 'openai/gpt-4']],
+      ['MAJOR', ['anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-4', 'google/gemini-pro']],
+      ['SUBSTANTIVE', ['anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-3.5-turbo', 'google/gemini-pro']],
+      ['ADMINISTRATIVE', ['anthropic/claude-3-5-sonnet-20241022', 'openai/gpt-3.5-turbo', 'mistralai/mistral-medium']]
     ]);
   }
 

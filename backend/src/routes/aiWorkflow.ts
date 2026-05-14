@@ -3,6 +3,7 @@ import { WorkflowAIService } from '../services/WorkflowAIService';
 import { EnhancedPublishingService } from '../services/EnhancedPublishingService';
 import { AICollaborativeService } from '../services/AICollaborativeService';
 import { authMiddleware } from '../middleware/auth';
+import { aiRateLimiter } from '../middleware/aiRateLimit';
 import winston from 'winston';
 
 const router = express.Router();
@@ -19,6 +20,10 @@ const aiCollaborative = new AICollaborativeService();
 
 // Apply authentication to all routes
 router.use(authMiddleware);
+// Apply per-user 20/hr AI budget. Bursty handlers (analyze-document, generate-workflow,
+// optimize-workflow, etc.) all push tokens to OpenRouter — without this a single user
+// can drain the org budget overnight.
+router.use(aiRateLimiter);
 
 /**
  * SMART WORKFLOW ROUTING & ANALYSIS

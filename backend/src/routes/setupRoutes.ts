@@ -1,5 +1,8 @@
 import { Express } from 'express';
 import path from 'path';
+// // === Batch 09 Gaps & Frontend Mounts ===
+import batch09GapAi from './batch09GapAi.js';
+import batch09GapNonai from './batch09GapNonai.js';
 import { healthRouter } from './health';
 import { documentsRouter } from './documents';
 import { publishingRouter } from './publishing';
@@ -36,6 +39,13 @@ import { upload } from '../middleware/upload/multerConfig';
 import { workflowInstancesRouter } from './workflow-instances';
 import headersRouter from './headers';
 import imagesRouter from './images';
+import { retentionRouter } from './retention';
+import complianceRouter from './compliance';
+import redlineDiffRouter from './redlineDiff';
+import classificationRouter from './classification';
+import redactSuggestionsRouter from './redactSuggestions';
+import versionSummaryRouter from './versionSummary';
+import customFeaturesRouter from './customFeatures';
 
 export function setupRoutes(app: Express) {
   // Serve uploaded files
@@ -108,6 +118,30 @@ export function setupRoutes(app: Express) {
 
   // Image serving routes
   app.use('/api/images', imagesRouter);
+
+  // Document retention policy routes
+  app.use('/api/retention', retentionRouter);
+  // Also mount the per-document retention setter under /api/documents
+  app.use('/api/documents', retentionRouter);
+
+  // AI Compliance Checker — score docs against org rule book.
+  app.use('/api/compliance', complianceRouter);
+
+  // AI Redline Diff Viewer — diff two versions + AI summary of changes.
+  app.use('/api/redline', redlineDiffRouter);
+
+  // AI Document Classification — primaryType + topics + tags per document.
+  app.use('/api/classification', classificationRouter);
+
+  // AI Redaction Suggestions — propose sensitive-text redactions.
+  app.use('/api/redact-suggestions', redactSuggestionsRouter);
+
+  // AI Version Change Narrative — single-document evolution story.
+  app.use('/api/version-summary', versionSummaryRouter);
+  app.use('/api/custom', customFeaturesRouter);
+  // // === Batch 09 Gaps & Frontend Mounts ===
+  app.use('/api/gap-ai-document_management', batch09GapAi);
+  app.use('/api/gap-nonai-document_management', batch09GapNonai);
 
   // ===== AUTHENTICATION ENDPOINTS =====
   app.post('/api/auth/login', authController.login);

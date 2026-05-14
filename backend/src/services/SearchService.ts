@@ -52,6 +52,9 @@ export class SearchService {
   private logger: winston.Logger;
   private libreOfficeService: LibreOfficeService;
   private indexName: string = 'dms-documents';
+  private esAvailable: boolean | null = null; // null = unknown, true/false = checked
+  private esLastChecked: number = 0;
+  private readonly ES_CHECK_INTERVAL_MS = 30_000; // recheck every 30s
 
   constructor() {
     this.elasticsearch = new ElasticsearchClient({
@@ -68,6 +71,96 @@ export class SearchService {
     });
 
     // this.initializeIndex() // DISABLED;
+  }
+
+  /** Check if Elasticsearch is reachable; result is cached for 30s */
+  private async isElasticsearchAvailable(): Promise<boolean> {
+    const now = Date.now();
+    if (this.esAvailable !== null && now - this.esLastChecked < this.ES_CHECK_INTERVAL_MS) {
+      return this.esAvailable;
+    }
+    try {
+      await Promise.race([
+        this.elasticsearch.cluster.health({} as any),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('ES ping timeout')), 3000))
+      ]);
+      if (!this.esAvailable) {
+        this.logger.info('Elasticsearch is now available — resuming ES-backed search');
+      }
+      this.esAvailable = true;
+    } catch {
+      if (this.esAvailable !== false) {
+        this.logger.warn('Elasticsearch is unavailable — falling back to PostgreSQL search');
+      }
+      this.esAvailable = false;
+    }
+    this.esLastChecked = now;
+    return this.esAvailable;
+  }
+
+  /** PostgreSQL fallback search — returns the same SearchResult shape */
+  private async postgresSearch(
+    organizationId: string,
+    options: SearchOptions = {}
+  ): Promise<SearchResult> {
+    const { query, filters = {}, from = 0, size = 20 } = options;
+
+    // Build a simple ILIKE query across title, fileName and ocrText
+    const conditions: string[] = [`"organizationId" = '${organizationId}'`];
+    const params: any[] = [organizationId];
+    let paramIdx = 2;
+
+    if (query && query.trim()) {
+      const q = `%${query.trim()}%`;
+      params.push(q);
+      conditions.push(
+        `(title ILIKE $${paramIdx} OR "fileName" ILIKE $${paramIdx} OR "originalName" ILIKE $${paramIdx} OR "ocrText" ILIKE $${paramIdx})`
+      );
+      paramIdx++;
+    }
+
+    if (filters.category) {
+      params.push(filters.category);
+      conditions.push(`category = $${paramIdx++}`);
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const countResult = await this.prisma.$queryRawUnsafe<{ count: string }[]>(
+      `SELECT COUNT(*)::text as count FROM documents ${whereClause}`,
+      ...params
+    );
+    const total = parseInt(countResult[0]?.count || '0');
+
+    const rows = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT id, title, "fileName", "originalName", "mimeType", category, tags,
+              "ocrText", "organizationId", "createdAt", "updatedAt"
+       FROM documents ${whereClause}
+       ORDER BY "updatedAt" DESC
+       LIMIT ${size} OFFSET ${from}`,
+      ...params
+    );
+
+    const documents = rows.map(row => ({
+      id: row.id,
+      title: row.title,
+      content: row.ocrText || '',
+      organizationId: row.organizationId,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      metadata: {
+        category: row.category,
+        tags: row.tags || [],
+        mimeType: row.mimeType,
+        fileName: row.fileName,
+        originalName: row.originalName
+      },
+      score: 1,
+      highlights: undefined,
+      _fallback: 'postgresql'
+    }));
+
+    this.logger.info('PostgreSQL fallback search completed', { query, total, resultsCount: documents.length });
+    return { documents, total };
   }
 
   private async initializeIndex_DISABLED(): Promise<void> {
@@ -167,6 +260,14 @@ export class SearchService {
   }
 
   async indexDocument(document: SearchDocument): Promise<void> {
+    const esUp = await this.isElasticsearchAvailable();
+    if (!esUp) {
+      this.logger.warn('Elasticsearch unavailable — skipping document indexing (will be indexed when ES recovers)', {
+        documentId: document.id
+      });
+      return; // Graceful degradation: document is stored in PG, search falls back to PG
+    }
+
     try {
       await this.elasticsearch.index({
         index: this.indexName,
@@ -185,14 +286,16 @@ export class SearchService {
       // Refresh index to make document searchable immediately
       await this.elasticsearch.indices.refresh({ index: this.indexName });
 
-      this.logger.info('Document indexed successfully', { 
+      this.logger.info('Document indexed successfully', {
         documentId: document.id,
         title: document.title
       });
 
     } catch (error: any) {
-      this.logger.error('Failed to index document:', error);
-      throw error;
+      this.logger.error('Failed to index document (ES may be down):', error);
+      this.esAvailable = false;
+      this.esLastChecked = Date.now();
+      // Non-fatal: document is safe in PostgreSQL
     }
   }
 
@@ -394,6 +497,12 @@ export class SearchService {
         post_tags: ['</mark>']
       } : undefined;
 
+      // Check ES availability and fall back to PostgreSQL if needed
+      const esUp = await this.isElasticsearchAvailable();
+      if (!esUp) {
+        return this.postgresSearch(organizationId, options);
+      }
+
       // Execute Elasticsearch search using a simpler approach
       const response: any = await this.elasticsearch.search({
         index: this.indexName,
@@ -437,8 +546,10 @@ export class SearchService {
       };
 
     } catch (error: any) {
-      this.logger.error('Search failed:', error);
-      throw error;
+      this.logger.error('Elasticsearch search failed, falling back to PostgreSQL:', error.message);
+      this.esAvailable = false;
+      this.esLastChecked = Date.now();
+      return this.postgresSearch(organizationId, options);
     }
   }
 

@@ -159,6 +159,10 @@ model Document {
   aiClassification          String?
   aiTags                    String[]
   aiConfidence              Float?
+  /// Structured AI results (model + usage + per-feature output) — JSONB.
+  /// Cross-project standard "ai_results JSONB" pattern. Holds e.g.
+  /// { compliance: {...}, redlineSummary: {...}, distributionRouting: {...} }.
+  aiResults                 Json                        @default("{}")
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @updatedAt
   lastAccessedAt            DateTime?
