@@ -30,6 +30,7 @@ const navigation = [
   { name: 'Folders', href: '/folders', icon: FolderIcon },
   { name: 'Search', href: '/search', icon: MagnifyingGlassIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
+  { name: 'DMS Views', href: '/custom-views', icon: ChartBarIcon },
   { name: 'Users', href: '/users', icon: UserGroupIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];

@@ -13,6 +13,7 @@ export const Header: React.FC = () => {
   const navItems = [
     { label: 'Home', href: '/' },
     { label: 'Features', href: '/features' },
+    { label: 'DMS Views', href: '/custom-views' },
     { label: 'About', href: '/about' },
     { label: 'Contact', href: '/contact' },
   ];

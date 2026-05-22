@@ -1,5 +1,22 @@
-// @ts-ignore - node-bsdiff doesn't have types
-import { bsdiff, bspatch } from 'node-bsdiff';
+// @ts-ignore - node-bsdiff is loaded lazily because the native module
+// may not be compiled for the current Node version in some dev environments.
+let _bsdiff: any = null;
+let _bspatch: any = null;
+function _loadBsdiff() {
+  if (_bsdiff && _bspatch) return { bsdiff: _bsdiff, bspatch: _bspatch };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('node-bsdiff');
+    _bsdiff = mod.bsdiff;
+    _bspatch = mod.bspatch;
+  } catch {
+    _bsdiff = async () => { throw new Error('node-bsdiff not available'); };
+    _bspatch = async () => { throw new Error('node-bsdiff not available'); };
+  }
+  return { bsdiff: _bsdiff, bspatch: _bspatch };
+}
+const bsdiff: any = (...args: any[]) => _loadBsdiff().bsdiff(...args);
+const bspatch: any = (...args: any[]) => _loadBsdiff().bspatch(...args);
 import { StorageService } from './StorageService';
 import crypto from 'crypto';
 import winston from 'winston';

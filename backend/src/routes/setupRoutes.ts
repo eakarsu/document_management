@@ -1,8 +1,13 @@
 import { Express } from 'express';
 import path from 'path';
 // // === Batch 09 Gaps & Frontend Mounts ===
+// @ts-ignore
 import batch09GapAi from './batch09GapAi.js';
+// @ts-ignore
 import batch09GapNonai from './batch09GapNonai.js';
+// === DMS Custom Views (4 endpoints) ===
+// @ts-ignore -- plain JS router
+import customViewsRouter from './customViews.js';
 import { healthRouter } from './health';
 import { documentsRouter } from './documents';
 import { publishingRouter } from './publishing';
@@ -142,6 +147,8 @@ export function setupRoutes(app: Express) {
   // // === Batch 09 Gaps & Frontend Mounts ===
   app.use('/api/gap-ai-document_management', batch09GapAi);
   app.use('/api/gap-nonai-document_management', batch09GapNonai);
+  // DMS Custom Views (4 endpoints)
+  app.use('/api/custom-views', customViewsRouter);
 
   // ===== AUTHENTICATION ENDPOINTS =====
   app.post('/api/auth/login', authController.login);
