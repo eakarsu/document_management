@@ -134,7 +134,7 @@ export class WorkflowAIService {
       // Get document content for analysis (optional for analysis)
       let content: Buffer | null = null;
       try {
-        content = await this.documentService.getDocumentContent(documentId);
+        content = await this.documentService.getDocumentContent(documentId, organizationId);
       } catch (error: any) {
         this.logger.warn('Could not get document content for analysis:', error);
       }
@@ -843,7 +843,12 @@ export class WorkflowAIService {
           throw new Error(`OpenRouter API error: ${response.statusText} - ${errorBody}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        if (!data.choices?.[0]?.message?.content) {
+          throw new Error('OpenRouter response did not contain message content');
+        }
         const result = data.choices[0].message.content;
         
         // Cache successful response

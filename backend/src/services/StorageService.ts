@@ -1,13 +1,15 @@
 import crypto from 'crypto';
-import path from 'path';
+import { Client } from 'minio';
 import winston from 'winston';
+import { objectBelongsToOrganization, safeObjectKey, validateUpload } from '../security/storagePolicy';
 
 interface UploadResult {
   success: boolean;
   storageId?: string;
   storagePath?: string;
+  storageVersionId?: string;
   checksum?: string;
-  thumbnailPath?: string;
+  malwareScan?: 'CLEAN';
   error?: string;
 }
 
@@ -16,185 +18,123 @@ interface FileMetadata {
   originalName: string;
   mimeType: string;
   size: number;
-  checksum: string;
+  checksum?: string;
+}
+
+function required(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required`);
+  return value;
 }
 
 export class StorageService {
-  private logger: winston.Logger;
+  private logger = winston.createLogger({ level: 'info', format: winston.format.json(), transports: [new winston.transports.Console()] });
+  private client: Client;
+  private bucket: string;
 
-  constructor() {
-    this.logger = winston.createLogger({
-      level: 'info',
-      format: winston.format.json(),
-      transports: [new winston.transports.Console()]
+  constructor(client?: Client) {
+    this.bucket = process.env.OBJECT_STORAGE_BUCKET || 'dms-documents';
+    if (client) { this.client = client; return; }
+    const endpoint = required('OBJECT_STORAGE_ENDPOINT');
+    const parsed = new URL(endpoint);
+    this.client = new Client({
+      endPoint: parsed.hostname,
+      port: parsed.port ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80,
+      useSSL: parsed.protocol === 'https:',
+      accessKey: required('OBJECT_STORAGE_ACCESS_KEY'),
+      secretKey: required('OBJECT_STORAGE_SECRET_KEY'),
+      region: process.env.OBJECT_STORAGE_REGION || 'us-east-1',
     });
-
-    this.logger.info('StorageService initialized for filesystem-only operations');
   }
 
-  async uploadDocument(
-    fileBuffer: Buffer,
-    metadata: FileMetadata,
-    organizationId: string,
-    userId: string
-  ): Promise<UploadResult> {
+  private async ensureBucket() {
+    if (!(await this.client.bucketExists(this.bucket))) await this.client.makeBucket(this.bucket, process.env.OBJECT_STORAGE_REGION || 'us-east-1');
+    await this.client.setBucketVersioning(this.bucket, { Status: 'Enabled' });
+  }
+
+  private async scan(buffer: Buffer) {
+    const scanner = process.env.MALWARE_SCANNER_URL;
+    if (!scanner) throw new Error('MALWARE_SCANNER_URL is required; uploads fail closed');
+    const response = await fetch(scanner, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: new Uint8Array(buffer) });
+    if (!response.ok) throw new Error('MALWARE_SCANNER_UNAVAILABLE');
+    const result = await response.json() as { clean?: boolean; signature?: string };
+    if (!result.clean) throw new Error(`MALWARE_DETECTED${result.signature ? `:${result.signature}` : ''}`);
+  }
+
+  async uploadDocument(fileBuffer: Buffer, metadata: FileMetadata, organizationId: string, userId: string): Promise<UploadResult> {
     try {
-      this.logger.info('Starting filesystem document upload', {
-        filename: metadata.filename,
-        size: metadata.size,
-        mimeType: metadata.mimeType
+      const validation = validateUpload(fileBuffer, metadata);
+      if (!validation.accepted) throw new Error(validation.reason);
+      await this.scan(fileBuffer);
+      await this.ensureBucket();
+      const storageId = crypto.randomBytes(16).toString('hex');
+      const storagePath = safeObjectKey(organizationId, storageId, metadata.filename);
+      const checksum = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+      const result = await this.client.putObject(this.bucket, storagePath, fileBuffer, fileBuffer.length, {
+        'Content-Type': metadata.mimeType,
+        'x-amz-server-side-encryption': 'AES256',
+        'x-amz-meta-sha256': checksum,
+        'x-amz-meta-uploader': userId,
+        'x-amz-meta-original-name': Buffer.from(metadata.originalName, 'utf8').toString('base64'),
       });
-
-      const fs = require('fs');
-      const path = require('path');
-
-      // Generate checksum
-      const checksum = this.calculateChecksum(fileBuffer);
-
-      // Generate storage path for filesystem
-      const storageId = this.generateStorageId();
-      const uploadsDir = path.join(__dirname, '../../uploads');
-      
-      // Ensure uploads directory exists
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-        this.logger.info('Created uploads directory', { uploadsDir });
-      }
-
-      // Generate unique filename
-      const timestamp = Date.now();
-      const random = Math.floor(Math.random() * 1000000000);
-      const extension = path.extname(metadata.filename);
-      const uniqueFilename = `document-${timestamp}-${random}${extension}`;
-      const filePath = path.join(uploadsDir, uniqueFilename);
-      
-      // Store the full path for the database
-      const storagePath = filePath;
-
-      // Write file to filesystem
-      fs.writeFileSync(filePath, fileBuffer);
-      this.logger.info('File written to filesystem', { filePath, size: fileBuffer.length });
-
-      this.logger.info('Document uploaded successfully to filesystem', {
-        storageId,
-        storagePath,
-        checksum
-      });
-
-      return {
-        success: true,
-        storageId,
-        storagePath,
-        checksum
-      };
-
-    } catch (error: any) {
-      this.logger.error('Filesystem document upload failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Upload failed'
-      };
+      this.logger.info('Encrypted object stored', { organizationId, storageId, size: fileBuffer.length, checksum, versionId: result.versionId });
+      return { success: true, storageId, storagePath, storageVersionId: result.versionId ?? undefined, checksum, malwareScan: 'CLEAN' };
+    } catch (error) {
+      this.logger.error('Object upload failed', { reason: error instanceof Error ? error.message : 'unknown' });
+      return { success: false, error: error instanceof Error ? error.message : 'Upload failed' };
     }
   }
 
-  async downloadDocument(storagePath: string): Promise<Buffer | null> {
+  async downloadDocument(storagePath: string, organizationId: string): Promise<Buffer | null> {
+    if (!organizationId || !objectBelongsToOrganization(storagePath, organizationId)) return null;
+    if (storagePath.includes('..') || storagePath.startsWith('/')) return null;
     try {
-      this.logger.info('Downloading document from filesystem', { storagePath });
-
-      const fs = require('fs');
-      const path = require('path');
-
-      // Handle different storage path formats
-      let filePath: string;
-      
-      if (storagePath.startsWith('/')) {
-        // Absolute path - use as is
-        filePath = storagePath;
-      } else if (storagePath.includes('/')) {
-        // Relative path - store in uploads directory
-        const uploadsDir = path.join(__dirname, '../../uploads');
-        filePath = path.join(uploadsDir, storagePath);
-      } else {
-        // Just a filename - look in uploads directory
-        const uploadsDir = path.join(__dirname, '../../uploads');
-        filePath = path.join(uploadsDir, storagePath);
-      }
-
-      // Check if file exists
-      if (!fs.existsSync(filePath)) {
-        this.logger.warn('File not found on filesystem', { filePath });
-        return null;
-      }
-
-      // Read and return file content
-      const fileBuffer = fs.readFileSync(filePath);
-      this.logger.info('File loaded successfully from filesystem', { 
-        filePath, 
-        size: fileBuffer.length 
-      });
-      
-      return fileBuffer;
-
-    } catch (error: any) {
-      this.logger.error('Filesystem document download failed:', error);
-      return null;
-    }
+      const stream = await this.client.getObject(this.bucket, storagePath);
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+      return Buffer.concat(chunks);
+    } catch { return null; }
   }
 
-  async deleteDocument(storagePath: string, storageId?: string): Promise<boolean> {
+  async deleteDocument(storagePath: string, _storageId?: string): Promise<boolean> {
+    if (storagePath.includes('..') || storagePath.startsWith('/')) return false;
     try {
-      this.logger.info('Deleting document from filesystem', { storagePath });
-
-      const fs = require('fs');
-      const path = require('path');
-
-      // Handle different storage path formats
-      let filePath: string;
-      
-      if (storagePath.startsWith('/')) {
-        // Absolute path - use as is
-        filePath = storagePath;
-      } else if (storagePath.includes('/')) {
-        // Relative path - look in uploads directory
-        const uploadsDir = path.join(__dirname, '../../uploads');
-        filePath = path.join(uploadsDir, storagePath);
-      } else {
-        // Just a filename - look in uploads directory
-        const uploadsDir = path.join(__dirname, '../../uploads');
-        filePath = path.join(uploadsDir, storagePath);
+      // A plain delete on a versioned bucket only creates a delete marker. For
+      // approved records destruction, remove every concrete object version and
+      // delete marker for this exact tenant key.
+      const entries: Array<{ name: string; versionId?: string }> = [];
+      const stream = this.client.listObjects(this.bucket, storagePath, true, { IncludeVersion: true });
+      for await (const value of stream as any) {
+        const item = value as { name?: string; key?: string; versionId?: string; VersionId?: string };
+        const name = item.name || item.key;
+        const versionId = item.versionId || item.VersionId;
+        if (name === storagePath) entries.push({ name, ...(versionId && { versionId }) });
       }
-
-      // Check if file exists before trying to delete
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        this.logger.info('File deleted successfully from filesystem', { filePath });
-      } else {
-        this.logger.warn('File not found for deletion, treating as successful', { filePath });
+      if (!entries.length) {
+        await this.client.removeObject(this.bucket, storagePath);
+        return true;
       }
-
-      return true;
-
-    } catch (error: any) {
-      this.logger.error('Filesystem document deletion failed:', error);
-      return false;
+      const results = await this.client.removeObjects(this.bucket, entries);
+      return results.every(result => !result?.Error);
     }
+    catch (error) { this.logger.error('Object deletion failed', { reason: error instanceof Error ? error.message : 'unknown' }); return false; }
   }
 
-  private calculateChecksum(buffer: Buffer): string {
-    return crypto.createHash('sha256').update(buffer).digest('hex');
+  async deleteDocumentForOrganization(storagePath: string, organizationId: string): Promise<boolean> {
+    if (!objectBelongsToOrganization(storagePath, organizationId)) return false;
+    return this.deleteDocument(storagePath);
   }
 
-  private generateStorageId(): string {
-    return crypto.randomBytes(16).toString('hex');
+  async getDocumentUrl(storagePath: string, expirySeconds: number, organizationId: string): Promise<string | null> {
+    if (!organizationId || !objectBelongsToOrganization(storagePath, organizationId)) return null;
+    if (storagePath.includes('..') || storagePath.startsWith('/')) return null;
+    return this.client.presignedGetObject(this.bucket, storagePath, Math.min(expirySeconds, 900));
   }
 
-  async getDocumentUrl(storagePath: string, expirySeconds: number = 3600): Promise<string | null> {
-    // For filesystem storage, return null - use direct file serving instead
-    return null;
-  }
+  async getThumbnailUrl(_storagePath?: string): Promise<string | null> { return null; }
 
-  async getThumbnailUrl(storagePath: string, expirySeconds: number = 3600): Promise<string | null> {
-    // For filesystem storage, return null - thumbnails not implemented
-    return null;
+  async healthCheck(): Promise<boolean> {
+    try { return await this.client.bucketExists(this.bucket); }
+    catch { return false; }
   }
 }

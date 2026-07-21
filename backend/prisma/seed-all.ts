@@ -1,6 +1,10 @@
 import { PrismaClient } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 
 const prisma = new PrismaClient();
+
+const seedToken = (prefix: string): string =>
+  `${prefix}-${randomBytes(24).toString('base64url')}`;
 
 async function main() {
   console.log('🌱 Starting comprehensive database seeding...');
@@ -359,21 +363,21 @@ async function main() {
     // PASSWORD RESETS (15 records)
     // ========================================
     const passwordResetData = [
-      { email: 'admin@richmond-dms.com', token: 'rst-001-abc123def456', status: 'PENDING' as const, ipAddress: '192.168.1.10', userAgent: 'Mozilla/5.0 Chrome/120', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'manager@richmond-dms.com', token: 'rst-002-ghi789jkl012', status: 'USED' as const, ipAddress: '192.168.1.20', userAgent: 'Mozilla/5.0 Firefox/121', expiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), usedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'user@richmond-dms.com', token: 'rst-003-mno345pqr678', status: 'EXPIRED' as const, ipAddress: '10.0.0.5', userAgent: 'Mozilla/5.0 Safari/17', expiresAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'ao1@airforce.mil', token: 'rst-004-stu901vwx234', status: 'CANCELLED' as const, ipAddress: '172.16.0.1', userAgent: 'Mozilla/5.0 Edge/120', expiresAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'pcm@airforce.mil', token: 'rst-005-yza567bcd890', status: 'PENDING' as const, ipAddress: '192.168.2.100', userAgent: 'Mozilla/5.0 Chrome/119', expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'admin@richmond-dms.com', token: 'rst-006-efg123hij456', status: 'USED' as const, ipAddress: '192.168.1.10', userAgent: 'Mozilla/5.0 Chrome/120', expiresAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), usedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'coordinator1@airforce.mil', token: 'rst-007-klm789nop012', status: 'EXPIRED' as const, ipAddress: '10.0.1.50', userAgent: 'Mozilla/5.0 Firefox/120', expiresAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'legal.reviewer@airforce.mil', token: 'rst-008-qrs345tuv678', status: 'PENDING' as const, ipAddress: '172.16.1.25', userAgent: 'Mozilla/5.0 Safari/16', expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'sq.cc@airforce.mil', token: 'rst-009-wxy901zab234', status: 'USED' as const, ipAddress: '192.168.3.75', userAgent: 'Mozilla/5.0 Chrome/118', expiresAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), usedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'wg.cc@airforce.mil', token: 'rst-010-cde567fgh890', status: 'CANCELLED' as const, ipAddress: '10.0.2.30', userAgent: 'Mozilla/5.0 Edge/119', expiresAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'user@richmond-dms.com', token: 'rst-011-ijk123lmn456', status: 'PENDING' as const, ipAddress: '192.168.1.55', userAgent: 'Mozilla/5.0 Chrome/121', expiresAt: new Date(Date.now() + 36 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'manager@richmond-dms.com', token: 'rst-012-opq789rst012', status: 'EXPIRED' as const, ipAddress: '192.168.1.20', userAgent: 'Mozilla/5.0 Firefox/119', expiresAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'admin@airforce.mil', token: 'rst-013-uvw345xyz678', status: 'USED' as const, ipAddress: '172.16.2.10', userAgent: 'Mozilla/5.0 Safari/17', expiresAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), usedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'gp.cc@airforce.mil', token: 'rst-014-abc901def234', status: 'PENDING' as const, ipAddress: '10.0.3.15', userAgent: 'Mozilla/5.0 Chrome/120', expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'final.approver@airforce.mil', token: 'rst-015-ghi567jkl890', status: 'CANCELLED' as const, ipAddress: '192.168.4.40', userAgent: 'Mozilla/5.0 Edge/121', expiresAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'admin@richmond-dms.com', token: seedToken('rst-001'), status: 'PENDING' as const, ipAddress: '192.168.1.10', userAgent: 'Mozilla/5.0 Chrome/120', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'manager@richmond-dms.com', token: seedToken('rst-002'), status: 'USED' as const, ipAddress: '192.168.1.20', userAgent: 'Mozilla/5.0 Firefox/121', expiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), usedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'user@richmond-dms.com', token: seedToken('rst-003'), status: 'EXPIRED' as const, ipAddress: '10.0.0.5', userAgent: 'Mozilla/5.0 Safari/17', expiresAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'ao1@airforce.mil', token: seedToken('rst-004'), status: 'CANCELLED' as const, ipAddress: '172.16.0.1', userAgent: 'Mozilla/5.0 Edge/120', expiresAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'pcm@airforce.mil', token: seedToken('rst-005'), status: 'PENDING' as const, ipAddress: '192.168.2.100', userAgent: 'Mozilla/5.0 Chrome/119', expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'admin@richmond-dms.com', token: seedToken('rst-006'), status: 'USED' as const, ipAddress: '192.168.1.10', userAgent: 'Mozilla/5.0 Chrome/120', expiresAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), usedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'coordinator1@airforce.mil', token: seedToken('rst-007'), status: 'EXPIRED' as const, ipAddress: '10.0.1.50', userAgent: 'Mozilla/5.0 Firefox/120', expiresAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'legal.reviewer@airforce.mil', token: seedToken('rst-008'), status: 'PENDING' as const, ipAddress: '172.16.1.25', userAgent: 'Mozilla/5.0 Safari/16', expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'sq.cc@airforce.mil', token: seedToken('rst-009'), status: 'USED' as const, ipAddress: '192.168.3.75', userAgent: 'Mozilla/5.0 Chrome/118', expiresAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), usedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'wg.cc@airforce.mil', token: seedToken('rst-010'), status: 'CANCELLED' as const, ipAddress: '10.0.2.30', userAgent: 'Mozilla/5.0 Edge/119', expiresAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'user@richmond-dms.com', token: seedToken('rst-011'), status: 'PENDING' as const, ipAddress: '192.168.1.55', userAgent: 'Mozilla/5.0 Chrome/121', expiresAt: new Date(Date.now() + 36 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'manager@richmond-dms.com', token: seedToken('rst-012'), status: 'EXPIRED' as const, ipAddress: '192.168.1.20', userAgent: 'Mozilla/5.0 Firefox/119', expiresAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'admin@airforce.mil', token: seedToken('rst-013'), status: 'USED' as const, ipAddress: '172.16.2.10', userAgent: 'Mozilla/5.0 Safari/17', expiresAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), usedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'gp.cc@airforce.mil', token: seedToken('rst-014'), status: 'PENDING' as const, ipAddress: '10.0.3.15', userAgent: 'Mozilla/5.0 Chrome/120', expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'final.approver@airforce.mil', token: seedToken('rst-015'), status: 'CANCELLED' as const, ipAddress: '192.168.4.40', userAgent: 'Mozilla/5.0 Edge/121', expiresAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), userId: admin.id },
     ];
 
     for (const data of passwordResetData) {
@@ -489,21 +493,21 @@ async function main() {
     // EMAIL VERIFICATIONS (15 records)
     // ========================================
     const emailVerificationData = [
-      { email: 'admin@richmond-dms.com', token: 'ev-001-abc123', status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '192.168.1.10', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'manager@richmond-dms.com', token: 'ev-002-def456', status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '192.168.1.20', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'user@richmond-dms.com', token: 'ev-003-ghi789', status: 'VERIFIED' as const, attempts: 2, maxAttempts: 3, ipAddress: '10.0.0.5', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'newuser1@richmond-dms.com', token: 'ev-004-jkl012', status: 'PENDING' as const, attempts: 0, maxAttempts: 3, ipAddress: '192.168.1.55', expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'newuser2@richmond-dms.com', token: 'ev-005-mno345', status: 'PENDING' as const, attempts: 1, maxAttempts: 3, ipAddress: '192.168.2.100', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'expired@richmond-dms.com', token: 'ev-006-pqr678', status: 'EXPIRED' as const, attempts: 0, maxAttempts: 3, ipAddress: '10.0.1.50', expiresAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'failed@richmond-dms.com', token: 'ev-007-stu901', status: 'FAILED' as const, attempts: 3, maxAttempts: 3, ipAddress: '172.16.0.1', expiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'ao1@airforce.mil', token: 'ev-008-vwx234', status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '172.16.1.25', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'pcm@airforce.mil', token: 'ev-009-yza567', status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '192.168.3.75', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'test@example.com', token: 'ev-010-bcd890', status: 'EXPIRED' as const, attempts: 2, maxAttempts: 3, ipAddress: '10.0.2.30', expiresAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'bounced@invalid.com', token: 'ev-011-efg123', status: 'FAILED' as const, attempts: 3, maxAttempts: 3, ipAddress: '192.168.4.40', expiresAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'coordinator1@airforce.mil', token: 'ev-012-hij456', status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '10.0.3.15', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'newhire@richmond-dms.com', token: 'ev-013-klm789', status: 'PENDING' as const, attempts: 0, maxAttempts: 5, ipAddress: '192.168.1.80', expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'contractor@richmond-dms.com', token: 'ev-014-nop012', status: 'PENDING' as const, attempts: 1, maxAttempts: 3, ipAddress: '172.16.2.10', expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000), userId: admin.id },
-      { email: 'temp@richmond-dms.com', token: 'ev-015-qrs345', status: 'EXPIRED' as const, attempts: 0, maxAttempts: 3, ipAddress: '192.168.5.5', expiresAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'admin@richmond-dms.com', token: seedToken('ev-001'), status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '192.168.1.10', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'manager@richmond-dms.com', token: seedToken('ev-002'), status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '192.168.1.20', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'user@richmond-dms.com', token: seedToken('ev-003'), status: 'VERIFIED' as const, attempts: 2, maxAttempts: 3, ipAddress: '10.0.0.5', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'newuser1@richmond-dms.com', token: seedToken('ev-004'), status: 'PENDING' as const, attempts: 0, maxAttempts: 3, ipAddress: '192.168.1.55', expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'newuser2@richmond-dms.com', token: seedToken('ev-005'), status: 'PENDING' as const, attempts: 1, maxAttempts: 3, ipAddress: '192.168.2.100', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'expired@richmond-dms.com', token: seedToken('ev-006'), status: 'EXPIRED' as const, attempts: 0, maxAttempts: 3, ipAddress: '10.0.1.50', expiresAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'failed@richmond-dms.com', token: seedToken('ev-007'), status: 'FAILED' as const, attempts: 3, maxAttempts: 3, ipAddress: '172.16.0.1', expiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'ao1@airforce.mil', token: seedToken('ev-008'), status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '172.16.1.25', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'pcm@airforce.mil', token: seedToken('ev-009'), status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '192.168.3.75', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'test@example.com', token: seedToken('ev-010'), status: 'EXPIRED' as const, attempts: 2, maxAttempts: 3, ipAddress: '10.0.2.30', expiresAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'bounced@invalid.com', token: seedToken('ev-011'), status: 'FAILED' as const, attempts: 3, maxAttempts: 3, ipAddress: '192.168.4.40', expiresAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'coordinator1@airforce.mil', token: seedToken('ev-012'), status: 'VERIFIED' as const, attempts: 1, maxAttempts: 3, ipAddress: '10.0.3.15', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), verifiedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'newhire@richmond-dms.com', token: seedToken('ev-013'), status: 'PENDING' as const, attempts: 0, maxAttempts: 5, ipAddress: '192.168.1.80', expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'contractor@richmond-dms.com', token: seedToken('ev-014'), status: 'PENDING' as const, attempts: 1, maxAttempts: 3, ipAddress: '172.16.2.10', expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000), userId: admin.id },
+      { email: 'temp@richmond-dms.com', token: seedToken('ev-015'), status: 'EXPIRED' as const, attempts: 0, maxAttempts: 3, ipAddress: '192.168.5.5', expiresAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), userId: admin.id },
     ];
 
     for (const data of emailVerificationData) {

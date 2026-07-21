@@ -50,7 +50,7 @@ export class DocumentCRUD {
       const fileSize = input.fileBuffer.length;
 
       // Check for duplicate
-      const existingDoc = await checkDuplicateDocument(checksum);
+      const existingDoc = await checkDuplicateDocument(checksum, organizationId);
       if (existingDoc) {
         return this.handleExistingDocument(existingDoc, userId, organizationId);
       }
@@ -88,6 +88,8 @@ export class DocumentCRUD {
           checksum,
           storagePath: uploadResult.storagePath!,
           storageProvider: 'minio',
+          objectVersionId: uploadResult.storageVersionId,
+          retentionUntil: new Date(Date.now() + Number(process.env.DEFAULT_RETENTION_DAYS || 2555) * 86_400_000),
           status: DocumentStatus.DRAFT,
           category: input.category,
           tags: input.tags || [],
@@ -104,7 +106,7 @@ export class DocumentCRUD {
       });
 
       // Create initial version
-      await this.createInitialVersion(document.id, input, uploadResult.storagePath!, fileSize, checksum, userId);
+      await this.createInitialVersion(document.id, input, uploadResult.storagePath!, uploadResult.storageVersionId, fileSize, checksum, userId);
 
       // Index for search
       await this.indexDocument(document, organizationId);
@@ -141,10 +143,13 @@ export class DocumentCRUD {
       }
 
       // Merge customFields to preserve existing data
-      const updateData: any = {
-        ...input,
-        updatedAt: new Date()
-      };
+      // Metadata updates are deliberately allow-listed. Workflow/publication,
+      // retention, classification, storage pointers and ownership have separate
+      // governed services and must never be mass-assigned from an API payload.
+      const updateData: any = { updatedAt: new Date() };
+      for (const key of ['title', 'description', 'category', 'tags', 'folderId'] as const) {
+        if (input[key] !== undefined) updateData[key] = input[key];
+      }
 
       // If customFields are being updated, merge with existing customFields
       if (input.customFields) {
@@ -198,12 +203,7 @@ export class DocumentCRUD {
       }
 
       if (permanent) {
-        // Permanently delete
-        await this.prisma.document.delete({
-          where: { id: documentId }
-        });
-        await this.storageService.deleteDocument(document.storagePath);
-        await this.searchService.deleteDocument(documentId);
+        throw new Error('USE_GOVERNED_DELETION_JOB');
       } else {
         // Soft delete
         await this.prisma.document.update({
@@ -263,6 +263,7 @@ export class DocumentCRUD {
     documentId: string,
     input: CreateDocumentInput,
     storagePath: string,
+    objectVersionId: string | undefined,
     fileSize: number,
     checksum: string,
     userId: string
@@ -276,6 +277,9 @@ export class DocumentCRUD {
         fileSize,
         checksum,
         storagePath,
+        objectVersionId,
+        malwareScan: 'CLEAN',
+        encryptedAtRest: true,
         changeNotes: 'Initial version',
         documentId,
         createdById: userId

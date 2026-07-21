@@ -453,92 +453,14 @@ router.get('/', authMiddleware, async (req: any, res) => {
 
 // Complete workflow (for final publish)
 router.post('/:documentId/complete', authMiddleware, async (req: any, res) => {
-  try {
-    const { documentId } = req.params;
-    const { action, metadata } = req.body;
-
-    // Get current workflow instance
-    const workflowInstance = await prisma.jsonWorkflowInstance.findFirst({
-      where: {
-        documentId,
-        isActive: true
-      }
-    });
-
-    if (!workflowInstance) {
-      return res.status(404).json({
-        success: false,
-        error: 'No active workflow found for this document'
-      });
-    }
-
-    // Update workflow instance to complete - keep currentStageId as 11 for UI
-    const updated = await prisma.jsonWorkflowInstance.update({
-      where: { id: workflowInstance.id },
-      data: {
-        currentStageId: '11', // Keep at stage 11 for UI to show completion
-        isActive: false,
-        completedAt: new Date(),
-        metadata: JSON.stringify({
-          ...(typeof workflowInstance.metadata === 'string'
-            ? JSON.parse(workflowInstance.metadata as string)
-            : workflowInstance.metadata),
-          ...metadata,
-          completionAction: action,
-          completedAt: new Date().toISOString()
-        })
-      }
-    });
-
-    // Add final history entry
-    await prisma.jsonWorkflowHistory.create({
-      data: {
-        workflowInstanceId: workflowInstance.id,
-        stageId: workflowInstance.currentStageId,
-        stageName: 'Workflow Completed',
-        action: action === 'publish' ? 'Published Document' : 'Completed Workflow',
-        performedBy: req.user?.email || 'system',
-        metadata: JSON.stringify({
-          completedAt: new Date().toISOString(),
-          finalStage: workflowInstance.currentStageId,
-          action
-        })
-      }
-    });
-
-    // Update document status to published
-    if (action === 'publish') {
-      await prisma.document.update({
-        where: { id: documentId },
-        data: {
-          status: 'PUBLISHED',
-          updatedAt: new Date()
-        }
-      });
-    }
-
-    logger.info('Workflow completed successfully:', {
-      documentId,
-      workflowId: workflowInstance.id,
-      action
-    });
-
-    res.json({
-      success: true,
-      message: action === 'publish'
-        ? 'Document published and workflow completed successfully!'
-        : 'Workflow completed successfully!',
-      isComplete: true,
-      workflow: updated
-    });
-
-  } catch (error: any) {
-    logger.error('Failed to complete workflow:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to complete workflow'
-    });
-  }
+  const documentId = req.params.documentId;
+  // Legacy completion was non-transactional and could publish without the
+  // independent-review, AI-review and signed-audit gates.
+  return res.status(410).json({
+    success: false,
+    error: 'LEGACY_COMPLETION_DISABLED',
+    replacement: `/api/workflow/documents/${documentId}/workflow/action`
+  });
 });
 
 export { router as workflowInstancesRouter };

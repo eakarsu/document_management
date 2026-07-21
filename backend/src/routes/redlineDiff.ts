@@ -16,6 +16,7 @@ import axios from 'axios';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authenticateToken';
 import { aiRateLimiter } from '../middleware/aiRateLimit';
 import { parseAIJson } from '../utils/parseAIJson';
+import { defendAIInput, stageAIResult } from '../security/aiGovernance';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -106,6 +107,7 @@ router.post('/:documentId/:fromVersion/:toVersion/summary', authenticateToken, a
       .map((d) => `${d.type === 'add' ? '+' : '-'} ${d.line}`)
       .join('\n');
 
+    const defended = defendAIInput(compact);
     const aiResp = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
@@ -122,7 +124,7 @@ router.post('/:documentId/:fromVersion/:toVersion/summary', authenticateToken, a
           {
             role: 'user',
             content:
-              `Document: ${doc.title}\nFrom version ${fromVersion} to ${toVersion}.\n\nDiff (truncated):\n${compact}`,
+              `Document: ${doc.title}\nFrom version ${fromVersion} to ${toVersion}.\n\nDiff (delimited and truncated):\n${defended.content}`,
           },
         ],
         temperature: 0.2,
@@ -145,25 +147,9 @@ router.post('/:documentId/:fromVersion/:toVersion/summary', authenticateToken, a
       return res.status(502).json({ error: 'AI_PARSE_FAILED', raw: parsed.raw });
     }
 
-    // Persist into Document.aiResults so the UI can show the latest summary.
-    await prisma.document.update({
-      where: { id: documentId },
-      data: {
-        aiResults: {
-          ...((doc as any).aiResults || {}),
-          redlineSummary: {
-            ...parsed.data,
-            fromVersion: +fromVersion,
-            toVersion: +toVersion,
-            model: MODEL,
-            usage,
-            generatedAt: new Date().toISOString(),
-          },
-        },
-      } as any,
-    });
-
-    res.json({ ...parsed.data, model: MODEL, usage });
+    const output = { ...parsed.data, fromVersion: +fromVersion, toVersion: +toVersion, model: MODEL, usage, generatedAt: new Date().toISOString() };
+    const artifact = await stageAIResult({ prisma, document: doc, actorId: req.user.id, feature: 'redlineSummary', output, promptDigest: defended.digest, model: MODEL });
+    res.status(202).json({ result: output, artifactId: artifact.id, reviewStatus: artifact.status, persisted: false });
   } catch (err: any) {
     console.error('redline summary failed', err?.response?.data || err.message);
     res.status(500).json({ error: err.message });

@@ -196,9 +196,9 @@ curl -X POST http://localhost:4000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"ao1@airforce.mil","password":"testpass123"}'
 
-# Get user info (use accessToken from above)
-curl http://localhost:4000/api/auth/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+# Get user info (set ACCESS_TOKEN to the returned access token)
+curl --oauth2-bearer "${ACCESS_TOKEN:?set ACCESS_TOKEN first}" \
+  http://localhost:4000/api/auth/me
 
 # Should return:
 # {

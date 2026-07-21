@@ -3,11 +3,13 @@ import { BinaryDiffService } from '../BinaryDiffService';
 import winston from 'winston';
 import { CreateVersionInput } from '../../types/document/document.types';
 import { calculateChecksum } from '../../utils/document/documentUtils';
+import { StorageService } from '../StorageService';
 
 export class DocumentVersioning {
   private prisma: PrismaClient;
   private binaryDiffService: BinaryDiffService;
   private logger: winston.Logger;
+  private storageService: StorageService;
 
   constructor(
     prisma: PrismaClient,
@@ -17,6 +19,7 @@ export class DocumentVersioning {
     this.prisma = prisma;
     this.binaryDiffService = binaryDiffService;
     this.logger = logger;
+    this.storageService = new StorageService();
   }
 
   async createDocumentVersion(
@@ -54,9 +57,7 @@ export class DocumentVersioning {
       if (latestVersion && latestVersion.storagePath) {
         try {
           // Retrieve the previous version's file from storage
-          const { StorageService } = await import('../StorageService');
-          const storageService = new StorageService();
-          const oldBuffer = await storageService.downloadDocument(latestVersion.storagePath);
+          const oldBuffer = await this.storageService.downloadDocument(latestVersion.storagePath, organizationId);
 
           if (oldBuffer && oldBuffer.length > 0) {
             this.logger.info('Computing binary diff for new version', {
@@ -100,16 +101,29 @@ export class DocumentVersioning {
         }
       }
 
-      // Create new version
-      const newVersion = await this.prisma.documentVersion.create({
-        data: {
+      const fileName = input.fileName || document.fileName;
+      const uploadResult = await this.storageService.uploadDocument(fileBuffer, {
+        filename: fileName,
+        originalName: fileName,
+        mimeType: document.mimeType,
+        size: fileSize,
+        checksum,
+      }, organizationId, userId);
+      if (!uploadResult.success || !uploadResult.storagePath) throw new Error(`Version upload failed: ${uploadResult.error || 'missing object key'}`);
+
+      // The database only points at the new encrypted object after upload and scan succeed.
+      const newVersion = await this.prisma.$transaction(async tx => {
+        const version = await tx.documentVersion.create({ data: {
           versionNumber: newVersionNumber,
           title: input.title || document.title,
           description: input.description || document.description,
-          fileName: input.fileName || document.fileName,
+          fileName,
           fileSize,
           checksum,
-          storagePath: '', // Will be updated after upload
+          storagePath: uploadResult.storagePath!,
+          objectVersionId: uploadResult.storageVersionId,
+          malwareScan: 'CLEAN',
+          encryptedAtRest: true,
           changeNotes: input.changeNotes || '',
           changeType: input.changeType || 'MINOR',
           documentId,
@@ -123,16 +137,17 @@ export class DocumentVersioning {
           compressionRatio: diffData ? diffData.compressionRatio : null,
           diffPath: diffData ? diffData.diffPath : null,
           patchAlgorithm: diffData ? diffData.patchAlgorithm : null
-        }
-      });
-
-      // Update document
-      await this.prisma.document.update({
-        where: { id: documentId },
-        data: {
+        }});
+        await tx.document.update({ where: { id: documentId }, data: {
           currentVersion: newVersionNumber,
+          fileName,
+          fileSize,
+          checksum,
+          storagePath: uploadResult.storagePath!,
+          objectVersionId: uploadResult.storageVersionId,
           updatedAt: new Date()
-        }
+        }});
+        return version;
       });
 
       this.logger.info('Document version created', {
@@ -224,12 +239,9 @@ export class DocumentVersioning {
     };
 
     try {
-      const { StorageService } = await import('../StorageService');
-      const storageService = new StorageService();
-
       const [oldBuffer, newBuffer] = await Promise.all([
-        versionFrom.storagePath ? storageService.downloadDocument(versionFrom.storagePath) : Promise.resolve(null),
-        versionTo.storagePath ? storageService.downloadDocument(versionTo.storagePath) : Promise.resolve(null)
+        versionFrom.storagePath ? this.storageService.downloadDocument(versionFrom.storagePath, organizationId) : Promise.resolve(null),
+        versionTo.storagePath ? this.storageService.downloadDocument(versionTo.storagePath, organizationId) : Promise.resolve(null)
       ]);
 
       if (oldBuffer && newBuffer) {
@@ -274,7 +286,8 @@ export class DocumentVersioning {
     const version = await this.prisma.documentVersion.findFirst({
       where: {
         documentId,
-        versionNumber
+        versionNumber,
+        document: { organizationId }
       }
     });
 
@@ -299,6 +312,9 @@ export class DocumentVersioning {
         fileSize: version.fileSize,
         checksum: version.checksum,
         storagePath: version.storagePath,
+        objectVersionId: version.objectVersionId,
+        malwareScan: version.malwareScan,
+        encryptedAtRest: version.encryptedAtRest,
         changeNotes: `Restored from version ${versionNumber}`,
         changeType: 'MAJOR',
         documentId,
@@ -316,6 +332,7 @@ export class DocumentVersioning {
         fileSize: version.fileSize,
         checksum: version.checksum,
         storagePath: version.storagePath,
+        objectVersionId: version.objectVersionId,
         currentVersion: newVersionNumber
       }
     });
@@ -332,7 +349,8 @@ export class DocumentVersioning {
     const version = await this.prisma.documentVersion.findFirst({
       where: {
         documentId,
-        versionNumber
+        versionNumber,
+        document: { organizationId }
       }
     });
 
@@ -355,8 +373,8 @@ export class DocumentVersioning {
     });
 
     // If this was the current version, update to the previous version
-    const document = await this.prisma.document.findUnique({
-      where: { id: documentId }
+    const document = await this.prisma.document.findFirst({
+      where: { id: documentId, organizationId }
     });
 
     if (document?.currentVersion === versionNumber) {
@@ -376,6 +394,7 @@ export class DocumentVersioning {
             fileSize: previousVersion.fileSize,
             checksum: previousVersion.checksum,
             storagePath: previousVersion.storagePath
+            ,objectVersionId: previousVersion.objectVersionId
           }
         });
       }

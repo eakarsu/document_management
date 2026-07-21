@@ -82,11 +82,12 @@ const WORKFLOW_STAGES = {
 async function canLeaveFeedback(
   documentId: string,
   userId: string,
-  stageNumber: number
+  stageNumber: number,
+  organizationId: string
 ): Promise<{ allowed: boolean; reason?: string }> {
   // Get document and current workflow stage
-  const document = await prisma.document.findUnique({
-    where: { id: documentId }
+  const document = await prisma.document.findFirst({
+    where: { id: documentId, organizationId, status: { not: 'DELETED' } }
   });
 
   if (!document) {
@@ -141,7 +142,7 @@ router.post('/stage3/internal-feedback', authMiddleware, async (req: Request, re
     const userId = (req as any).user?.id;
 
     // Validate stage
-    const canAdd = await canLeaveFeedback(documentId, userId, 3);
+    const canAdd = await canLeaveFeedback(documentId, userId, 3, (req as any).user.organizationId);
     if (!canAdd.allowed) {
       return res.status(403).json({ error: canAdd.reason });
     }
@@ -329,7 +330,7 @@ router.post('/stage7/collaborative-feedback', authMiddleware, async (req: Reques
     const userId = (req as any).user?.id;
 
     // Validate stage
-    const canAdd = await canLeaveFeedback(documentId, userId, 7);
+    const canAdd = await canLeaveFeedback(documentId, userId, 7, (req as any).user.organizationId);
     if (!canAdd.allowed) {
       return res.status(403).json({ error: canAdd.reason });
     }

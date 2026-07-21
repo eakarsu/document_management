@@ -61,13 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(data.error || 'Login failed');
       }
 
-      if (data.success && data.user && data.accessToken) {
-        // Store tokens
-        localStorage.setItem('accessToken', data.accessToken);
-        if (data.refreshToken) {
-          localStorage.setItem('refreshToken', data.refreshToken);
-        }
-
+      if (data.success && data.user) {
         // Set user
         setUser(data.user);
         
@@ -116,27 +110,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshToken = async (): Promise<boolean> => {
     try {
-      const refresh = localStorage.getItem('refreshToken');
-      if (!refresh) {
-        return false;
-      }
-
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ refreshToken: refresh }),
+        credentials: 'include',
+        body: '{}',
       });
 
       const data = await response.json();
 
-      if (data.success && data.accessToken) {
-        localStorage.setItem('accessToken', data.accessToken);
-        return true;
-      }
-
-      return false;
+      return Boolean(data.success);
     } catch (error) {
       console.error('Token refresh error:', error);
       return false;
@@ -155,17 +140,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuthStatus = useCallback(async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
       // Verify token with backend
       const response = await fetch('/api/auth/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (response.ok) {

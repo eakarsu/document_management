@@ -21,6 +21,7 @@ import axios from 'axios';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authenticateToken';
 import { aiRateLimiter } from '../middleware/aiRateLimit';
 import { parseAIJson } from '../utils/parseAIJson';
+import { defendAIInput, stageAIResult } from '../security/aiGovernance';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -163,13 +164,14 @@ router.post('/check/:documentId', authenticateToken, aiRateLimiter, async (req: 
     if (!OPENROUTER_API_KEY) {
       return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'OPENROUTER_API_KEY not set.' });
     }
+    const defended = defendAIInput(content);
 
     const systemPrompt =
       'You are a compliance reviewer. For each rule provided, decide whether the document text passes. ' +
       'Return STRICT JSON only. Schema: ' +
       '{"score":number(0-100),"findings":[{"ruleId":string,"ruleName":string,"severity":"CRITICAL"|"MAJOR"|"MINOR","passed":boolean,"excerpt":string,"suggestion":string}]}';
     const userPrompt =
-      `Document title: ${doc.title}\n\nDocument content (truncated):\n${content.substring(0, 8000)}\n\n` +
+      `Document title: ${doc.title}\n\nDocument content (delimited and truncated):\n${defended.content.substring(0, 9000)}\n\n` +
       `Rules:\n${rules.map((r: any) => `- [${r.id}] [${r.severity || 'MINOR'}] ${r.name}: ${r.description}`).join('\n')}\n\n` +
       'For each rule decide passed=true/false. Score 100 = all CRITICAL+MAJOR pass. Cite a short excerpt for failed rules.';
 
@@ -221,18 +223,9 @@ router.post('/check/:documentId', authenticateToken, aiRateLimiter, async (req: 
       generatedAt: new Date().toISOString(),
     };
 
-    // Persist into Document.aiResults JSONB.
-    await prisma.document.update({
-      where: { id: doc.id },
-      data: {
-        aiResults: {
-          ...((doc as any).aiResults || {}),
-          compliance: { ...report, usage },
-        },
-      } as any,
-    });
-
-    res.json(report);
+    const output = { ...report, usage };
+    const artifact = await stageAIResult({ prisma, document: doc, actorId: req.user.id, feature: 'compliance', output, promptDigest: defended.digest, model: MODEL });
+    res.status(202).json({ result: report, artifactId: artifact.id, reviewStatus: artifact.status, persisted: false });
   } catch (err: any) {
     console.error('compliance check failed', err?.response?.data || err.message);
     res.status(500).json({ error: err.message });

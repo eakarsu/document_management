@@ -59,6 +59,9 @@ if [ $? -eq 0 ]; then
         
         echo "⏳ Waiting for PostgreSQL to start..."
         sleep 5
+
+        DMS_TEST_JWT_SECRET="$(openssl rand -hex 32)"
+        DMS_TEST_REFRESH_SECRET="$(openssl rand -hex 32)"
         
         # Start app
         docker run -d \
@@ -66,8 +69,8 @@ if [ $? -eq 0 ]; then
           -p 3000:3000 \
           -p 4000:4000 \
           -e DATABASE_URL=postgresql://dms_user:dms_password@host.docker.internal:5432/dms_metadata \
-          -e JWT_SECRET=test_jwt_secret_key_12345 \
-          -e JWT_REFRESH_SECRET=test_jwt_refresh_secret_12345 \
+          -e JWT_SECRET="$DMS_TEST_JWT_SECRET" \
+          -e JWT_REFRESH_SECRET="$DMS_TEST_REFRESH_SECRET" \
           richmond-dms:test
         
         echo ""

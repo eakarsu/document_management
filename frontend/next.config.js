@@ -6,11 +6,9 @@ config({ path: resolve(__dirname, '../.env') });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingRoot: resolve(__dirname, '..'),
   typescript: {
     ignoreBuildErrors: false,
-  },
-  eslint: {
-    ignoreDuringBuilds: false,
   },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
@@ -18,30 +16,10 @@ const nextConfig = {
     NEXT_PUBLIC_COMPANY_LOCATION: process.env.NEXT_PUBLIC_COMPANY_LOCATION,
   },
   images: {
-    domains: ['localhost', 'minio', 's3.amazonaws.com'],
+    remotePatterns: process.env.NODE_ENV === 'development'
+      ? [{ protocol: 'http', hostname: 'localhost' }]
+      : [],
     formats: ['image/webp', 'image/avif'],
-  },
-  // Enable webpack 5 features
-  webpack: (config, { buildId, dev, isServer, defaultLoaders, nextRuntime, webpack }) => {
-    // Add support for importing PDFs
-    config.module.rules.push({
-      test: /\.pdf$/,
-      use: {
-        loader: 'file-loader',
-        options: {
-          publicPath: '/_next/static/files/',
-          outputPath: 'static/files/',
-        },
-      },
-    });
-
-    // Add support for web workers
-    config.module.rules.push({
-      test: /\.worker\.js$/,
-      use: { loader: 'worker-loader' },
-    });
-
-    return config;
   },
   // Security headers
   async headers() {
@@ -67,7 +45,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; connect-src 'self' http://*:4000 https://*:4000 ws://*:* wss://*:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://*:*; font-src 'self' data:; frame-src 'self' http://*:4000 https://*:4000 blob:;",
+            value: "default-src 'self'; base-uri 'self'; object-src 'none'; connect-src 'self' ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self' blob:; form-action 'self'; frame-ancestors 'self';",
           },
         ],
       },
@@ -77,67 +55,23 @@ const nextConfig = {
   async redirects() {
     return [];
   },
-  // Rewrites for API proxy - proxy all /api calls to backend except preview and download routes
+  // The backend is the sole authorization and data boundary. beforeFiles
+  // prevents legacy Next handlers from bypassing ABAC, audit or retention.
   async rewrites() {
-    return [
-      // Don't proxy preview routes - handle them locally
-      {
-        source: '/api/documents/:id/preview',
-        destination: '/api/documents/:id/preview',
-      },
-      // Don't proxy download routes - handle them locally
-      {
-        source: '/api/documents/:id/download',
-        destination: '/api/documents/:id/download',
-      },
-      // Don't proxy feedback routes - handle them locally
-      {
-        source: '/api/documents/:id/feedback',
-        destination: '/api/documents/:id/feedback',
-      },
-      // Don't proxy feedback sub-routes - handle them locally
-      {
-        source: '/api/documents/:id/feedback/:feedbackId',
-        destination: '/api/documents/:id/feedback/:feedbackId',
-      },
-      // Don't proxy comments routes - handle them locally
-      {
-        source: '/api/documents/:id/comments',
-        destination: '/api/documents/:id/comments',
-      },
-      // Don't proxy update-content routes - handle them locally
-      {
-        source: '/api/documents/:id/update-content',
-        destination: '/api/documents/:id/update-content',
-      },
-      // Don't proxy AI document generator - handle locally
-      {
-        source: '/api/ai-document-generator',
-        destination: '/api/ai-document-generator',
-      },
-      // Proxy create-with-template to backend (must come before the :id pattern)
-      {
-        source: '/api/documents/create-with-template',
-        destination: 'http://localhost:4000/api/documents/create-with-template',
-      },
-      // Don't proxy documents PATCH route - handle feedback locally (only for actual document IDs)
-      {
-        source: '/api/documents/:id((?!create-with-template$).*)',
-        destination: '/api/documents/:id',
-      },
-      // Proxy all other API calls to backend
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:4000/api/:path*',
-      },
-    ];
+    const backend = process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:4000';
+    return {
+      beforeFiles: [
+        { source: '/api/:path*', destination: `${backend}/api/:path*` },
+        { source: '/graphql', destination: `${backend}/graphql` },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
   },
   // Optimize bundle size
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
-  // Enable SWC minification
-  swcMinify: true,
 };
 
 module.exports = nextConfig;

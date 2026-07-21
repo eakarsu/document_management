@@ -163,9 +163,10 @@ export const documentResolvers: any = {
     async downloadUrl(
       parent: any,
       _: any,
-      { services }: Context
+      { user, services }: Context
     ) {
-      return await services.storage.getDocumentUrl(parent.storagePath);
+      if (!user || parent.organizationId !== user.organizationId) throw new Error('Access denied');
+      return await services.storage.getDocumentUrl(parent.storagePath, 900, user.organizationId);
     },
 
     async thumbnailUrl(
@@ -189,9 +190,12 @@ export const documentResolvers: any = {
     async downloadUrl(
       parent: any,
       _: any,
-      { services }: Context
+      { user, services }: Context
     ) {
-      return await services.storage.getDocumentUrl(parent.storagePath);
+      if (!user) throw new Error('Authentication required');
+      const document = await services.document.getDocumentById(parent.documentId, user.id, user.organizationId);
+      if (!document) throw new Error('Access denied');
+      return await services.storage.getDocumentUrl(parent.storagePath, 900, user.organizationId);
     }
   }
 };

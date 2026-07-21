@@ -18,6 +18,7 @@ import axios from 'axios';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authenticateToken';
 import { aiRateLimiter } from '../middleware/aiRateLimit';
 import { parseAIJson } from '../utils/parseAIJson';
+import { defendAIInput, stageAIResult } from '../security/aiGovernance';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -113,7 +114,8 @@ router.post('/preview', authenticateToken, aiRateLimiter, async (req: Authentica
     if (!OPENROUTER_API_KEY) {
       return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'OPENROUTER_API_KEY not set.' });
     }
-    const classification = await classifyText(title || 'Untitled', String(content));
+    const defended = defendAIInput(String(content));
+    const classification = await classifyText(title || 'Untitled', defended.content);
     res.json(classification);
   } catch (err: any) {
     console.error('classification preview failed', err?.response?.data || err.message);
@@ -136,19 +138,10 @@ router.post('/:documentId', authenticateToken, aiRateLimiter, async (req: Authen
       return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'OPENROUTER_API_KEY not set.' });
     }
 
-    const classification = await classifyText(doc.title, content);
-
-    await prisma.document.update({
-      where: { id: doc.id },
-      data: {
-        aiResults: {
-          ...((doc as any).aiResults || {}),
-          classification,
-        },
-      } as any,
-    });
-
-    res.json(classification);
+    const defended = defendAIInput(content);
+    const classification = await classifyText(doc.title, defended.content);
+    const artifact = await stageAIResult({ prisma, document: doc, actorId: req.user.id, feature: 'classification', output: classification, promptDigest: defended.digest, model: classification.model });
+    res.status(202).json({ result: classification, artifactId: artifact.id, reviewStatus: artifact.status, persisted: false });
   } catch (err: any) {
     console.error('classification failed', err?.response?.data || err.message);
     res.status(500).json({ error: err.message });

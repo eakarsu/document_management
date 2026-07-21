@@ -184,13 +184,13 @@ export class DocumentService {
       try {
         switch (input.operation) {
           case 'DELETE':
-            await this.deleteDocument(documentId, userId, organizationId, false);
+            throw new Error('USE_GOVERNED_DELETION_JOB');
             break;
           case 'ARCHIVE':
-            await this.updateDocument(documentId, { status: 'ARCHIVED' }, userId, organizationId);
+            await this.prisma.document.updateMany({ where: { id: documentId, organizationId, status: { not: 'PUBLISHED' } }, data: { status: 'ARCHIVED' } });
             break;
           case 'RESTORE':
-            await this.updateDocument(documentId, { status: 'DRAFT' }, userId, organizationId);
+            await this.prisma.document.updateMany({ where: { id: documentId, organizationId, status: 'ARCHIVED' }, data: { status: 'DRAFT' } });
             break;
           case 'MOVE':
             if (input.targetFolderId) {
@@ -279,18 +279,13 @@ export class DocumentService {
       this.logger.error('Failed to create audit log:', error);
     }
   }
-  // Add missing method
-  async getDocument(documentId: string): Promise<any> {
-    return this.prisma.document.findUnique({
-      where: { id: documentId }
-    });
-  }
-
-  async getDocumentContent(documentId: string): Promise<Buffer> {
-    const doc = await this.getDocument(documentId);
-    if (!doc || !doc.content) {
-      throw new Error('Document not found or has no content');
-    }
-    return Buffer.from(doc.content);
+  async getDocumentContent(documentId: string, organizationId: string): Promise<Buffer> {
+    const doc = await this.prisma.document.findFirst({ where: { id: documentId, organizationId, status: { not: 'DELETED' } } });
+    if (!doc) throw new Error('Document not found');
+    const object = await this.storageService.downloadDocument(doc.storagePath, organizationId);
+    if (!object) throw new Error('Document object not found');
+    const checksum = require('crypto').createHash('sha256').update(object).digest('hex');
+    if (checksum !== doc.checksum) throw new Error('DOCUMENT_CHECKSUM_MISMATCH');
+    return object;
   }
 }

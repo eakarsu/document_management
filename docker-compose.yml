@@ -1,188 +1,61 @@
-version: '3.8'
-
 services:
-  # PostgreSQL for metadata (AWS/Production - Port 5433 to avoid local conflict)
   postgres:
-    image: postgres:15-alpine
-    container_name: dms_postgres
+    image: postgres:${POSTGRES_IMAGE_TAG:?set a reviewed pinned PostgreSQL tag}
     environment:
-      POSTGRES_DB: dms_prod
-      POSTGRES_USER: dms_user
-      POSTGRES_PASSWORD: dms_password
-    ports:
-      - "5433:5432"  # External port 5433 to avoid conflict with local PostgreSQL on 5432
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/postgres/init:/docker-entrypoint-initdb.d
-    networks:
-      - dms_network
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes: [postgres_data:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dms_user -d dms_prod"]
+      test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+    networks: [private]
+    restart: unless-stopped
 
-  # MongoDB for document storage
-  mongodb:
-    image: mongo:7.0
-    container_name: dms_mongodb
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: dms_user
-      MONGO_INITDB_ROOT_PASSWORD: dms_password
-      MONGO_INITDB_DATABASE: dms_documents
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-      - ./database/mongodb/init:/docker-entrypoint-initdb.d
-    networks:
-      - dms_network
-
-  # Redis for caching
-  redis:
-    image: redis:7.2-alpine
-    container_name: dms_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - dms_network
-    command: redis-server --appendonly yes
-
-  # Elasticsearch for search
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: dms_elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    networks:
-      - dms_network
-
-  # RabbitMQ for message queuing
-  rabbitmq:
-    image: rabbitmq:3.12-management-alpine
-    container_name: dms_rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: dms_user
-      RABBITMQ_DEFAULT_PASS: dms_password
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - dms_network
-
-  # MinIO for S3-compatible object storage
   minio:
-    image: minio/minio:latest
-    container_name: dms_minio
+    image: minio/minio:${MINIO_IMAGE_TAG:?set a reviewed pinned MinIO tag}
+    command: server /data
     environment:
-      MINIO_ROOT_USER: dms_user
-      MINIO_ROOT_PASSWORD: dms_password
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    networks:
-      - dms_network
-    command: server /data --console-address ":9001"
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_ACCESS_KEY:?required}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_SECRET_KEY:?required}
+    volumes: [object_data:/data]
+    networks: [private]
+    restart: unless-stopped
 
-  # Unified Application (Backend + Frontend)
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile.simple
-    container_name: dms_app
+    build: { context: ., dockerfile: Dockerfile }
+    read_only: true
+    tmpfs: [/tmp]
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      # Backend settings
-      BACKEND_PORT: 4000
-      DATABASE_URL: postgresql://dms_user:dms_password@postgres:5432/dms_prod
-      MONGODB_URL: mongodb://dms_user:dms_password@mongodb:27017/dms_documents
-      REDIS_URL: redis://redis:6379
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-      RABBITMQ_URL: amqp://dms_user:dms_password@rabbitmq:5672
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: dms_user
-      MINIO_SECRET_KEY: dms_password
-      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_key_here}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your_jwt_refresh_secret_here}
-      # Frontend settings
-      FRONTEND_PORT: 3000
-      NEXT_PUBLIC_API_URL: http://localhost:4000
-      NEXT_PUBLIC_WS_URL: ws://localhost:4000
-      # OpenRouter API
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      # Application Mode
-      APP_MODE: ${APP_MODE:-production}
-      NEXT_PUBLIC_APP_MODE: ${NEXT_PUBLIC_APP_MODE:-production}
-      NEXT_PUBLIC_ENABLE_LOGIN: ${NEXT_PUBLIC_ENABLE_LOGIN:-false}
-      # Company Info
-      NEXT_PUBLIC_COMPANY_NAME: ${NEXT_PUBLIC_COMPANY_NAME:-Richmond DMS}
-      NEXT_PUBLIC_COMPANY_LOCATION: ${NEXT_PUBLIC_COMPANY_LOCATION:-Richmond, VA}
-    ports:
-      - "3000:3000"  # Frontend
-      - "4000:4000"  # Backend API
-    volumes:
-      - ./uploads:/app/backend/uploads
-      - ./logs:/app/logs
-    networks:
-      - dms_network
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?required}
+      JWT_SECRET: ${JWT_SECRET:?required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?required}
+      AUDIT_SIGNING_KEY: ${AUDIT_SIGNING_KEY:?required}
+      AUDIT_SIGNING_KEY_ID: ${AUDIT_SIGNING_KEY_ID:?required}
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:?required}
+      OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:?required}
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:?required}
+      MALWARE_SCANNER_URL: ${MALWARE_SCANNER_URL:?required}
+      MALWARE_SCANNER_HEALTH_URL: ${MALWARE_SCANNER_HEALTH_URL:?required}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?required}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL_VERSION: ${OPENROUTER_MODEL_VERSION:-}
+    ports: ["3000:3000", "4000:4000"]
     depends_on:
-      - postgres
-      - mongodb
-      - redis
-      - elasticsearch
-      - rabbitmq
-      - minio
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+    networks: [private, egress]
     restart: unless-stopped
-
-  # AI Services
-  ai-services:
-    build:
-      context: ./ai-services
-      dockerfile: Dockerfile
-    container_name: dms_ai_services
-    environment:
-      PYTHONPATH: /app
-      ENVIRONMENT: development
-      DATABASE_URL: postgresql://dms_user:dms_password@postgres:5432/dms_metadata
-      MONGODB_URL: mongodb://dms_user:dms_password@mongodb:27017/dms_documents
-      REDIS_URL: redis://redis:6379
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: dms_user
-      MINIO_SECRET_KEY: dms_password
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./ai-services:/app
-    networks:
-      - dms_network
-    depends_on:
-      - postgres
-      - mongodb
-      - redis
-      - minio
-    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
 
 volumes:
   postgres_data:
-  mongodb_data:
-  redis_data:
-  elasticsearch_data:
-  rabbitmq_data:
-  minio_data:
-
+  object_data:
 networks:
-  dms_network:
-    driver: bridge
+  private: { internal: true }
+  egress: {}

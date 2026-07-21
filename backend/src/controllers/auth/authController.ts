@@ -1,366 +1,76 @@
 import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
-import { JWT_SECRET, JWT_REFRESH_SECRET, JWT_ACCESS_EXPIRES_IN, JWT_REFRESH_EXPIRES_IN } from '../../config/constants';
+import { AuthService } from '../../services/AuthService';
 import { AuthenticatedRequest } from '../../middleware/authenticateToken';
 
-const prisma = new PrismaClient();
+const auth = new AuthService();
+const secure = process.env.NODE_ENV === 'production';
+const cookieBase = { httpOnly: true, secure, sameSite: 'strict' as const, path: '/' };
+
+function clientIdentity(req: Request) {
+  return { ip: req.ip || req.socket.remoteAddress || 'unknown', userAgent: String(req.headers['user-agent'] || 'unknown') };
+}
+
+function setSessionCookies(res: Response, tokens: { accessToken: string; refreshToken: string }) {
+  res.cookie('accessToken', tokens.accessToken, { ...cookieBase, maxAge: 15 * 60 * 1000 });
+  res.cookie('refreshToken', tokens.refreshToken, { ...cookieBase, maxAge: 8 * 60 * 60 * 1000 });
+}
 
 export class AuthController {
   async login(req: Request, res: Response) {
-    try {
-      const { email, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({
-          success: false,
-          error: 'Email and password are required'
-        });
-      }
-
-      // Find user by email
-      const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          passwordHash: true,
-          roleId: true,
-          organizationId: true,
-          isActive: true
-        }
-      });
-
-      if (!user || !user.isActive) {
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid email or password'
-        });
-      }
-
-      // Check password
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid email or password'
-        });
-      }
-
-      // Generate tokens
-      const accessToken = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-          roleId: user.roleId,
-          organizationId: user.organizationId,
-          type: 'access'
-        },
-        JWT_SECRET,
-        { expiresIn: JWT_ACCESS_EXPIRES_IN } as jwt.SignOptions
-      );
-
-      const refreshToken = jwt.sign(
-        {
-          userId: user.id,
-          type: 'refresh'
-        },
-        JWT_REFRESH_SECRET,
-        { expiresIn: JWT_REFRESH_EXPIRES_IN } as jwt.SignOptions
-      );
-
-      // Return user data and tokens
-      const userData = {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        roleId: user.roleId,
-        organizationId: user.organizationId
-      };
-
-      // Set cookies for authentication
-      // Check if request is HTTPS (via X-Forwarded-Proto from nginx)
-      const isSecure = req.headers['x-forwarded-proto'] === 'https';
-
-      res.cookie('accessToken', accessToken, {
-        httpOnly: false, // Allow JavaScript to read it for client-side API calls
-        secure: isSecure,
-        sameSite: 'lax',
-        maxAge: 15 * 60 * 1000, // 15 minutes in milliseconds
-        path: '/'
-      });
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: false,
-        secure: isSecure,
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-        path: '/'
-      });
-
-      res.json({
-        success: true,
-        user: userData,
-        accessToken,
-        refreshToken
-      });
-
-    } catch (error: any) {
-      console.error('Login error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Login failed'
-      });
-    }
+    const { email, password, mfaCode } = req.body || {};
+    if (!email || !password) return res.status(400).json({ success: false, error: 'Email and password are required' });
+    const client = clientIdentity(req);
+    const result = await auth.login(String(email), String(password), client.ip, client.userAgent, mfaCode ? String(mfaCode) : undefined);
+    if (!result.success) return res.status(401).json(result);
+    setSessionCookies(res, result);
+    return res.json({ success: true, user: result.user });
   }
 
-  async register(req: Request, res: Response) {
+  async oidcState(req: Request, res: Response) {
+    const domain = String(req.body?.organizationDomain || '');
+    if (!domain) return res.status(400).json({ error: 'organizationDomain is required' });
+    const result = auth.issueOidcState(domain);
+    res.cookie('oidcState', result.state, { ...cookieBase, maxAge: 10 * 60 * 1000 });
+    return res.json({ nonce: result.nonce });
+  }
+
+  async oidcCallback(req: Request, res: Response) {
     try {
-      const { email, password, firstName, lastName, organizationName } = req.body;
-      if (!email || !password || !firstName || !lastName) {
-        return res.status(400).json({
-          success: false,
-          error: 'Email, password, first name, and last name are required'
-        });
-      }
+      const organizationDomain = String(req.body?.organizationDomain || '');
+      const idToken = String(req.body?.idToken || '');
+      const state = String(req.cookies?.oidcState || '');
+      if (!organizationDomain || !idToken || !state) return res.status(400).json({ error: 'OIDC callback fields are required' });
+      const client = clientIdentity(req);
+      const result = await auth.loginOidc(organizationDomain, idToken, state, client.ip, client.userAgent);
+      setSessionCookies(res, result);
+      res.clearCookie('oidcState', cookieBase);
+      return res.json({ success: true, user: result.user });
+    } catch (error) { return res.status(401).json({ success: false, error: error instanceof Error ? error.message : 'OIDC_LOGIN_FAILED' }); }
+  }
 
-      // Check if user already exists
-      const existingUser = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() }
-      });
-
-      if (existingUser) {
-        return res.status(409).json({
-          success: false,
-          error: 'User with this email already exists'
-        });
-      }
-
-      // Find or create organization
-      let organization;
-      if (organizationName) {
-        organization = await prisma.organization.findFirst({
-          where: { name: organizationName }
-        });
-        if (!organization) {
-          organization = await prisma.organization.create({
-            data: {
-              name: organizationName,
-              domain: organizationName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.local'
-            }
-          });
-        }
-      } else {
-        // Use default organization
-        organization = await prisma.organization.findFirst();
-        if (!organization) {
-          organization = await prisma.organization.create({
-            data: {
-              name: 'Default Organization',
-              domain: 'default.local'
-            }
-          });
-        }
-      }
-
-      // Find default user role
-      let userRole = await prisma.role.findFirst({
-        where: {
-          name: 'USER',
-          organizationId: organization.id
-        }
-      });
-      if (!userRole) {
-        userRole = await prisma.role.create({
-          data: {
-            name: 'USER',
-            organizationId: organization.id,
-            permissions: ['documents:read', 'documents:write']
-          }
-        });
-      }
-
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 12);
-
-      // Create user
-      const user = await prisma.user.create({
-        data: {
-          email: email.toLowerCase(),
-          passwordHash: hashedPassword,
-          firstName,
-          lastName,
-          roleId: userRole.id,
-          organizationId: organization.id,
-          isActive: true
-        },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          roleId: true,
-          organizationId: true
-        }
-      });
-
-      // Generate tokens
-      const accessToken = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-          roleId: user.roleId,
-          organizationId: user.organizationId,
-          type: 'access'
-        },
-        JWT_SECRET,
-        { expiresIn: '15m' }
-      );
-
-      const refreshToken = jwt.sign(
-        {
-          userId: user.id,
-          type: 'refresh'
-        },
-        JWT_REFRESH_SECRET,
-        { expiresIn: JWT_REFRESH_EXPIRES_IN } as jwt.SignOptions
-      );
-
-      res.status(201).json({
-        success: true,
-        user,
-        accessToken,
-        refreshToken
-      });
-
-    } catch (error: any) {
-      console.error('Registration error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Registration failed'
-      });
-    }
+  async register(_req: Request, res: Response) {
+    return res.status(403).json({ success: false, error: 'SELF_REGISTRATION_DISABLED' });
   }
 
   async refresh(req: Request, res: Response) {
-    try {
-      const { refreshToken } = req.body;
-      if (!refreshToken) {
-        return res.status(400).json({ error: 'Refresh token required' });
-      }
-
-      const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as any;
-
-      if (decoded.type !== 'refresh') {
-        return res.status(401).json({ error: 'Invalid refresh token' });
-      }
-
-      const user = await prisma.user.findUnique({
-        where: {
-          id: decoded.userId,
-          isActive: true
-        },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          roleId: true,
-          organizationId: true
-        }
-      });
-
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid refresh token' });
-      }
-
-      // Generate new access token
-      const accessToken = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-          roleId: user.roleId,
-          organizationId: user.organizationId,
-          type: 'access'
-        },
-        JWT_SECRET,
-        { expiresIn: '15m' }
-      );
-
-      res.json({
-        success: true,
-        accessToken,
-        user
-      });
-
-    } catch (error: any) {
-      console.error('Token refresh error:', error);
-      res.status(401).json({ error: 'Invalid or expired refresh token' });
-    }
+    const token = req.cookies?.refreshToken;
+    if (!token) return res.status(401).json({ error: 'Refresh cookie required' });
+    const result = await auth.refreshToken(token);
+    if (!result.accessToken || !result.refreshToken) return res.status(401).json({ error: result.error });
+    setSessionCookies(res, { accessToken: result.accessToken, refreshToken: result.refreshToken });
+    return res.json({ success: true, user: result.user });
   }
 
   async logout(req: AuthenticatedRequest, res: Response) {
-    try {
-      // In a real implementation, you'd blacklist the token
-      // For now, we'll just return success
-      res.json({ success: true, message: 'Logged out successfully' });
-    } catch (error: any) {
-      res.status(500).json({ error: 'Logout failed' });
-    }
+    if (req.user) await auth.logout(req.user.id, req.user.sessionId);
+    res.clearCookie('accessToken', cookieBase);
+    res.clearCookie('refreshToken', cookieBase);
+    return res.json({ success: true });
   }
 
   async getMe(req: AuthenticatedRequest, res: Response) {
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          roleId: true,
-          organizationId: true,
-          isActive: true,
-          role: {
-            select: {
-              name: true,
-              roleType: true,
-              permissions: true
-            }
-          },
-          organization: {
-            select: {
-              name: true,
-              domain: true
-            }
-          }
-        }
-      });
-
-      if (!user || !user.isActive) {
-        return res.status(401).json({ error: 'User not found or inactive' });
-      }
-
-      // Use roleType from database, fallback to name uppercased if roleType not set
-      const roleType = user.role?.roleType || user.role?.name?.toUpperCase() || 'USER';
-
-      res.json({
-        success: true,
-        user: {
-          ...user,
-          role: {
-            ...user.role,
-            roleType: roleType
-          }
-        }
-      });
-    } catch (error: any) {
-      console.error('Get current user error:', error);
-      res.status(500).json({ error: 'Failed to get user information' });
-    }
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    return res.json({ success: true, user: req.user });
   }
 }
 

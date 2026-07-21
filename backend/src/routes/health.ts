@@ -4,8 +4,7 @@ import { createClient } from 'redis';
 import { Client as ElasticsearchClient } from '@elastic/elasticsearch';
 // @ts-ignore — amqplib has no bundled types; install @types/amqplib to remove this
 import amqp from 'amqplib';
-import fs from 'fs';
-import path from 'path';
+import { StorageService } from '../services/StorageService';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -74,48 +73,28 @@ async function checkElasticsearch(): Promise<ServiceResult> {
   }
 }
 
-/** Check MinIO / local filesystem storage */
+/** Check required encrypted object storage; there is no filesystem fallback. */
 async function checkStorage(): Promise<ServiceResult> {
   const start = Date.now();
-  // Try MinIO if env var is set, fall back to filesystem check
-  const minioEndpoint = process.env.MINIO_ENDPOINT;
-  if (minioEndpoint) {
-    try {
-      const http = await import('http');
-      await new Promise<void>((resolve, reject) => {
-        const req = http.default.request(
-          { hostname: minioEndpoint.replace(/^https?:\/\//, '').split(':')[0],
-            port: parseInt(process.env.MINIO_PORT || '9000'),
-            path: '/minio/health/live',
-            method: 'GET',
-            timeout: 3000 },
-          (res) => {
-            if (res.statusCode === 200) resolve();
-            else reject(new Error(`MinIO health returned ${res.statusCode}`));
-          }
-        );
-        req.on('error', reject);
-        req.on('timeout', () => reject(new Error('MinIO health timeout')));
-        req.end();
-      });
-      return { status: 'up', responseTime: Date.now() - start, detail: 'minio' };
-    } catch (err: any) {
-      return { status: 'down', responseTime: Date.now() - start, error: err.message, detail: 'minio' };
-    }
-  }
-
-  // Fallback: check local uploads directory is writable
   try {
-    const uploadsDir = path.join(__dirname, '../../../uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-    const testFile = path.join(uploadsDir, '.health-check');
-    fs.writeFileSync(testFile, 'ok');
-    fs.unlinkSync(testFile);
-    return { status: 'up', responseTime: Date.now() - start, detail: 'local-filesystem' };
+    const available = await new StorageService().healthCheck();
+    if (!available) throw new Error('Object bucket unavailable');
+    return { status: 'up', responseTime: Date.now() - start, detail: 'encrypted-object-storage' };
   } catch (err: any) {
-    return { status: 'down', responseTime: Date.now() - start, error: err.message, detail: 'local-filesystem' };
+    return { status: 'down', responseTime: Date.now() - start, error: err.message, detail: 'encrypted-object-storage' };
+  }
+}
+
+async function checkMalwareScanner(): Promise<ServiceResult> {
+  const start = Date.now();
+  try {
+    const url = process.env.MALWARE_SCANNER_HEALTH_URL || process.env.MALWARE_SCANNER_URL;
+    if (!url) throw new Error('Malware scanner URL is not configured');
+    const response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(3000) });
+    if (!response.ok) throw new Error(`Scanner health returned ${response.status}`);
+    return { status: 'up', responseTime: Date.now() - start };
+  } catch (err: any) {
+    return { status: 'down', responseTime: Date.now() - start, error: err.message };
   }
 }
 
@@ -240,12 +219,15 @@ router.get('/detailed', async (req, res) => {
 // Readiness check
 router.get('/ready', async (req, res) => {
   try {
-    // Check if all critical services are available
-    await prisma.$queryRaw`SELECT 1`;
+    const [database, storage, malwareScanner] = await Promise.all([checkDatabase(), checkStorage(), checkMalwareScanner()]);
+    if ([database, storage, malwareScanner].some(service => service.status !== 'up')) {
+      return res.status(503).json({ status: 'not_ready', timestamp: new Date().toISOString(), services: { database, storage, malwareScanner } });
+    }
     
     res.json({
       status: 'ready',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      services: { database, storage, malwareScanner }
     });
 
   } catch (error: any) {

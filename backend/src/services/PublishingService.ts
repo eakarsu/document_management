@@ -69,8 +69,8 @@ export class PublishingService {
       transports: [new winston.transports.Console()]
     });
 
-    // Initialize scheduled tasks
-    this.initializeScheduledTasks();
+    // Background publication is run by an explicit authenticated worker. API
+    // process startup never mutates publication state.
   }
 
   /**
@@ -82,6 +82,10 @@ export class PublishingService {
     userId: string
   ): Promise<PublishingWorkflow> {
     try {
+      if (input.autoApprove) throw new Error('AUTO_APPROVAL_PROHIBITED');
+      if (!input.approvalSteps.length || input.approvalSteps.some(step => step.isRequired && (!step.minApprovals || !step.requiredUsers.length))) throw new Error('REQUIRED_APPROVER_CONFIGURATION_INVALID');
+      const validUsers = await this.prisma.user.count({ where: { id: { in: [...new Set(input.approvalSteps.flatMap(step => step.requiredUsers))] }, organizationId, isActive: true } });
+      if (validUsers !== new Set(input.approvalSteps.flatMap(step => step.requiredUsers)).size) throw new Error('CROSS_ORGANIZATION_APPROVER_REJECTED');
       this.logger.info('Creating publishing workflow', {
         name: input.name,
         workflowType: input.workflowType,
@@ -93,7 +97,7 @@ export class PublishingService {
           name: input.name,
           description: input.description,
           workflowType: input.workflowType as any,
-          autoApprove: input.autoApprove || false,
+          autoApprove: false,
           requiredApprovers: input.requiredApprovers || 1,
           allowParallel: input.allowParallel || false,
           timeoutHours: input.timeoutHours || 72,
@@ -179,6 +183,7 @@ export class PublishingService {
       if (!workflow) {
         throw new Error('Publishing workflow not found or inactive');
       }
+      if (workflow.autoApprove || !workflow.approvalSteps.length) throw new Error('GOVERNED_APPROVAL_STEPS_REQUIRED');
 
       // Validate document exists and is in the same organization
       const document = await this.prisma.document.findFirst({
@@ -205,7 +210,7 @@ export class PublishingService {
           id: `pub_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
           documentId: input.documentId,
           workflowId: input.workflowId,
-          status: workflow.autoApprove ? PublishingStatus.APPROVED : PublishingStatus.PENDING_APPROVAL,
+          status: PublishingStatus.PENDING_APPROVAL,
           currentStepNumber: 1,
           scheduledPublishDate: input.scheduledPublishAt,
           submissionNotes: input.publishingNotes,
@@ -217,18 +222,12 @@ export class PublishingService {
         }
       });
 
-      // If auto-approve, publish immediately
-      if (workflow.autoApprove) {
-        await this.publishDocument(publishing.id, userId, organizationId);
-      } else {
-        // Create approval requests for first step
-        await this.createApprovalRequests(publishing.id, workflow.approvalSteps[0]);
-      }
+      await this.createApprovalRequests(publishing.id, workflow.approvalSteps[0]);
 
       this.logger.info('Document submitted for publishing successfully', {
         publishingId: publishing.id,
         documentId: input.documentId,
-        autoApproved: workflow.autoApprove
+        autoApproved: false
       });
 
       return publishing;
@@ -291,8 +290,12 @@ export class PublishingService {
         throw new Error('Approval step not found');
       }
 
+      if (approverId === publishing.submittedById || approverId === publishing.documents.createdById) throw new Error('INDEPENDENT_APPROVER_REQUIRED');
+
       // Validate approver has permission
-      const hasPermission = approvalStep.requiredUsers.some(user => user.userId === approverId);
+      const directPermission = approvalStep.requiredUsers.some(user => user.userId === approverId);
+      const delegatedPermission = approvalStep.allowDelegation && Boolean(await this.prisma.approvalDelegation.findFirst({ where: { organizationId, delegateId: approverId, status: 'ACCEPTED', startsAt: { lte: new Date() }, expiresAt: { gt: new Date() }, AND: [{ OR: [{ documentId: publishing.documentId }, { documentId: null }] }, { OR: [{ stepId: approvalStep.id }, { stepId: null }] }] } }));
+      const hasPermission = directPermission || delegatedPermission;
       if (!hasPermission) {
         throw new Error('User not authorized to approve this step');
       }
@@ -307,7 +310,7 @@ export class PublishingService {
           }
         },
         update: {
-          status: ApprovalStatus.APPROVED,
+          status: input.decision === ApprovalDecision.APPROVE ? ApprovalStatus.APPROVED : ApprovalStatus.REJECTED,
           decision: input.decision,
           comments: input.comments,
           respondedAt: new Date()
@@ -372,14 +375,10 @@ export class PublishingService {
         throw new Error('Publishing record not found');
       }
 
-      // Update document status to PUBLISHED
-      await this.prisma.document.update({
-        where: { id: publishing.documentId },
-        data: {
-          status: 'PUBLISHED',
-          updatedAt: new Date()
-        }
-      });
+      // Publication authority belongs only to the governed 12-stage workflow.
+      if (publishing.documents.status !== 'PUBLISHED') throw new Error('GOVERNED_WORKFLOW_PUBLICATION_REQUIRED');
+      const governedAudit = await this.prisma.signedAuditEvent.findFirst({ where: { organizationId, entityType: 'Document', entityId: publishing.documentId, action: 'DOCUMENT_PUBLISHED' } });
+      if (!governedAudit) throw new Error('SIGNED_PUBLICATION_AUDIT_REQUIRED');
 
       // Update publishing status
       await this.prisma.document_publishings.update({
@@ -407,15 +406,6 @@ export class PublishingService {
 
     } catch (error: any) {
       this.logger.error('Failed to publish document:', error);
-      
-      // Update status to failed
-      await this.prisma.document_publishings.update({
-        where: { id: publishingId },
-        data: {
-          status: PublishingStatus.REJECTED
-        }
-      });
-
       throw error;
     }
   }
@@ -726,10 +716,8 @@ export class PublishingService {
           }
         });
 
-        // If scheduled for immediate publish, do it now
-        if (!publishing.scheduledPublishDate || publishing.scheduledPublishDate <= new Date()) {
-          await this.publishDocument(publishingId, 'system', publishing.documents.organizationId);
-        }
+        // An explicit worker may distribute only after the governed 12-stage
+        // workflow has produced a signed DOCUMENT_PUBLISHED audit event.
       }
     }
   }

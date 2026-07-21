@@ -17,6 +17,7 @@ import axios from 'axios';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authenticateToken';
 import { aiRateLimiter } from '../middleware/aiRateLimit';
 import { parseAIJson } from '../utils/parseAIJson';
+import { defendAIInput, stageAIResult } from '../security/aiGovernance';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -132,6 +133,7 @@ router.post('/:documentId', authenticateToken, aiRateLimiter, async (req: Authen
       prior = v.content;
     }
 
+    const defended = defendAIInput(changeLog.join('\n\n'));
     const aiResp = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
@@ -149,7 +151,7 @@ router.post('/:documentId', authenticateToken, aiRateLimiter, async (req: Authen
           {
             role: 'user',
             content:
-              `Document title: ${doc.title}\nTotal versions: ${versions.length}\n\nChange log (truncated):\n${changeLog.join('\n\n')}`,
+              `Document title: ${doc.title}\nTotal versions: ${versions.length}\n\nChange log (delimited and truncated):\n${defended.content}`,
           },
         ],
         temperature: 0.2,
@@ -183,17 +185,8 @@ router.post('/:documentId', authenticateToken, aiRateLimiter, async (req: Authen
       generatedAt: new Date().toISOString(),
     };
 
-    await prisma.document.update({
-      where: { id: doc.id },
-      data: {
-        aiResults: {
-          ...((doc as any).aiResults || {}),
-          versionSummary: summary,
-        },
-      } as any,
-    });
-
-    res.json(summary);
+    const artifact = await stageAIResult({ prisma, document: doc, actorId: req.user.id, feature: 'versionSummary', output: summary, promptDigest: defended.digest, model: MODEL });
+    res.status(202).json({ result: summary, artifactId: artifact.id, reviewStatus: artifact.status, persisted: false });
   } catch (err: any) {
     console.error('version-summary failed', err?.response?.data || err.message);
     res.status(500).json({ error: err.message });

@@ -1,30 +1,11 @@
 import { Express } from 'express';
-import path from 'path';
-// // === Batch 09 Gaps & Frontend Mounts ===
-// @ts-ignore
-import batch09GapAi from './batch09GapAi.js';
-// @ts-ignore
-import batch09GapNonai from './batch09GapNonai.js';
-// === DMS Custom Views (4 endpoints) ===
-// @ts-ignore -- plain JS router
-import customViewsRouter from './customViews.js';
 import { healthRouter } from './health';
 import { documentsRouter } from './documents';
 import { publishingRouter } from './publishing';
-import { aiWorkflowRouter } from './aiWorkflow';
-import eightStageWorkflowRouter from './eightStageWorkflow';
 import editorRouter from './editor';
-import feedbackProcessorRouter from './feedbackProcessor';
-import oprWorkflowFeedbackRouter from './oprWorkflowFeedback';
-import exportRouter from './export';
-import exportPerfectRouter from './export-perfect';
-import aiDocumentGeneratorRouter from './ai-document-generator';
-import workflowRouter from './workflow';
 import workflowsRouter from './workflows';
-import distributionRouter from './distribution';
 import usersRouter from './users';
 import attachmentsRouter from './attachments';
-import versionsRouter from './versions';
 import passwordResetsRouter from './password-resets';
 import passwordChangesRouter from './password-changes';
 import csvExportsRouter from './csv-exports';
@@ -41,7 +22,6 @@ import { dashboardController } from '../controllers/dashboard/dashboardControlle
 import { searchController } from '../controllers/search/searchController';
 import { authenticateToken } from '../middleware/authenticateToken';
 import { upload } from '../middleware/upload/multerConfig';
-import { workflowInstancesRouter } from './workflow-instances';
 import headersRouter from './headers';
 import imagesRouter from './images';
 import { retentionRouter } from './retention';
@@ -50,14 +30,21 @@ import redlineDiffRouter from './redlineDiff';
 import classificationRouter from './classification';
 import redactSuggestionsRouter from './redactSuggestions';
 import versionSummaryRouter from './versionSummary';
-import customFeaturesRouter from './customFeatures';
+import governedWorkflowRouter from './governed-workflow';
 
 export function setupRoutes(app: Express) {
-  // Serve uploaded files
-  app.use('/uploads', require('express').static(path.join(__dirname, '../../uploads')));
-
   // Health check route
   app.use('/health', healthRouter);
+
+  // Public session-establishment routes must be registered before any router
+  // that applies authentication at the `/api` mount point.
+  app.post('/api/auth/login', authController.login);
+  app.post('/api/auth/oidc/state', authController.oidcState);
+  app.post('/api/auth/oidc/callback', authController.oidcCallback);
+  app.post('/api/auth/register', authController.register);
+  app.post('/api/auth/refresh', authController.refresh);
+  app.post('/api/auth/logout', authenticateToken, authController.logout);
+  app.get('/api/auth/me', authenticateToken, authController.getMe);
 
   // Document routes
   app.use('/api/documents', documentsRouter);
@@ -65,45 +52,22 @@ export function setupRoutes(app: Express) {
   // Publishing routes
   app.use('/api/publishing', publishingRouter);
 
-  // AI Workflow routes
-  app.use('/api/ai-workflow', aiWorkflowRouter);
-
-  // 8-Stage Workflow routes
-  app.use('/api/workflow/8-stage', eightStageWorkflowRouter);
-
   // Editor routes
   app.use('/api/editor', editorRouter);
 
-  // Export routes (PDF, DOCX, etc.)
-  app.use('/api/export', exportRouter);
-  app.use('/api/export-perfect', exportPerfectRouter);
+  // Production-supported, transactional 12-stage workflow routes. This is
+  // mounted first so it replaces the legacy in-memory handlers at the same URLs.
+  app.use('/api/workflow', governedWorkflowRouter);
 
-  // AI Document Generator route
-  app.use('/api/ai-document-generator', aiDocumentGeneratorRouter);
-
-  // Feedback Processor routes (OpenRouter AI)
-  app.use('/api/feedback-processor', feedbackProcessorRouter);
-
-  // OPR Workflow Feedback routes (Stage 3 & 7 feedback)
-  app.use('/api/opr-workflow-feedback', oprWorkflowFeedbackRouter);
-
-  // Pluggable Workflow System routes
-  app.use('/api/workflow', workflowRouter);
-
-  // Register JSON workflows route
+  // Read-only workflow catalogue. State changes are only exposed by the
+  // governed transactional workflow router above.
   app.use('/api/workflows', workflowsRouter);
-
-  // Distribution routes (for workflow document distribution)
-  app.use('/api/workflows', distributionRouter);
 
   // User management routes
   app.use('/api', usersRouter);
 
   // Attachment routes
   app.use('/api', attachmentsRouter);
-
-  // Version control routes
-  app.use('/api', versionsRouter);
 
   // 8 System Feature routes
   app.use('/api', passwordResetsRouter);
@@ -115,19 +79,14 @@ export function setupRoutes(app: Express) {
   app.use('/api', passwordStrengthRulesRouter);
   app.use('/api', inputSanitizationRulesRouter);
 
-  // Workflow instances routes
-  app.use('/api/workflow-instances', workflowInstancesRouter);
-
   // Header templates routes
   app.use(headersRouter);
 
   // Image serving routes
   app.use('/api/images', imagesRouter);
 
-  // Document retention policy routes
-  app.use('/api/retention', retentionRouter);
-  // Also mount the per-document retention setter under /api/documents
-  app.use('/api/documents', retentionRouter);
+  // Tenant-scoped retention, legal hold, export-manifest and deletion jobs.
+  app.use('/api', retentionRouter);
 
   // AI Compliance Checker — score docs against org rule book.
   app.use('/api/compliance', complianceRouter);
@@ -143,29 +102,15 @@ export function setupRoutes(app: Express) {
 
   // AI Version Change Narrative — single-document evolution story.
   app.use('/api/version-summary', versionSummaryRouter);
-  app.use('/api/custom', customFeaturesRouter);
-  // // === Batch 09 Gaps & Frontend Mounts ===
-  app.use('/api/gap-ai-document_management', batch09GapAi);
-  app.use('/api/gap-nonai-document_management', batch09GapNonai);
-  // DMS Custom Views (4 endpoints)
-  app.use('/api/custom-views', customViewsRouter);
-
-  // ===== AUTHENTICATION ENDPOINTS =====
-  app.post('/api/auth/login', authController.login);
-  app.post('/api/auth/register', authController.register);
-  app.post('/api/auth/refresh', authController.refresh);
-  app.post('/api/auth/logout', authenticateToken, authController.logout);
-  app.get('/api/auth/me', authenticateToken, authController.getMe);
-
   // ===== TASK ENDPOINTS =====
   app.get('/api/tasks', authenticateToken, taskController.getUserTasks);
   app.get('/api/workflow/tasks', authenticateToken, taskController.getWorkflowTasks);
 
   // ===== DOCUMENT VERSION ENDPOINTS =====
-  app.post('/api/documents/:id/versions', upload.single('file'), versionController.createVersion);
-  app.get('/api/documents/:id/versions', versionController.getVersionHistory);
-  app.get('/api/documents/:id/versions/:from/compare/:to', versionController.compareVersions);
-  app.get('/api/documents/:id/versions/:versionNumber', versionController.getVersionDetails);
+  app.post('/api/documents/:id/versions', authenticateToken, upload.single('file'), versionController.createVersion);
+  app.get('/api/documents/:id/versions', authenticateToken, versionController.getVersionHistory);
+  app.get('/api/documents/:id/versions/:from/compare/:to', authenticateToken, versionController.compareVersions);
+  app.get('/api/documents/:id/versions/:versionNumber', authenticateToken, versionController.getVersionDetails);
 
   // ===== DOCUMENT ENDPOINTS =====
   app.put('/api/documents/:id/status/:status', authenticateToken, documentController.updateStatus);

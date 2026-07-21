@@ -4,13 +4,17 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { createServer } from 'http';
+import type { Server } from 'http';
 import expressWinston from 'express-winston';
 import { config } from './config/database';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './config/logger';
-import { BACKEND_PORT, FRONTEND_URL, ALLOWED_ORIGINS, RATE_LIMIT_CONFIG } from './config/constants';
+import { BACKEND_PORT, ALLOWED_ORIGINS, RATE_LIMIT_CONFIG } from './config/constants';
 import { setupRoutes } from './routes/setupRoutes';
 import { setupGraphQL } from './graphql/setupGraphQL';
+
+let activeServer: Server | undefined;
+let shutdownStarted = false;
 
 async function startServer() {
   try {
@@ -25,8 +29,8 @@ async function startServer() {
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
           imgSrc: ["'self'", "data:", "https:"],
-          frameSrc: ["'self'", "http://localhost:4000", "https://localhost:4000"],
-          frameAncestors: ["'self'", "http://localhost:3000", "https://localhost:3000", "http://localhost:3001", "https://localhost:3001", "http://localhost:3002", "https://localhost:3002"],
+          frameSrc: ["'self'"],
+          frameAncestors: ["'self'"],
         },
       },
     }));
@@ -37,14 +41,14 @@ async function startServer() {
 
     // CORS - Allow configured origins from environment variable
     app.use(cors({
-      origin: ALLOWED_ORIGINS.includes(FRONTEND_URL) ? ALLOWED_ORIGINS : [...ALLOWED_ORIGINS, FRONTEND_URL],
+      origin: ALLOWED_ORIGINS,
       credentials: true,
     }));
 
     // Request logging
     app.use(expressWinston.logger({
       winstonInstance: logger,
-      meta: true,
+      meta: false,
       msg: "HTTP {{req.method}} {{req.url}}",
       expressFormat: true,
       colorize: false,
@@ -73,10 +77,12 @@ async function startServer() {
 
     const PORT = BACKEND_PORT;
 
-    httpServer.listen(PORT, () => {
-      logger.info(`🚀 Server ready at http://localhost:${PORT}`);
-      logger.info(`🚀 GraphQL endpoint at http://localhost:${PORT}/graphql`);
-      logger.info(`🚀 WebSocket server at ws://localhost:${PORT}/graphql`);
+    const host = process.env.BACKEND_HOST;
+    if (host !== '127.0.0.1') throw new Error('BACKEND_HOST=127.0.0.1 is required');
+    activeServer = httpServer.listen(PORT, host, () => {
+      logger.info(`Server ready at http://${host}:${PORT}`);
+      logger.info(`GraphQL endpoint at http://${host}:${PORT}/graphql`);
+      logger.info(`WebSocket server at ws://${host}:${PORT}/graphql`);
     });
 
   } catch (error: any) {
@@ -85,15 +91,28 @@ async function startServer() {
   }
 }
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  logger.info('Received SIGINT, shutting down gracefully...');
-  process.exit(0);
-});
+function shutdown(signal: string) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  logger.info('Graceful shutdown started', { signal });
+  const timeout = setTimeout(() => {
+    logger.error('Graceful shutdown timed out');
+    process.exit(1);
+  }, 10_000);
+  timeout.unref();
+  if (!activeServer) return process.exit(0);
+  activeServer.close(error => {
+    clearTimeout(timeout);
+    if (error) {
+      logger.error('HTTP server shutdown failed', { error });
+      return process.exit(1);
+    }
+    logger.info('HTTP server stopped');
+    process.exit(0);
+  });
+}
 
-process.on('SIGTERM', () => {
-  logger.info('Received SIGTERM, shutting down gracefully...');
-  process.exit(0);
-});
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 startServer();

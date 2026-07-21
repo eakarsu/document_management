@@ -1,545 +1,165 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
-import { createClient } from 'redis';
-import winston from 'winston';
+import { JWT_ACCESS_EXPIRES_IN, JWT_REFRESH_EXPIRES_IN, JWT_REFRESH_SECRET, JWT_SECRET } from '../config/constants';
+import { verifyTotp } from '../security/mfa';
 
-interface UserData {
+export interface AuthenticatedUser {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
-  role: {
-    id: string;
-    name: string;
-    permissions: string[];
-  };
-  organization: {
-    id: string;
-    name: string;
-    domain: string;
-  };
   organizationId: string;
+  clearanceLevel: 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL' | 'RESTRICTED';
+  accessAttributes: unknown;
+  role: { id: string; name: string; permissions: string[] };
+  organization: { id: string; name: string; domain: string };
+  sessionId: string;
+  permissions: string[];
 }
 
-interface LoginResult {
-  success: boolean;
-  user?: UserData;
-  accessToken?: string;
-  refreshToken?: string;
-  error?: string;
-}
-
-interface RegisterData {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  organizationId: string;
-  roleId?: string;
-}
+interface TokenClaims { userId: string; organizationId: string; sid: string; type: 'access' | 'refresh'; iat: number; exp: number }
+const issuer = 'dms-api';
+const audience = 'dms-client';
+const digest = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 
 export class AuthService {
-  private prisma: PrismaClient;
-  private redis: any;
-  private redisConnected: boolean = false;
-  private logger: winston.Logger;
-  private jwtSecret: string;
-  private jwtRefreshSecret: string;
+  constructor(private prisma = new PrismaClient()) {}
 
-  constructor() {
-    this.prisma = new PrismaClient();
-    this.redis = createClient({
-      url: process.env.REDIS_URL || 'redis://localhost:6379',
-      socket: {
-        connectTimeout: 5000,
-        reconnectStrategy: false // Don't auto-reconnect to avoid hanging
-      }
-    });
-    this.logger = winston.createLogger({
-      level: 'info',
-      format: winston.format.json(),
-      transports: [
-        new winston.transports.Console()
-      ]
-    });
-    this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
-    this.jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
-
-    // Connect to Redis - with proper error handling
-    this.initRedis();
+  private policyDefaults(policy: any) {
+    return {
+      requireSso: policy?.requireSso ?? false,
+      requireMfa: policy?.requireMfa ?? true,
+      accessTokenMinutes: Math.max(5, Math.min(30, policy?.accessTokenMinutes ?? 15)),
+      idleTimeoutMinutes: Math.max(5, Math.min(60, policy?.idleTimeoutMinutes ?? 15)),
+      absoluteSessionHours: Math.max(1, Math.min(24, policy?.absoluteSessionHours ?? 8)),
+      maxActiveSessions: Math.max(1, Math.min(10, policy?.maxActiveSessions ?? 3)),
+    };
   }
 
-  private async initRedis() {
-    try {
-      await this.redis.connect();
-      this.redisConnected = true;
-      this.logger.info('Redis connected successfully');
-    } catch (error: any) {
-      this.redisConnected = false;
-      this.logger.error('Redis connection failed:', error);
-      // Continue without Redis for now
+  private userData(user: any, sessionId: string): AuthenticatedUser {
+    return {
+      id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName,
+      organizationId: user.organizationId, clearanceLevel: user.clearanceLevel, accessAttributes: user.accessAttributes,
+      role: { id: user.role.id, name: user.role.name, permissions: user.role.permissions },
+      permissions: user.role.permissions,
+      organization: { id: user.organization.id, name: user.organization.name, domain: user.organization.domain },
+      sessionId,
+    };
+  }
+
+  private signAccess(user: any, sid: string, minutes: number) {
+    return jwt.sign({ userId: user.id, organizationId: user.organizationId, sid, type: 'access' }, JWT_SECRET, { expiresIn: `${minutes}m`, issuer, audience } as jwt.SignOptions);
+  }
+
+  private signRefresh(user: any, sid: string) {
+    return jwt.sign({ userId: user.id, organizationId: user.organizationId, sid, type: 'refresh', jti: crypto.randomUUID() }, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_EXPIRES_IN, issuer, audience } as jwt.SignOptions);
+  }
+
+  private async beginSession(user: any, policyInput: any, ipAddress: string, userAgent: string, authMethod: string, mfaVerified: boolean) {
+    const policy = this.policyDefaults(policyInput);
+    const active = await this.prisma.userSession.findMany({ where: { userId: user.id, isActive: true, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: 'asc' } });
+    if (active.length >= policy.maxActiveSessions) {
+      await this.prisma.userSession.updateMany({ where: { id: { in: active.slice(0, active.length - policy.maxActiveSessions + 1).map(item => item.id) } }, data: { isActive: false } });
     }
+    const sid = crypto.randomUUID();
+    const refreshToken = this.signRefresh(user, sid);
+    await this.prisma.userSession.create({ data: {
+      sessionId: sid, userId: user.id, ipAddress: ipAddress.slice(0, 128), userAgent: userAgent.slice(0, 512), authMethod,
+      refreshTokenHash: digest(refreshToken), mfaVerifiedAt: mfaVerified ? new Date() : null,
+      expiresAt: new Date(Date.now() + policy.absoluteSessionHours * 3_600_000),
+    } });
+    await this.prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+    return { user: this.userData(user, sid), accessToken: this.signAccess(user, sid, policy.accessTokenMinutes), refreshToken };
   }
 
-  async login(email: string, password: string, ipAddress: string, userAgent: string): Promise<LoginResult> {
+  async login(email: string, password: string, ipAddress: string, userAgent: string, mfaCode?: string) {
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase(), isActive: true }, include: { role: true, organization: { include: { authPolicy: true } } } });
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) return { success: false as const, error: 'Invalid email or password' };
+    if (!user.emailVerified) return { success: false as const, error: 'Email verification required' };
+    const policy = this.policyDefaults(user.organization.authPolicy);
+    if (policy.requireSso) return { success: false as const, error: 'SSO_REQUIRED' };
+    if (policy.requireMfa && (!user.mfaEnabled || !user.mfaSecret || !mfaCode || !verifyTotp(user.mfaSecret, mfaCode))) return { success: false as const, error: 'MFA_REQUIRED_OR_INVALID' };
+    return { success: true as const, ...(await this.beginSession(user, user.organization.authPolicy, ipAddress, userAgent, 'password', policy.requireMfa)) };
+  }
+
+  issueOidcState(organizationDomain: string) {
+    const nonce = crypto.randomBytes(24).toString('base64url');
+    const state = jwt.sign({ type: 'oidc_state', organizationDomain, nonce }, JWT_SECRET, { expiresIn: '10m', issuer, audience } as jwt.SignOptions);
+    return { state, nonce };
+  }
+
+  private async oidcClaims(idToken: string, policy: any, state: string) {
+    if (!policy.oidcIssuer || !policy.oidcClientId || !policy.oidcJwksUri) throw new Error('OIDC_POLICY_INCOMPLETE');
+    const stateClaims = jwt.verify(state, JWT_SECRET, { issuer, audience }) as any;
+    if (stateClaims.type !== 'oidc_state') throw new Error('OIDC_STATE_INVALID');
+    const header = jwt.decode(idToken, { complete: true })?.header;
+    if (!header?.kid || header.alg !== 'RS256') throw new Error('OIDC_ALGORITHM_REJECTED');
+    const jwks = await fetch(policy.oidcJwksUri, { headers: { accept: 'application/json' } });
+    if (!jwks.ok) throw new Error('OIDC_JWKS_UNAVAILABLE');
+    const key = ((await jwks.json()) as { keys?: any[] }).keys?.find(item => item.kid === header.kid && item.kty === 'RSA');
+    if (!key) throw new Error('OIDC_KEY_NOT_FOUND');
+    const publicKey = crypto.createPublicKey({ key: key as crypto.JsonWebKey, format: 'jwk' });
+    const claims = jwt.verify(idToken, publicKey, { algorithms: ['RS256'], issuer: policy.oidcIssuer, audience: policy.oidcClientId, clockTolerance: 5 }) as any;
+    if (!claims.sub || claims.nonce !== stateClaims.nonce) throw new Error('OIDC_NONCE_INVALID');
+    return { claims, stateClaims };
+  }
+
+  async loginOidc(organizationDomain: string, idToken: string, state: string, ipAddress: string, userAgent: string) {
+    const organization = await this.prisma.organization.findUnique({ where: { domain: organizationDomain }, include: { authPolicy: true } });
+    if (!organization?.isActive || !organization.authPolicy) throw new Error('OIDC_ORGANIZATION_NOT_FOUND');
+    const { claims, stateClaims } = await this.oidcClaims(idToken, organization.authPolicy, state);
+    if (stateClaims.organizationDomain !== organizationDomain) throw new Error('OIDC_ORGANIZATION_MISMATCH');
+    const identity = await this.prisma.externalIdentity.findFirst({ where: { issuer: claims.iss, subject: claims.sub, organizationId: organization.id }, include: { user: { include: { role: true, organization: true } } } });
+    if (!identity?.user.isActive) throw new Error('OIDC_IDENTITY_NOT_PROVISIONED');
+    const amr = Array.isArray(claims.amr) ? claims.amr : [];
+    const mfaVerified = amr.some((value: string) => ['mfa', 'otp', 'hwk'].includes(value));
+    if (this.policyDefaults(organization.authPolicy).requireMfa && !mfaVerified) throw new Error('OIDC_MFA_REQUIRED');
+    await this.prisma.externalIdentity.update({ where: { id: identity.id }, data: { lastAuthenticatedAt: new Date() } });
+    return { success: true as const, ...(await this.beginSession(identity.user, organization.authPolicy, ipAddress, userAgent, 'oidc', mfaVerified)) };
+  }
+
+  async refreshToken(refreshToken: string) {
     try {
-      // Find user with role and organization
-      const user = await this.prisma.user.findUnique({
-        where: { 
-          email: email.toLowerCase(),
-          isActive: true 
-        },
-        include: {
-          role: {
-            include: {
-              organization: true
-            }
-          },
-          organization: true
-        }
-      });
-
-      if (!user) {
-        this.logger.warn('Login attempt with invalid email', { email, ipAddress });
-        return {
-          success: false,
-          error: 'Invalid email or password'
-        };
+      const claims = jwt.verify(refreshToken, JWT_REFRESH_SECRET, { issuer, audience }) as TokenClaims;
+      if (claims.type !== 'refresh') return { error: 'INVALID_REFRESH_TOKEN' };
+      const session = await this.prisma.userSession.findFirst({ where: { sessionId: claims.sid, userId: claims.userId, isActive: true, expiresAt: { gt: new Date() } }, include: { user: { include: { role: true, organization: { include: { authPolicy: true } } } } } });
+      if (!session?.user.isActive) return { error: 'SESSION_EXPIRED' };
+      const suppliedHash = Buffer.from(digest(refreshToken), 'hex');
+      const storedHash = Buffer.from(session.refreshTokenHash, 'hex');
+      if (suppliedHash.length !== storedHash.length || !crypto.timingSafeEqual(suppliedHash, storedHash)) {
+        await this.prisma.userSession.update({ where: { id: session.id }, data: { isActive: false } });
+        return { error: 'REFRESH_TOKEN_REUSE_DETECTED' };
       }
-
-      // Verify password
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-      if (!isPasswordValid) {
-        this.logger.warn('Login attempt with invalid password', { email, ipAddress });
-        return {
-          success: false,
-          error: 'Invalid email or password'
-        };
-      }
-
-      // Check if account is verified
-      if (!user.emailVerified) {
-        return {
-          success: false,
-          error: 'Please verify your email address before logging in'
-        };
-      }
-
-      // Generate tokens
-      const accessToken = this.generateAccessToken(user);
-      const refreshToken = this.generateRefreshToken(user);
-
-      // Create session
-      await this.createSession(user.id, accessToken, ipAddress, userAgent);
-
-      // Update last login
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { lastLogin: new Date() }
-      });
-
-      this.logger.info('User logged in successfully', { 
-        userId: user.id, 
-        email: user.email,
-        ipAddress 
-      });
-
-      return {
-        success: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: {
-            id: user.role.id,
-            name: user.role.name,
-            permissions: user.role.permissions
-          },
-          organization: {
-            id: user.organization.id,
-            name: user.organization.name,
-            domain: user.organization.domain
-          },
-          organizationId: user.organizationId
-        },
-        accessToken,
-        refreshToken
-      };
-
-    } catch (error: any) {
-      this.logger.error('Login error:', error);
-      return {
-        success: false,
-        error: 'An error occurred during login'
-      };
-    }
+      const policy = this.policyDefaults(session.user.organization.authPolicy);
+      if (session.lastSeenAt < new Date(Date.now() - policy.idleTimeoutMinutes * 60_000)) { await this.prisma.userSession.update({ where: { id: session.id }, data: { isActive: false } }); return { error: 'SESSION_IDLE_TIMEOUT' }; }
+      const rotated = this.signRefresh(session.user, session.sessionId);
+      await this.prisma.userSession.update({ where: { id: session.id }, data: { refreshTokenHash: digest(rotated), lastSeenAt: new Date() } });
+      return { accessToken: this.signAccess(session.user, session.sessionId, policy.accessTokenMinutes), refreshToken: rotated, user: this.userData(session.user, session.sessionId) };
+    } catch { return { error: 'INVALID_REFRESH_TOKEN' }; }
   }
 
-  async register(userData: RegisterData): Promise<LoginResult> {
+  async verifyToken(token: string): Promise<AuthenticatedUser | null> {
     try {
-      console.log('🔄 AuthService.register() called with:', { email: userData.email, orgId: userData.organizationId });
-      
-      // Check if user already exists
-      const existingUser = await this.prisma.user.findUnique({
-        where: { email: userData.email.toLowerCase() }
-      });
-
-      if (existingUser) {
-        console.log('❌ User already exists:', userData.email);
-        return {
-          success: false,
-          error: 'User with this email already exists'
-        };
-      }
-
-      console.log('✅ User does not exist, proceeding with registration...');
-
-      // Hash password
-      const passwordHash = await bcrypt.hash(userData.password, 12);
-      console.log('✅ Password hashed successfully');
-
-      // Get default role if not specified
-      let roleId = userData.roleId;
-      if (!roleId) {
-        console.log('🔍 Looking for default User role in organization:', userData.organizationId);
-        const defaultRole = await this.prisma.role.findFirst({
-          where: {
-            organizationId: userData.organizationId,
-            name: 'User'
-          }
-        });
-        console.log('🔍 Found default role:', defaultRole?.id, defaultRole?.name);
-        roleId = defaultRole?.id;
-      }
-
-      if (!roleId) {
-        console.log('❌ No valid role found');
-        return {
-          success: false,
-          error: 'Invalid role specified'
-        };
-      }
-
-      console.log('✅ Using role ID:', roleId);
-
-      // Create user
-      const newUser = await this.prisma.user.create({
-        data: {
-          email: userData.email.toLowerCase(),
-          passwordHash,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          organizationId: userData.organizationId,
-          roleId,
-          emailVerified: false // Require email verification
-        },
-        include: {
-          role: true,
-          organization: true
-        }
-      });
-
-      // Generate verification token
-      const verificationToken = this.generateVerificationToken(newUser.id);
-      try {
-        await this.redis.setEx(`email_verification:${newUser.id}`, 24 * 60 * 60, verificationToken);
-      } catch (redisError) {
-        this.logger.warn('Redis setEx failed, continuing without email verification cache:', redisError);
-      }
-
-      // TODO: Send verification email
-
-      this.logger.info('User registered successfully', { 
-        userId: newUser.id, 
-        email: newUser.email 
-      });
-
-      return {
-        success: true,
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          role: {
-            id: newUser.role.id,
-            name: newUser.role.name,
-            permissions: newUser.role.permissions
-          },
-          organization: {
-            id: newUser.organization.id,
-            name: newUser.organization.name,
-            domain: newUser.organization.domain
-          },
-          organizationId: newUser.organizationId
-        }
-      };
-
-    } catch (error: any) {
-      console.error('❌ Registration error details:', error);
-      this.logger.error('Registration error:', error);
-      return {
-        success: false,
-        error: 'An error occurred during registration'
-      };
-    }
+      const claims = jwt.verify(token, JWT_SECRET, { issuer, audience }) as TokenClaims;
+      if (claims.type !== 'access') return null;
+      const session = await this.prisma.userSession.findFirst({ where: { sessionId: claims.sid, userId: claims.userId, isActive: true, expiresAt: { gt: new Date() } }, include: { user: { include: { role: true, organization: { include: { authPolicy: true } } } } } });
+      if (!session?.user.isActive || session.user.organizationId !== claims.organizationId) return null;
+      const policy = this.policyDefaults(session.user.organization.authPolicy);
+      if (session.lastSeenAt < new Date(Date.now() - policy.idleTimeoutMinutes * 60_000)) { await this.prisma.userSession.update({ where: { id: session.id }, data: { isActive: false } }); return null; }
+      await this.prisma.userSession.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
+      return this.userData(session.user, session.sessionId);
+    } catch { return null; }
   }
 
-  async logout(userId: string, sessionId?: string): Promise<boolean> {
-    try {
-      // Invalidate specific session or all sessions for user
-      if (sessionId) {
-        await this.prisma.userSession.updateMany({
-          where: { 
-            userId,
-            sessionId,
-            isActive: true 
-          },
-          data: { isActive: false }
-        });
-        
-        // Remove from Redis
-        try {
-          await this.redis.del(`session:${sessionId}`);
-        } catch (redisError) {
-          this.logger.warn('Redis del failed:', redisError);
-        }
-      } else {
-        // Invalidate all sessions
-        await this.prisma.userSession.updateMany({
-          where: { 
-            userId,
-            isActive: true 
-          },
-          data: { isActive: false }
-        });
-        
-        // Remove all sessions from Redis
-        const sessions = await this.prisma.userSession.findMany({
-          where: { userId },
-          select: { sessionId: true }
-        });
-        
-        for (const session of sessions) {
-          try {
-            await this.redis.del(`session:${session.sessionId}`);
-          } catch (redisError) {
-            this.logger.warn('Redis del failed:', redisError);
-          }
-        }
-      }
-
-      this.logger.info('User logged out', { userId, sessionId });
-      return true;
-
-    } catch (error: any) {
-      this.logger.error('Logout error:', error);
-      return false;
-    }
+  async logout(userId: string, sessionId?: string) {
+    await this.prisma.userSession.updateMany({ where: { userId, ...(sessionId && { sessionId }) }, data: { isActive: false } });
+    return true;
   }
 
-  async refreshToken(refreshToken: string): Promise<{ accessToken?: string; error?: string }> {
-    try {
-      const decoded = jwt.verify(refreshToken, this.jwtRefreshSecret) as any;
-      
-      // Find user
-      const user = await this.prisma.user.findUnique({
-        where: { 
-          id: decoded.userId,
-          isActive: true 
-        },
-        include: {
-          role: true
-        }
-      });
-
-      if (!user) {
-        return { error: 'Invalid refresh token' };
-      }
-
-      // Generate new access token
-      const accessToken = this.generateAccessToken(user);
-
-      return { accessToken };
-
-    } catch (error: any) {
-      this.logger.error('Token refresh error:', error);
-      return { error: 'Invalid refresh token' };
-    }
-  }
-
-  async verifyToken(token: string): Promise<UserData | null> {
-    try {
-      const decoded = jwt.verify(token, this.jwtSecret) as any;
-      
-      // Check if token is blacklisted (only if Redis is connected)
-      let isBlacklisted = false;
-      if (this.redisConnected) {
-        try {
-          const result = await this.redis.get(`blacklist:${token}`);
-          isBlacklisted = !!result;
-        } catch (redisError) {
-          this.logger.warn('Redis get failed:', redisError);
-        }
-      }
-      if (isBlacklisted) {
-        return null;
-      }
-
-      // Find user
-      const user = await this.prisma.user.findUnique({
-        where: { 
-          id: decoded.userId,
-          isActive: true 
-        },
-        include: {
-          role: true,
-          organization: true
-        }
-      });
-
-      if (!user) {
-        return null;
-      }
-
-      return {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: {
-          id: user.role.id,
-          name: user.role.name,
-          permissions: user.role.permissions
-        },
-        organization: {
-          id: user.organization.id,
-          name: user.organization.name,
-          domain: user.organization.domain
-        },
-        organizationId: user.organizationId
-      };
-
-    } catch (error: any) {
-      return null;
-    }
-  }
-
-  private generateAccessToken(user: any): string {
-    return jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        roleId: user.roleId,
-        organizationId: user.organizationId
-      },
-      this.jwtSecret,
-      { 
-        expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h',
-        issuer: 'dms-api',
-        audience: 'dms-client'
-      } as jwt.SignOptions
-    );
-  }
-
-  private generateRefreshToken(user: any): string {
-    return jwt.sign(
-      {
-        userId: user.id,
-        type: 'refresh'
-      },
-      this.jwtRefreshSecret,
-      { 
-        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-        issuer: 'dms-api',
-        audience: 'dms-client'
-      } as jwt.SignOptions
-    );
-  }
-
-  private generateVerificationToken(userId: string): string {
-    return jwt.sign(
-      { userId, type: 'verification' },
-      this.jwtSecret,
-      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h' } as jwt.SignOptions
-    );
-  }
-
-  private async createSession(
-    userId: string, 
-    token: string, 
-    ipAddress: string, 
-    userAgent: string
-  ): Promise<void> {
-    const decoded = jwt.decode(token) as any;
-    const sessionId = `session_${userId}_${Date.now()}`;
-    
-    // Store in database
-    await this.prisma.userSession.create({
-      data: {
-        sessionId,
-        userId,
-        ipAddress,
-        userAgent,
-        expiresAt: new Date(decoded.exp * 1000)
-      }
-    });
-
-    // Store in Redis for quick lookup
-    try {
-      await this.redis.setEx(
-        `session:${sessionId}`,
-        15 * 60, // 15 minutes
-        JSON.stringify({
-          userId,
-          token,
-          ipAddress,
-          userAgent
-        })
-      );
-    } catch (redisError) {
-      this.logger.warn('Redis setEx for session failed:', redisError);
-    }
-  }
-
-  async hasPermission(userId: string, permission: string): Promise<boolean> {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        include: { role: true }
-      });
-
-      if (!user || !user.role) {
-        return false;
-      }
-
-      return user.role.permissions.includes(permission) || user.role.permissions.includes('*');
-
-    } catch (error: any) {
-      this.logger.error('Permission check error:', error);
-      return false;
-    }
-  }
-
-  async getActiveSessionsCount(userId: string): Promise<number> {
-    try {
-      const count = await this.prisma.userSession.count({
-        where: {
-          userId,
-          isActive: true,
-          expiresAt: {
-            gt: new Date()
-          }
-        }
-      });
-
-      return count;
-
-    } catch (error: any) {
-      this.logger.error('Session count error:', error);
-      return 0;
-    }
+  async hasPermission(userId: string, permission: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    return Boolean(user?.isActive && (user.role.permissions.includes(permission) || user.role.permissions.includes('*')));
   }
 }

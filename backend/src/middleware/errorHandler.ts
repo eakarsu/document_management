@@ -9,8 +9,7 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: 'error.log', level: 'error' })
+    new winston.transports.Console()
   ]
 });
 
@@ -38,10 +37,10 @@ export const errorHandler = (
     request: {
       method: req.method,
       url: req.url,
-      headers: req.headers,
-      body: req.method !== 'GET' ? req.body : undefined,
       ip: req.ip,
-      userAgent: req.get('User-Agent')
+      userAgent: req.get('User-Agent'),
+      requestId: req.get('X-Request-Id'),
+      contentLength: req.get('Content-Length')
     },
     user: (req as any).user?.id || 'anonymous'
   });

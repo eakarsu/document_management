@@ -3,7 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import winston from 'winston';
 import fs from 'fs';
 import path from 'path';
-import * as XLSX from 'xlsx';
+import os from 'os';
+import ExcelJS from 'exceljs';
 import { LibreOfficeService } from './LibreOfficeService';
 
 interface SearchDocument {
@@ -103,10 +104,12 @@ export class SearchService {
     organizationId: string,
     options: SearchOptions = {}
   ): Promise<SearchResult> {
-    const { query, filters = {}, from = 0, size = 20 } = options;
+    const { query, filters = {} } = options;
+    const from = Math.max(0, Math.trunc(Number(options.from) || 0));
+    const size = Math.min(100, Math.max(1, Math.trunc(Number(options.size) || 20)));
 
     // Build a simple ILIKE query across title, fileName and ocrText
-    const conditions: string[] = [`"organizationId" = '${organizationId}'`];
+    const conditions: string[] = ['"organizationId" = $1'];
     const params: any[] = [organizationId];
     let paramIdx = 2;
 
@@ -131,12 +134,15 @@ export class SearchService {
     );
     const total = parseInt(countResult[0]?.count || '0');
 
+    params.push(size, from);
+    const limitParameter = `$${paramIdx++}`;
+    const offsetParameter = `$${paramIdx++}`;
     const rows = await this.prisma.$queryRawUnsafe<any[]>(
       `SELECT id, title, "fileName", "originalName", "mimeType", category, tags,
               "ocrText", "organizationId", "createdAt", "updatedAt"
        FROM documents ${whereClause}
        ORDER BY "updatedAt" DESC
-       LIMIT ${size} OFFSET ${from}`,
+       LIMIT ${limitParameter} OFFSET ${offsetParameter}`,
       ...params
     );
 
@@ -304,8 +310,8 @@ export class SearchService {
       this.logger.info('Indexing single document with text extraction', { documentId });
 
       // Get document from database
-      const document = await this.prisma.document.findUnique({
-        where: { id: documentId },
+      const document = await this.prisma.document.findFirst({
+        where: { id: documentId, organizationId },
         include: { createdBy: true }
       });
 
@@ -314,7 +320,7 @@ export class SearchService {
       }
 
       // Extract text content from the file
-      const extractedContent = await this.extractTextContent(document.storagePath, document.mimeType);
+      const extractedContent = await this.extractTextContent(document.storagePath, document.mimeType, organizationId);
       const content = document.ocrText || extractedContent || '';
 
       // Index document with extracted content
@@ -597,14 +603,12 @@ export class SearchService {
     }
   }
 
-  async reindexAllDocuments(organizationId?: string): Promise<void> {
+  async reindexAllDocuments(organizationId: string): Promise<void> {
     try {
       this.logger.info('Starting document reindexing', { organizationId });
 
-      const where: any = {};
-      if (organizationId) {
-        where.organizationId = organizationId;
-      }
+      if (!organizationId) throw new Error('ORGANIZATION_REQUIRED');
+      const where: any = { organizationId };
 
       // Get documents from database
       const documents = await this.prisma.document.findMany({
@@ -622,7 +626,7 @@ export class SearchService {
         const operations = [];
         for (const doc of batch) {
           // Extract text content from the file
-          const extractedContent = await this.extractTextContent(doc.storagePath, doc.mimeType);
+          const extractedContent = await this.extractTextContent(doc.storagePath, doc.mimeType, doc.organizationId);
           const content = doc.ocrText || extractedContent || '';
 
           operations.push({ index: { _index: this.indexName, _id: doc.id } });
@@ -677,14 +681,28 @@ export class SearchService {
 
   async getSearchStats(organizationId: string): Promise<any> {
     try {
-      // Simplified implementation to avoid Elasticsearch typing issues
-      // Return basic mock data for now
+      if (!organizationId) throw new Error('ORGANIZATION_REQUIRED');
+      const active = { organizationId, status: { not: 'DELETED' as const } };
+      const [total, categories, mimeTypes, tags, months] = await Promise.all([
+        this.prisma.document.count({ where: active }),
+        this.prisma.document.groupBy({ by: ['category'], where: active, _count: { _all: true } }),
+        this.prisma.document.groupBy({ by: ['mimeType'], where: active, _count: { _all: true } }),
+        this.prisma.document.findMany({ where: active, select: { tags: true } }),
+        this.prisma.$queryRaw<Array<{ month: Date; count: bigint }>>`
+          SELECT date_trunc('month', "createdAt") AS month, COUNT(*)::bigint AS count
+          FROM documents
+          WHERE "organizationId" = ${organizationId} AND status <> 'DELETED'
+          GROUP BY 1 ORDER BY 1
+        `
+      ]);
+      const tagCounts = new Map<string, number>();
+      for (const document of tags) for (const tag of document.tags) tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
       return {
-        total_documents: { value: 0 },
-        categories: { buckets: [] },
-        mime_types: { buckets: [] },
-        tags: { buckets: [] },
-        documents_per_month: { buckets: [] }
+        total_documents: { value: total },
+        categories: { buckets: categories.map(value => ({ key: value.category || 'uncategorized', doc_count: value._count._all })) },
+        mime_types: { buckets: mimeTypes.map(value => ({ key: value.mimeType, doc_count: value._count._all })) },
+        tags: { buckets: [...tagCounts.entries()].map(([key, doc_count]) => ({ key, doc_count })).sort((a, b) => b.doc_count - a.doc_count) },
+        documents_per_month: { buckets: months.map(value => ({ key_as_string: value.month.toISOString(), doc_count: Number(value.count) })) }
       };
     } catch (error: any) {
       this.logger.error('Failed to get search stats:', error);
@@ -703,30 +721,22 @@ export class SearchService {
   }
 
   // Extract text content from files
-  private async extractTextContent(filePath: string, mimeType: string): Promise<string> {
+  private async extractTextContent(filePath: string, mimeType: string, organizationId: string): Promise<string> {
     try {
       this.logger.info('🔍 Starting text extraction', { filePath, mimeType });
-      
-      // Check if it's a local file path first
-      if (fs.existsSync(filePath)) {
-        return await this.extractTextFromLocalFile(filePath, mimeType);
-      }
-      
-      // If not a local file, try to download from storage (MinIO)
-      this.logger.info('🌐 File not found locally, attempting to download from MinIO storage', { filePath });
-      
+      if (!organizationId) throw new Error('ORGANIZATION_REQUIRED');
+      let tempDirectory: string | undefined;
       try {
         const { StorageService } = require('./StorageService');
         const storageService = new StorageService();
-        const fileBuffer = await storageService.downloadDocument(filePath);
+        const fileBuffer = await storageService.downloadDocument(filePath, organizationId);
         
         if (!fileBuffer) {
           this.logger.warn('File not found in storage:', filePath);
           return '';
         }
         
-        // Create temporary file to extract text from
-        const tempFilePath = `/tmp/temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'dms-extract-'));
         
         // Add appropriate file extension based on MIME type
         let extension = '';
@@ -737,7 +747,7 @@ export class SearchService {
         else if (mimeType === 'text/plain') extension = '.txt';
         else if (mimeType === 'text/csv') extension = '.csv';
         
-        const tempFilePathWithExt = tempFilePath + extension;
+        const tempFilePathWithExt = path.join(tempDirectory, `source${extension}`);
         fs.writeFileSync(tempFilePathWithExt, fileBuffer);
         
         this.logger.info('📁 Downloaded file to temporary location for text extraction', { 
@@ -748,18 +758,13 @@ export class SearchService {
         // Extract text from temporary file
         const extractedText = await this.extractTextFromLocalFile(tempFilePathWithExt, mimeType);
         
-        // Clean up temporary file
-        try {
-          fs.unlinkSync(tempFilePathWithExt);
-        } catch (cleanupError) {
-          this.logger.warn('Failed to cleanup temporary file:', tempFilePathWithExt);
-        }
-        
         return extractedText;
         
       } catch (storageError) {
         this.logger.error('Failed to download file from storage:', { filePath, error: storageError });
         return '';
+      } finally {
+        if (tempDirectory) fs.rmSync(tempDirectory, { recursive: true, force: true });
       }
     } catch (error: any) {
       this.logger.error('❌ Text extraction failed completely:', { 
@@ -795,18 +800,21 @@ export class SearchService {
         this.logger.info('🔄 Attempting XLSX extraction (primary method for Excel)', { filePath });
         
         try {
-          const workbook = XLSX.readFile(filePath);
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.readFile(filePath);
           let extractedText = '';
           
           this.logger.info('📊 XLSX workbook loaded', { 
-            sheetNames: workbook.SheetNames,
-            sheetCount: workbook.SheetNames.length
+            sheetNames: workbook.worksheets.map(sheet => sheet.name),
+            sheetCount: workbook.worksheets.length
           });
           
           // Process all sheets
-          workbook.SheetNames.forEach(sheetName => {
-            const sheet = workbook.Sheets[sheetName];
-            const sheetData = XLSX.utils.sheet_to_csv(sheet);
+          workbook.worksheets.forEach(sheet => {
+            const sheetName = sheet.name;
+            const rows: string[] = [];
+            sheet.eachRow(row => rows.push((row.values as unknown[]).slice(1).map(value => String(value ?? '')).join(',')));
+            const sheetData = rows.join('\n');
             extractedText += sheetData + '\n';
             
             this.logger.info('📄 XLSX sheet processed', { 
@@ -837,12 +845,12 @@ export class SearchService {
         this.logger.info('📄 Processing PDF with pdftotext', { filePath });
         
         try {
-          const { exec } = require('child_process');
+          const { execFile } = require('child_process');
           const util = require('util');
-          const execPromise = util.promisify(exec);
+          const execFilePromise = util.promisify(execFile);
           
           // Use pdftotext to extract text from PDF
-          const { stdout, stderr } = await execPromise(`pdftotext "${filePath}" -`);
+          const { stdout, stderr } = await execFilePromise('pdftotext', [filePath, '-'], { maxBuffer: 2 * 1024 * 1024 });
           
           if (stderr && !stderr.includes('Warning')) {
             this.logger.warn('pdftotext stderr:', stderr);

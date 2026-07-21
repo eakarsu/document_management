@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { DocumentService } from '../services/DocumentService';
 import { StorageService } from '../services/StorageService';
 import { SearchService } from '../services/SearchService';
@@ -8,6 +8,10 @@ import { authMiddleware, requirePermission } from '../middleware/auth';
 import winston from 'winston';
 import { PrismaClient } from '@prisma/client';
 import { getTemplateContent, getTemplateName } from '../templates/documentTemplates';
+import { validateUpload } from '../security/storagePolicy';
+import { authorizeDocumentAccess, GovernanceRole } from '../security/governancePolicy';
+import { prepareUntrustedDocumentForAI } from '../security/governancePolicy';
+import { RetentionService } from '../services/RetentionService';
 
 const router = express.Router();
 const logger = winston.createLogger({
@@ -21,23 +25,40 @@ const documentService = new DocumentService();
 const storageService = new StorageService();
 const searchService = new SearchService();
 const prisma = new PrismaClient();
+const retentionService = new RetentionService(prisma);
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>'"]/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  }[character] as string));
+}
 
 // Configure multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB limit
+    fileSize: 50 * 1024 * 1024,
     files: 10 // Maximum 10 files per request
   },
   fileFilter: (req, file, cb) => {
-    // Allow all file types for now
-    // TODO: Add file type restrictions based on organization settings
+    const knownTypes = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/zip', 'image/png', 'image/jpeg', 'text/plain', 'text/csv', 'text/html']);
+    if (!knownTypes.has(file.mimetype)) return cb(new Error('File type not allowed'));
     cb(null, true);
   }
 });
 
 // Middleware to apply to all document routes
 router.use(authMiddleware);
+router.param('id', async (req: any, res, next, documentId) => {
+  try {
+    const document = await prisma.document.findFirst({ where: { id: documentId, organizationId: req.user.organizationId, status: { not: 'DELETED' } }, include: { permissions: { where: { userId: req.user.id, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } } } });
+    if (!document) return res.status(404).json({ error: 'Document not found' });
+    const decision = authorizeDocumentAccess({ id: req.user.id, organizationId: req.user.organizationId, role: req.user.role.name.toUpperCase() as GovernanceRole, clearance: req.user.clearanceLevel, attributes: req.user.accessAttributes || {} }, { organizationId: document.organizationId, classification: document.classification, handlingCaveats: document.handlingCaveats, permittedUserIds: document.permissions.map(permission => permission.userId) });
+    if (!decision.allowed) return res.status(403).json({ error: decision.reason });
+    req.authorizedDocument = document;
+    next();
+  } catch { return res.status(500).json({ error: 'Document authorization failed' }); }
+});
 
 // List documents (with special handling for legal reviewers)
 router.get('/',
@@ -59,6 +80,7 @@ router.get('/',
       const userRole = req.user.role?.name?.toUpperCase() || '';
 
       let whereConditions: any = {
+        organizationId: req.user.organizationId,
         status: { not: 'DELETED' }
       };
 
@@ -99,24 +121,15 @@ router.get('/',
           // Get documents in workflow stages the user can access
           const workflowDocs = await prisma.jsonWorkflowInstance.findMany({
             where: {
-              currentStageId: { in: accessibleStages }
+              currentStageId: { in: accessibleStages },
+              document: { organizationId: req.user.organizationId }
             },
             select: { documentId: true }
           });
 
           const workflowDocIds = workflowDocs.map(w => w.documentId);
 
-          // Include documents in their organization OR documents in their workflow stages
-          whereConditions = {
-            ...whereConditions,
-            OR: [
-              { organizationId: req.user.organizationId },
-              ...(workflowDocIds.length > 0 ? [{ id: { in: workflowDocIds } }] : [])
-            ]
-          };
-        } else {
-          // Regular users only see documents in their organization
-          whereConditions.organizationId = req.user.organizationId;
+          if (workflowDocIds.length > 0) whereConditions.id = { in: workflowDocIds };
         }
       }
 
@@ -124,10 +137,10 @@ router.get('/',
       if (category) whereConditions.category = category;
       if (status) whereConditions.status = status;
       if (search) {
-        whereConditions.OR = [
+        whereConditions.AND = [{ OR: [
           { title: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } }
-        ];
+        ] }];
       }
 
       // Get documents
@@ -189,141 +202,23 @@ router.get('/',
 router.post('/create-with-template',
   async (req: any, res) => {
     try {
-      const {
-        title,
-        templateId,
-        category,
-        description,
-        tags,
-        folderId,
-        headerContent
-      } = req.body;
-
-      // Get template content
-      let templateContent = getTemplateContent(templateId || 'blank');
+      const { title, templateId, category, description, tags, folderId, headerContent } = req.body;
+      const templateContent = getTemplateContent(templateId || 'blank');
       const templateName = getTemplateName(templateId || 'blank');
-
-      // Extract header and styles from template content
-      let headerHtml = '';
-      let contentWithoutHeader = templateContent;
-      let styles = '';
-
-      // Check if template content already has a header section
-      const styleMatch = templateContent.match(/<style>([\s\S]*?)<\/style>/);
-      const headerTableMatch = templateContent.match(/<table class="header-table">[\s\S]*?<\/table>/);
-      const complianceMatch = templateContent.match(/<div class="compliance-section">[\s\S]*?<\/div>/);
-      const infoTableMatch = templateContent.match(/<table class="info-table">[\s\S]*?<\/table>/);
-      const bottomTableMatch = templateContent.match(/<table style="width: 100%; margin-top: 20px; border-top: 1px solid #000;">[\s\S]*?<\/table>/);
-
-      if (styleMatch || headerTableMatch) {
-        // Extract complete header including styles
-        if (styleMatch) {
-          styles = styleMatch[0];
-        }
-
-        // Build header HTML from all header components
-        const headerParts = [];
-        if (headerTableMatch) headerParts.push(headerTableMatch[0]);
-        if (complianceMatch) headerParts.push(complianceMatch[0]);
-        if (infoTableMatch) headerParts.push(infoTableMatch[0]);
-        if (bottomTableMatch) headerParts.push(bottomTableMatch[0]);
-
-        if (headerParts.length > 0) {
-          headerHtml = styles + '\n' + headerParts.join('\n');
-
-          // Remove header components from content
-          contentWithoutHeader = templateContent;
-          if (styles) contentWithoutHeader = contentWithoutHeader.replace(styles, '');
-          headerParts.forEach(part => {
-            contentWithoutHeader = contentWithoutHeader.replace(part, '');
-          });
-
-          // Also remove the page break div that comes after header
-          contentWithoutHeader = contentWithoutHeader.replace(/<div style="page-break-before: always; margin-top: 2in;">/, '<div>');
-        }
-      }
-
-      // If header content is provided from frontend, use it
-      if (headerContent) {
-        headerHtml = headerContent;
-      }
-
-      // Create document with template content in customFields
-      const prisma = new PrismaClient();
-
-      // Generate a unique file name for the document
       const fileName = `${title || templateName}_${Date.now()}.html`;
-      const storagePath = `documents/${req.user.organizationId}/${fileName}`;
-
-      // Create a unique checksum for the content with timestamp to avoid conflicts
-      const crypto = require('crypto');
-      const uniqueContent = `${templateContent}-${Date.now()}-${Math.random()}`;
-      const checksum = crypto.createHash('md5').update(uniqueContent).digest('hex');
-      
-      const document = await prisma.document.create({
-        data: {
-          title: title || templateName,
-          description: description || `Created from ${templateName} template`,
-          fileName: fileName,
-          originalName: fileName,
-          mimeType: 'text/html',
-          fileSize: Buffer.byteLength(templateContent, 'utf8'),
-          checksum: checksum,
-          storagePath: storagePath,
-          category: category || 'GENERAL',
-          status: 'DRAFT',
-          currentVersion: 1,
-          createdById: req.user.id,
-          organizationId: req.user.organizationId,
-          tags: tags || [],
-          customFields: {
-            templateId: templateId,
-            createdFrom: 'template',
-            content: contentWithoutHeader || templateContent, // Store content without header
-            htmlContent: templateContent, // Store full template with header
-            editableContent: contentWithoutHeader || templateContent, // Store editable content without header
-            headerHtml: headerHtml, // Store header HTML separately for proper formatting
-            hasHeader: !!headerHtml
-          }
-        },
-        include: {
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true
-            }
-          }
-        }
-      });
-
-      // Create initial version
-      await prisma.documentVersion.create({
-        data: {
-          documentId: document.id,
-          versionNumber: 1,
-          title: document.title,
-          fileName: fileName,
-          fileSize: Buffer.byteLength(templateContent, 'utf8'),
-          checksum: checksum,
-          storagePath: storagePath,
-          changeType: 'MINOR',
-          changeNotes: 'Initial version created from template',
-          createdById: req.user.id
-        }
-      });
-
-      logger.info('Document created from template', {
-        documentId: document.id,
-        templateId: templateId,
-        userId: req.user.id
-      });
-
-      res.json({
-        success: true,
-        document
-      });
+      const document = await documentService.createDocument({
+        title: title || templateName,
+        description: description || `Created from ${templateName} template`,
+        fileName,
+        originalName: fileName,
+        mimeType: 'text/html',
+        fileBuffer: Buffer.from(templateContent, 'utf8'),
+        category: category || 'GENERAL',
+        tags: Array.isArray(tags) ? tags : [],
+        folderId,
+        customFields: { templateId, createdFrom: 'template', headerHtml: typeof headerContent === 'string' ? headerContent : '', hasHeader: Boolean(headerContent) },
+      }, req.user.id, req.user.organizationId);
+      res.status(201).json({ success: true, document });
 
     } catch (error: any) {
       logger.error('Document creation from template failed:', error);
@@ -532,7 +427,7 @@ router.get('/:id/download',
 
       // Get file content
       const fileContent = await documentService.getDocumentContent(
-        documentId
+        documentId, req.user.organizationId
       );
 
       if (!fileContent) {
@@ -583,7 +478,7 @@ router.get('/:id/preview',
 
       // Get file content
       const fileContent = await documentService.getDocumentContent(
-        documentId
+        documentId, req.user.organizationId
       );
 
       if (!fileContent) {
@@ -698,6 +593,7 @@ router.get('/search',
               const doc = await prisma.document.findFirst({
                 where: { 
                   id: hit.id,
+                  organizationId: req.user.organizationId,
                   status: { not: 'DELETED' }  // Filter out deleted documents
                 },
                 include: {
@@ -732,7 +628,7 @@ router.get('/search',
       const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
       const take = parseInt(limit as string);
 
-      let where: any = {};
+      let where: any = { organizationId: req.user.organizationId };
 
       // Get user's role for workflow access
       const userRole = req.user.role?.name?.toUpperCase() || '';
@@ -772,9 +668,7 @@ router.get('/search',
         }).then(perms => perms.map(p => p.documentId));
 
         // User can see: documents from their org OR documents they have permission for
-        const accessConditions: any[] = [
-          { organizationId: req.user.organizationId }
-        ];
+        const accessConditions: any[] = [];
 
         if (permittedDocIds.length > 0) {
           accessConditions.push({ id: { in: permittedDocIds } });
@@ -785,7 +679,8 @@ router.get('/search',
         if (accessibleStages.length > 0) {
           const workflowDocs = await prisma.jsonWorkflowInstance.findMany({
             where: {
-              currentStageId: { in: accessibleStages }
+              currentStageId: { in: accessibleStages },
+              document: { organizationId: req.user.organizationId }
             },
             select: { documentId: true }
           });
@@ -796,7 +691,7 @@ router.get('/search',
           }
         }
 
-        where.OR = accessConditions;
+        if (accessConditions.length) where.AND = [{ OR: accessConditions }];
       }
 
       // Filter out deleted documents
@@ -811,16 +706,7 @@ router.get('/search',
           { originalName: { contains: q as string, mode: 'insensitive' } }
         ];
 
-        if (where.OR) {
-          // Combine access and search conditions
-          where.AND = [
-            { OR: where.OR },
-            { OR: searchConditions }
-          ];
-          delete where.OR;
-        } else {
-          where.OR = searchConditions;
-        }
+        where.AND = [...(where.AND || []), { OR: searchConditions }];
       }
 
       // Filters
@@ -886,7 +772,7 @@ router.get('/:id',
 
       // Check if document is in workflow stage that allows access
       const workflowInstance = await prisma.jsonWorkflowInstance.findFirst({
-        where: { documentId },
+        where: { documentId, document: { organizationId: req.user.organizationId } },
         select: { currentStageId: true }
       });
 
@@ -915,13 +801,7 @@ router.get('/:id',
         const userEmail = req.user.email?.toLowerCase() || '';
 
         // Check if user has access based on role or email
-        hasStageAccess = allowedRoles.some(role => {
-          const roleToCheck = role.toLowerCase().replace('_', '.');
-          return userRole === role ||
-                 userRole?.includes(role) ||
-                 userEmail.includes(roleToCheck) ||
-                 userEmail.includes('legal') && (role === 'LEGAL' || role === 'LEGAL_REVIEWER');
-        });
+        hasStageAccess = allowedRoles.includes(userRole);
 
         logger.info('Stage Access Check Details', {
           stage: workflowInstance.currentStageId,
@@ -954,6 +834,7 @@ router.get('/:id',
         document = await prisma.document.findFirst({
           where: {
             id: documentId,
+            organizationId: req.user.organizationId,
             status: { not: 'DELETED' }
           },
           include: {
@@ -1073,66 +954,11 @@ router.patch('/:id', authMiddleware,
         customFieldsKeys: documentUpdateData.customFields ? Object.keys(documentUpdateData.customFields) : []
       });
 
-      // Special handling for OPR - they should have full access to their documents
+      // OPR metadata is handled by the same allow-listed service as every other
+      // role. Ownership must not enable status/storage/tenant mass assignment.
       if (userRole === 'OPR') {
-        logger.info('OPR updating document:', {
-          documentId,
-          userId: req.user.id,
-          userRole
-        });
-
-        // OPR has full access to update any document fields
-        const existingDoc = await prisma.document.findFirst({
-          where: {
-            id: documentId
-          }
-        });
-
-        if (!existingDoc) {
-          logger.error('Document not found for OPR update:', { documentId });
-          return res.status(404).json({
-            success: false,
-            error: 'Document not found'
-          });
-        }
-
-        // Update the document with all provided fields (except content)
-        // If updating customFields, merge with existing customFields
-        let dataToUpdate = documentUpdateData;
-        if (documentUpdateData.customFields) {
-          dataToUpdate = {
-            ...documentUpdateData,
-            customFields: {
-              ...(existingDoc.customFields as any || {}),
-              ...documentUpdateData.customFields
-            }
-          };
-
-          logger.info('📝 OPR updating customFields:', {
-            documentId,
-            hasEditableContent: !!dataToUpdate.customFields.editableContent,
-            editableContentLength: dataToUpdate.customFields.editableContent?.length || 0,
-            customFieldsKeys: Object.keys(dataToUpdate.customFields)
-          });
-        }
-
-        const updatedDoc = await prisma.document.update({
-          where: { id: documentId },
-          data: dataToUpdate
-        });
-
-        logger.info('✅ Document updated successfully by OPR:', {
-          documentId: updatedDoc.id,
-          title: updatedDoc.title,
-          customFieldsKeys: Object.keys((updatedDoc.customFields as any) || {}),
-          hasEditableContent: !!(updatedDoc.customFields as any)?.editableContent,
-          editableContentLength: (updatedDoc.customFields as any)?.editableContent?.length || 0
-        });
-
-        return res.json({
-          success: true,
-          document: updatedDoc
-        });
+        const updatedDoc = await documentService.updateDocument(documentId, documentUpdateData, req.user.id, req.user.organizationId);
+        return res.json({ success: true, document: updatedDoc });
       }
 
       // Special handling for reviewers updating feedback
@@ -1154,7 +980,8 @@ router.patch('/:id', authMiddleware,
         // Check if document exists (without organization filter for reviewers)
         const existingDoc = await prisma.document.findFirst({
           where: {
-            id: documentId
+            id: documentId,
+            organizationId: req.user.organizationId
           }
         });
 
@@ -1253,19 +1080,12 @@ router.delete('/:id',
   async (req: any, res) => {
     try {
       const documentId = req.params.id;
-      const { permanent = false } = req.query;
-
-      const success = await documentService.deleteDocument(
-        documentId,
-        req.user.id,
-        req.user.organizationId,
-        permanent === 'true'
-      );
-
-      res.json({
-        success,
-        message: permanent ? 'Document permanently deleted' : 'Document moved to trash'
-      });
+      const role = String(req.user.role?.name || '').toUpperCase();
+      if (!['ADMIN', 'ADMINISTRATOR', 'LEGAL', 'RECORDS_MANAGER'].includes(role)) {
+        return res.status(403).json({ success: false, error: 'RECORDS_ADMIN_REQUIRED' });
+      }
+      const job = await retentionService.requestDeletion(documentId, req.user.organizationId, req.user.id);
+      res.status(202).json({ success: true, message: 'Governed deletion requested', job });
 
     } catch (error: any) {
       logger.error('Document deletion failed:', error);
@@ -1311,8 +1131,8 @@ router.post('/create-supplement',
       }
 
       // Fetch parent document to get details
-      const parentDocument = await prisma.document.findUnique({
-        where: { id: parentDocumentId }
+      const parentDocument = await prisma.document.findFirst({
+        where: { id: parentDocumentId, organizationId: req.user.organizationId }
       });
 
       if (!parentDocument) {
@@ -1324,30 +1144,21 @@ router.post('/create-supplement',
 
       // Format the supplement content with (Added)(ORG) tag
       const formattedContent = `
-        <h4>${paragraphNumber}. (Added)(${organization})</h4>
-        <p>${content}</p>
+        <h4>${escapeHtml(paragraphNumber)}. (Added)(${escapeHtml(organization)})</h4>
+        <p>${escapeHtml(content)}</p>
       `;
 
-      // Generate unique checksum for the supplement
-      const checksum = crypto
-        .createHash('sha256')
-        .update(formattedContent + Date.now() + Math.random())
-        .digest('hex');
-
-      // Create supplement document
-      const supplement = await prisma.document.create({
-        data: {
+      const fileName = `supplement_${String(organization).replace(/[^a-z0-9_-]/gi, '_')}_${Date.now()}.html`;
+      const supplement = await documentService.createDocument({
           title: title || `${parentDocument.title} - ${organization} Supplement`,
           description: description || `Supplement to ${supplementSection} by ${organization}`,
-          fileName: `supplement_${organization}_${Date.now()}.html`,
-          originalName: `${organization}_Supplement.html`,
+          fileName,
+          originalName: fileName,
           mimeType: 'text/html',
-          fileSize: Buffer.byteLength(formattedContent, 'utf8'),
-          checksum: checksum,
-          storagePath: '',
-          storageProvider: 'local',
-          status: 'DRAFT',
+          fileBuffer: Buffer.from(formattedContent, 'utf8'),
           category: category || 'supplement',
+          parentDocumentId,
+          tags: [],
           customFields: {
             content: formattedContent,
             editableContent: formattedContent,
@@ -1361,24 +1172,10 @@ router.post('/create-supplement',
             supplementSection,
             template: 'supplement',
             headerData: headerData || null
-          },
-          parentDocumentId: parentDocumentId,
-          supplementOrganization: organization,
-          supplementType: supplementType || 'standalone',
-          createdById: req.user.id,
-          organizationId: req.user.organizationId
-        },
-        include: {
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true
-            }
           }
-        }
-      });
+      }, req.user.id, req.user.organizationId);
+      if (!supplement) throw new Error('SUPPLEMENT_CREATE_FAILED');
+      await prisma.document.update({ where: { id: supplement.id }, data: { supplementOrganization: organization, supplementType: supplementType || 'standalone' } });
 
       logger.info('Supplement created successfully', { supplementId: supplement.id });
 
@@ -1415,8 +1212,8 @@ router.put('/:id/update-supplement',
       logger.info('Updating supplement document', { supplementId: id });
 
       // Fetch existing supplement
-      const existingSupplement = await prisma.document.findUnique({
-        where: { id }
+      const existingSupplement = await prisma.document.findFirst({
+        where: { id, organizationId: req.user.organizationId }
       });
 
       if (!existingSupplement) {
@@ -1438,15 +1235,22 @@ router.put('/:id/update-supplement',
 
       // Format the updated supplement content with (Added)(ORG) tag
       const formattedContent = `
-        <h4>${paragraphNumber}. (Added)(${organization})</h4>
-        <p>${content}</p>
+        <h4>${escapeHtml(paragraphNumber)}. (Added)(${escapeHtml(organization)})</h4>
+        <p>${escapeHtml(content)}</p>
       `;
+
+      await documentService.createDocumentVersion(id, Buffer.from(formattedContent, 'utf8'), {
+        fileName: existingSupplement.fileName,
+        title: existingSupplement.title,
+        description: existingSupplement.description || undefined,
+        changeNotes: 'Supplement content updated',
+        changeType: 'MINOR'
+      }, req.user.id, req.user.organizationId);
 
       // Update supplement document
       const updatedSupplement = await prisma.document.update({
         where: { id },
         data: {
-          fileSize: Buffer.byteLength(formattedContent, 'utf8'),
           customFields: {
             ...(existingSupplement.customFields as any || {}),
             content: formattedContent,
@@ -1522,20 +1326,11 @@ router.post('/:id/summarize', async (req: any, res) => {
     // Extract text content from the document
     let textContent = document.ocrText || document.content || '';
 
-    // If no text content, try reading from storage
+    // If no extracted text is stored, only decode explicitly text-based objects.
     if (!textContent && document.storagePath) {
       try {
-        const fs = await import('fs');
-        if (fs.existsSync(document.storagePath)) {
-          const rawBuffer = fs.readFileSync(document.storagePath);
-          // For plain text or known text-based files, convert to string
-          if (
-            document.mimeType?.includes('text') ||
-            document.mimeType === 'application/json'
-          ) {
-            textContent = rawBuffer.toString('utf-8');
-          }
-        }
+        const rawBuffer = await storageService.downloadDocument(document.storagePath, req.user.organizationId);
+        if (rawBuffer && document.mimeType?.includes('text')) textContent = rawBuffer.toString('utf-8');
       } catch (readErr: any) {
         logger.warn('Could not read document from storage for summarization', { id, error: readErr.message });
       }
@@ -1548,10 +1343,12 @@ router.post('/:id/summarize', async (req: any, res) => {
       });
     }
 
-    // Truncate to ~8000 chars to stay within token limits
+    // Bound and delimit untrusted content before sending it to a model.
     const truncatedContent = textContent.length > 8000
       ? textContent.slice(0, 8000) + '\n...[content truncated for summarization]'
       : textContent;
+    const defended = prepareUntrustedDocumentForAI(truncatedContent);
+    if (!defended.accepted) return res.status(422).json({ success: false, error: defended.reason, signals: defended.signals });
 
     // Call OpenRouter for summarization
     const axios = await import('axios');
@@ -1571,7 +1368,7 @@ router.post('/:id/summarize', async (req: any, res) => {
           },
           {
             role: 'user',
-            content: `Please summarize the following document titled "${document.title}":\n\n${truncatedContent}`
+            content: `${defended.instruction}\nSummarize the document titled "${document.title}".\n${defended.content}`
           }
         ],
         max_tokens: 1500,
@@ -1601,17 +1398,21 @@ router.post('/:id/summarize', async (req: any, res) => {
       documentLength: textContent.length
     };
 
-    // Persist summary back to document customFields
-    await prisma.document.update({
-      where: { id },
-      data: {
-        customFields: {
-          ...existingFields,
-          aiSummary: summaryRecord
-        },
-        updatedAt: new Date()
-      }
-    });
+    const artifact = await prisma.aIReviewArtifact.create({ data: {
+      organizationId: req.user.organizationId,
+      documentId: document.id,
+      documentVersion: document.currentVersion,
+      provider: 'openrouter',
+      model: String(summaryRecord.model || process.env.OPENROUTER_MODEL || 'unknown'),
+      modelVersion: String(aiResponse.data?.system_fingerprint || aiResponse.data?.created || 'provider-current'),
+      promptDigest: defended.digest,
+      sourceChecksums: [document.checksum],
+      outputChecksum: crypto.createHash('sha256').update(summaryContent).digest('hex'),
+      feature: 'summary',
+      output: summaryRecord,
+      promptDefense: { delimiter: 'UNTRUSTED_DOCUMENT', signalsChecked: true },
+      createdById: req.user.id,
+    } });
 
     logger.info('Document summarized successfully', {
       documentId: id,
@@ -1624,6 +1425,9 @@ router.post('/:id/summarize', async (req: any, res) => {
       documentId: id,
       documentTitle: document.title,
       summary: summaryRecord,
+      artifactId: artifact.id,
+      reviewStatus: artifact.status,
+      warning: 'AI output is advisory and cannot enter the governed workflow until independently approved.',
       cached: false
     });
 

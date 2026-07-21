@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "The static completeness review names credential risks but contains no secret values."
+paths = ['''(?:^|/)_COMPLETENESS_REVIEW\.md$''']

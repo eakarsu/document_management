@@ -5,25 +5,15 @@ import { RetryLink } from '@apollo/client/link/retry';
 
 // Create HTTP link
 const httpLink = createHttpLink({
-  uri: process.env.NEXT_PUBLIC_API_URL 
-    ? `${process.env.NEXT_PUBLIC_API_URL}/graphql`
-    : 'http://localhost:4000/graphql',
+  uri: '/graphql',
   credentials: 'include',
 });
 
-// Auth link to add JWT token to headers
+// Authentication is carried only by HttpOnly cookies.
 const authLink = setContext((_, { headers }) => {
-  // Get token from localStorage
-  let token: string | null = null;
-  
-  if (typeof window !== 'undefined') {
-    token = localStorage.getItem('accessToken');
-  }
-
   return {
     headers: {
       ...headers,
-      authorization: token ? `Bearer ${token}` : '',
       'Content-Type': 'application/json',
     },
   };
@@ -40,8 +30,6 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
       // Handle authentication errors
       if (extensions?.code === 'UNAUTHENTICATED' || extensions?.code === 'UNAUTHORIZED') {
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
           window.location.href = '/login';
         }
       }
@@ -58,14 +46,7 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
       if (statusCode === 401) {
         // Try to refresh token
         if (typeof window !== 'undefined') {
-          const refreshToken = localStorage.getItem('refreshToken');
-          if (refreshToken) {
-            // TODO: Implement token refresh logic
-            console.log('Attempting to refresh token...');
-          } else {
-            localStorage.removeItem('accessToken');
-            window.location.href = '/login';
-          }
+          window.location.href = '/login';
         }
       }
     }

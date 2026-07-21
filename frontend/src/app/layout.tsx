@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { ApolloWrapper } from '../lib/apollo-wrapper';
 import { MuiThemeProvider } from '../components/providers/MuiThemeProvider';
@@ -12,7 +12,6 @@ export const metadata: Metadata = {
   description: 'AI-powered enterprise document management system with advanced search, collaboration, and workflow capabilities.',
   keywords: ['document management', 'enterprise', 'AI', 'collaboration', 'workflow'],
   authors: [{ name: 'Richmond DMS Team' }],
-  viewport: 'width=device-width, initial-scale=1',
   robots: 'index, follow',
   openGraph: {
     title: 'Document Management System',
@@ -20,6 +19,12 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'Richmond DMS',
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#1976d2',
 };
 
 export default function RootLayout({
@@ -33,7 +38,6 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#1976d2" />
       </head>
       <body className={inter.className}>
         <ApolloWrapper>

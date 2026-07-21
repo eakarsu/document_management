@@ -1,388 +1,157 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs/promises';
 import { authMiddleware } from '../middleware/auth';
+import { StorageService } from '../services/StorageService';
+import { authorizeDocumentAccess, GovernanceRole } from '../security/governancePolicy';
+import crypto from 'node:crypto';
 
 const router = Router();
 const prisma = new PrismaClient();
+const storageService = new StorageService();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024, files: 10 } });
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'uploads', 'attachments');
-    await fs.mkdir(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Allow common document and image types
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'text/plain',
-      'text/csv',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp'
-    ];
-
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type'));
-    }
-  }
-});
-
-// Extend Request type to include user
 interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     email: string;
     firstName: string;
     lastName: string;
-    role: {
-      id: string;
-      name: string;
-      permissions: string[];
-    };
     organizationId: string;
+    role: { id: string; name: string; permissions: string[] };
   };
 }
 
-// GET /api/editor/documents/:id/attachments - Get all attachments for a document
+function safeDownloadName(name: string) {
+  return name.replace(/[\r\n"\\/]/g, '_').slice(0, 180);
+}
+
+async function scopedDocument(documentId: string, user: NonNullable<AuthenticatedRequest['user']>) {
+  const document = await prisma.document.findFirst({ where: { id: documentId, organizationId: user.organizationId, status: { not: 'DELETED' } }, include: { permissions: { where: { userId: user.id, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } } } });
+  if (!document) return null;
+  const access = authorizeDocumentAccess({ id: user.id, organizationId: user.organizationId, role: user.role.name.toUpperCase() as GovernanceRole, clearance: (user as any).clearanceLevel, attributes: (user as any).accessAttributes || {} }, { organizationId: document.organizationId, classification: document.classification, handlingCaveats: document.handlingCaveats, permittedUserIds: document.permissions.map(permission => permission.userId) });
+  return access.allowed ? document : null;
+}
+
 router.get('/editor/documents/:id/attachments', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id: documentId } = req.params;
-
-    // Check if document exists and user has access
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
-      select: {
-        id: true,
-        organizationId: true
-      }
-    });
-
-    if (!document) {
-      return res.status(404).json({ error: 'Document not found' });
-    }
-
-    // Check if user belongs to the same organization
-    if (document.organizationId !== req.user?.organizationId) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    // Get all attachments for the document
+    if (!req.user || !(await scopedDocument(req.params.id, req.user))) return res.status(404).json({ error: 'Document not found' });
     const attachments = await prisma.attachment.findMany({
-      where: { documentId },
-      include: {
-        uploadedBy: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      },
-      orderBy: [
-        { attachmentOrder: 'asc' },
-        { uploadedAt: 'desc' }
-      ]
+      where: { documentId: req.params.id, deletedAt: null },
+      include: { uploadedBy: { select: { firstName: true, lastName: true, email: true } } },
+      orderBy: [{ attachmentOrder: 'asc' }, { uploadedAt: 'desc' }],
     });
-
     res.json({ attachments });
-  } catch (error: any) {
-    console.error('Error fetching attachments:', error);
-    res.status(500).json({ error: 'Failed to fetch attachments' });
-  }
+  } catch { res.status(500).json({ error: 'Failed to fetch attachments' }); }
 });
 
-// POST /api/editor/documents/:id/attachments/upload - Upload attachments
-router.post(
-  '/editor/documents/:id/attachments/upload',
-  authMiddleware,
-  upload.array('files', 10), // Allow up to 10 files at once
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { id: documentId } = req.params;
-      const files = req.files as Express.Multer.File[];
-
-      if (!files || files.length === 0) {
-        return res.status(400).json({ error: 'No files uploaded' });
-      }
-
-      // Check if document exists and user has access
-      const document = await prisma.document.findUnique({
-        where: { id: documentId },
-        select: {
-          id: true,
-          organizationId: true
-        }
-      });
-
-      if (!document) {
-        // Clean up uploaded files
-        await Promise.all(files.map(file => fs.unlink(file.path)));
-        return res.status(404).json({ error: 'Document not found' });
-      }
-
-      // Check if user belongs to the same organization
-      if (document.organizationId !== req.user?.organizationId) {
-        // Clean up uploaded files
-        await Promise.all(files.map(file => fs.unlink(file.path)));
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      // Get the current max order for existing attachments
-      const maxOrder = await prisma.attachment.aggregate({
-        where: { documentId },
-        _max: { attachmentOrder: true }
-      });
-
-      let currentOrder = (maxOrder._max.attachmentOrder || 0) + 1;
-
-      // Create attachment records
-      const attachments = await Promise.all(
-        files.map(async (file) => {
-          const attachment = await prisma.attachment.create({
-            data: {
-              documentId,
-              fileName: file.filename,
-              originalName: file.originalname,
-              mimeType: file.mimetype,
-              fileSize: file.size,
-              storagePath: file.path,
-              storageProvider: 'local',
-              attachmentType: determineAttachmentType(file.mimetype),
-              attachmentOrder: currentOrder++,
-              uploadedById: req.user!.id
-            },
-            include: {
-              uploadedBy: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                  email: true
-                }
-              }
-            }
-          });
-
-          return attachment;
-        })
-      );
-
-      res.json({ attachments });
-    } catch (error: any) {
-      console.error('Error uploading attachments:', error);
-      res.status(500).json({ error: 'Failed to upload attachments' });
-    }
-  }
-);
-
-// GET /api/editor/documents/:id/attachments/:attachmentId/download - Download attachment
-router.get(
-  '/editor/documents/:id/attachments/:attachmentId/download',
-  authMiddleware,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { id: documentId, attachmentId } = req.params;
-
-      // Get attachment with document info
-      const attachment = await prisma.attachment.findUnique({
-        where: { id: attachmentId },
-        include: {
-          document: {
-            select: {
-              organizationId: true
-            }
-          }
-        }
-      });
-
-      if (!attachment) {
-        return res.status(404).json({ error: 'Attachment not found' });
-      }
-
-      // Verify attachment belongs to the specified document
-      if (attachment.documentId !== documentId) {
-        return res.status(404).json({ error: 'Attachment not found' });
-      }
-
-      // Check if user belongs to the same organization
-      if (attachment.document.organizationId !== req.user?.organizationId) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      // Check if file exists
-      try {
-        await fs.access(attachment.storagePath);
-      } catch {
-        return res.status(404).json({ error: 'File not found' });
-      }
-
-      // Send file
-      res.download(attachment.storagePath, attachment.originalName);
-    } catch (error: any) {
-      console.error('Error downloading attachment:', error);
-      res.status(500).json({ error: 'Failed to download attachment' });
-    }
-  }
-);
-
-// DELETE /api/editor/documents/:id/attachments/:attachmentId - Delete attachment
-router.delete(
-  '/editor/documents/:id/attachments/:attachmentId',
-  authMiddleware,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { id: documentId, attachmentId } = req.params;
-
-      // Get attachment with document info
-      const attachment = await prisma.attachment.findUnique({
-        where: { id: attachmentId },
-        include: {
-          document: {
-            select: {
-              organizationId: true,
-              createdById: true
-            }
-          }
-        }
-      });
-
-      if (!attachment) {
-        return res.status(404).json({ error: 'Attachment not found' });
-      }
-
-      // Verify attachment belongs to the specified document
-      if (attachment.documentId !== documentId) {
-        return res.status(404).json({ error: 'Attachment not found' });
-      }
-
-      // Check if user has permission to delete (document owner or admin)
-      const isOwner = attachment.document.createdById === req.user?.id;
-      const isAdmin = req.user?.role?.name === 'Administrator' || req.user?.role?.name === 'Admin';
-      const isUploader = attachment.uploadedById === req.user?.id;
-
-      if (!isOwner && !isAdmin && !isUploader) {
-        return res.status(403).json({ error: 'Permission denied' });
-      }
-
-      // Delete file from storage
-      try {
-        await fs.unlink(attachment.storagePath);
-      } catch (error: any) {
-        console.error('Error deleting file:', error);
-        // Continue even if file deletion fails
-      }
-
-      // Delete attachment record
-      await prisma.attachment.delete({
-        where: { id: attachmentId }
-      });
-
-      res.json({ message: 'Attachment deleted successfully' });
-    } catch (error: any) {
-      console.error('Error deleting attachment:', error);
-      res.status(500).json({ error: 'Failed to delete attachment' });
-    }
-  }
-);
-
-// PUT /api/editor/documents/:id/attachments/:attachmentId - Update attachment metadata
-router.put(
-  '/editor/documents/:id/attachments/:attachmentId',
-  authMiddleware,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { id: documentId, attachmentId } = req.params;
-      const { description, attachmentType, attachmentOrder } = req.body;
-
-      // Get attachment with document info
-      const attachment = await prisma.attachment.findUnique({
-        where: { id: attachmentId },
-        include: {
-          document: {
-            select: {
-              organizationId: true,
-              createdById: true
-            }
-          }
-        }
-      });
-
-      if (!attachment) {
-        return res.status(404).json({ error: 'Attachment not found' });
-      }
-
-      // Verify attachment belongs to the specified document
-      if (attachment.documentId !== documentId) {
-        return res.status(404).json({ error: 'Attachment not found' });
-      }
-
-      // Check if user has permission to update
-      const isOwner = attachment.document.createdById === req.user?.id;
-      const isAdmin = req.user?.role?.name === 'Administrator' || req.user?.role?.name === 'Admin';
-      const isUploader = attachment.uploadedById === req.user?.id;
-
-      if (!isOwner && !isAdmin && !isUploader) {
-        return res.status(403).json({ error: 'Permission denied' });
-      }
-
-      // Update attachment
-      const updatedAttachment = await prisma.attachment.update({
-        where: { id: attachmentId },
+router.post('/editor/documents/:id/attachments/upload', authMiddleware, upload.array('files', 10), async (req: AuthenticatedRequest, res: Response) => {
+  const files = req.files as Express.Multer.File[] | undefined;
+  try {
+    if (!req.user || !files?.length) return res.status(400).json({ error: 'No files uploaded' });
+    const document = await scopedDocument(req.params.id, req.user);
+    if (!document) return res.status(404).json({ error: 'Document not found' });
+    const maxOrder = await prisma.attachment.aggregate({ where: { documentId: document.id }, _max: { attachmentOrder: true } });
+    let order = (maxOrder._max.attachmentOrder || 0) + 1;
+    const attachments = [];
+    for (const file of files) {
+      const result = await storageService.uploadDocument(file.buffer, {
+        filename: file.originalname,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+      }, req.user.organizationId, req.user.id);
+      if (!result.success || !result.storagePath) return res.status(422).json({ error: result.error || 'Upload rejected' });
+      const attachment = await prisma.attachment.create({
         data: {
-          ...(description !== undefined && { description }),
-          ...(attachmentType !== undefined && { attachmentType }),
-          ...(attachmentOrder !== undefined && { attachmentOrder })
+          documentId: document.id,
+          fileName: file.originalname,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+          storagePath: result.storagePath,
+          storageProvider: 'minio',
+          attachmentType: determineAttachmentType(file.mimetype),
+          attachmentOrder: order++,
+          uploadedById: req.user.id,
+          checksum: result.checksum,
+          objectVersionId: result.storageVersionId,
+          malwareScan: 'CLEAN',
+          retentionUntil: document.retentionUntil,
         },
-        include: {
-          uploadedBy: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true
-            }
-          }
-        }
+        include: { uploadedBy: { select: { firstName: true, lastName: true, email: true } } },
       });
-
-      res.json({ attachment: updatedAttachment });
-    } catch (error: any) {
-      console.error('Error updating attachment:', error);
-      res.status(500).json({ error: 'Failed to update attachment' });
+      attachments.push(attachment);
     }
-  }
-);
+    res.status(201).json({ attachments });
+  } catch (error) { res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to upload attachments' }); }
+});
 
-// Helper function to determine attachment type based on MIME type
+router.get('/editor/documents/:id/attachments/:attachmentId/download', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: req.params.attachmentId, documentId: req.params.id, deletedAt: null, document: { organizationId: req.user.organizationId } },
+    });
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+    const buffer = await storageService.downloadDocument(attachment.storagePath, req.user.organizationId);
+    if (!buffer) return res.status(404).json({ error: 'Object not found' });
+    if (attachment.checksum && crypto.createHash('sha256').update(buffer).digest('hex') !== attachment.checksum) {
+      return res.status(409).json({ error: 'Attachment checksum verification failed' });
+    }
+    res.setHeader('Content-Type', attachment.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeDownloadName(attachment.originalName)}"`);
+    res.send(buffer);
+  } catch { res.status(500).json({ error: 'Failed to download attachment' }); }
+});
+
+router.delete('/editor/documents/:id/attachments/:attachmentId', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: req.params.attachmentId, documentId: req.params.id, deletedAt: null, document: { organizationId: req.user.organizationId } },
+      include: { document: true },
+    });
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+    const privileged = [attachment.document.createdById, attachment.uploadedById].includes(req.user.id) || ['Administrator', 'Admin'].includes(req.user.role.name);
+    if (!privileged) return res.status(403).json({ error: 'Permission denied' });
+    if (attachment.document.legalHoldActive) return res.status(409).json({ error: 'LEGAL_HOLD_ACTIVE' });
+    if (attachment.retentionUntil && attachment.retentionUntil > new Date()) return res.status(409).json({ error: 'RETENTION_ACTIVE' });
+    const deleted = await storageService.deleteDocumentForOrganization(attachment.storagePath, req.user.organizationId);
+    if (!deleted) return res.status(503).json({ error: 'Object deletion was not confirmed' });
+    await prisma.attachment.update({ where: { id: attachment.id }, data: { deletedAt: new Date() } });
+    res.json({ message: 'Attachment deleted and tombstoned' });
+  } catch { res.status(500).json({ error: 'Failed to delete attachment' }); }
+});
+
+router.put('/editor/documents/:id/attachments/:attachmentId', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: req.params.attachmentId, documentId: req.params.id, deletedAt: null, document: { organizationId: req.user.organizationId } },
+      include: { document: true },
+    });
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+    const privileged = [attachment.document.createdById, attachment.uploadedById].includes(req.user.id) || ['Administrator', 'Admin'].includes(req.user.role.name);
+    if (!privileged) return res.status(403).json({ error: 'Permission denied' });
+    const { description, attachmentType, attachmentOrder } = req.body;
+    const updated = await prisma.attachment.update({
+      where: { id: attachment.id },
+      data: {
+        ...(typeof description === 'string' && { description: description.slice(0, 1000) }),
+        ...(typeof attachmentType === 'string' && { attachmentType: attachmentType.slice(0, 50) }),
+        ...(Number.isInteger(attachmentOrder) && { attachmentOrder }),
+      },
+    });
+    res.json({ attachment: updated });
+  } catch { res.status(500).json({ error: 'Failed to update attachment' }); }
+});
+
 function determineAttachmentType(mimeType: string): string {
   if (mimeType.startsWith('image/')) return 'IMAGE';
   if (mimeType === 'application/pdf') return 'REFERENCE';
-  if (mimeType.includes('word') || mimeType.includes('document')) return 'SUPPORTING';
-  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'FORM';
-  if (mimeType.includes('powerpoint') || mimeType.includes('presentation')) return 'APPENDIX';
+  if (mimeType.includes('spreadsheet')) return 'FORM';
+  if (mimeType.includes('presentation')) return 'APPENDIX';
   return 'SUPPORTING';
 }
 

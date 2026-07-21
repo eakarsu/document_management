@@ -32,6 +32,7 @@ const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    mfaCode: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -84,7 +85,7 @@ const LoginPage: React.FC = () => {
     document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
     // Just populate the form fields, don't login automatically
-    setFormData({ email, password });
+    setFormData({ email, password, mfaCode: '' });
 
     // Clear any existing errors
     setError('');
@@ -101,7 +102,7 @@ const LoginPage: React.FC = () => {
     document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
     // Clear form and reload page
-    setFormData({ email: '', password: '' });
+    setFormData({ email: '', password: '', mfaCode: '' });
     setError('');
     window.location.reload();
   };
@@ -151,19 +152,11 @@ const LoginPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Login successful, received data:', { user: data.user?.email, hasToken: !!data.accessToken, fullData: data });
-
-        // Store tokens in localStorage for client-side API calls
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
-
-        // Cookies are already set by the API route - no need to set them here
+        console.log('✅ Login successful for:', data.user?.email);
 
         // Store user data
         const userData = {
-          ...data.user,
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken
+          ...data.user
         };
         localStorage.setItem('user', JSON.stringify(userData));
 
@@ -242,6 +235,19 @@ const LoginPage: React.FC = () => {
 
             <TextField
               fullWidth
+              id="mfaCode"
+              name="mfaCode"
+              label="Authenticator code"
+              inputMode="numeric"
+              value={formData.mfaCode}
+              onChange={handleInputChange}
+              inputProps={{ pattern: '[0-9]{6}', maxLength: 6 }}
+              helperText="Required when your organization enforces MFA"
+              autoComplete="one-time-code"
+            />
+
+            <TextField
+              fullWidth
               id="password"
               name="password"
               label="Password"
@@ -300,7 +306,7 @@ const LoginPage: React.FC = () => {
               🎯 Hierarchical Distributed Review Workflow (10 Stages)
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              All test accounts use password: <strong>testpass123</strong>
+              All test accounts use password: <strong></strong>
             </Typography>
 
             {/* Stage 1: Action Officers */}
@@ -314,7 +320,7 @@ const LoginPage: React.FC = () => {
                     size="small"
                     variant="outlined"
                     color="primary"
-                    onClick={() => quickLogin('ao1@airforce.mil', 'testpass123')}
+                    onClick={() => quickLogin('ao1@airforce.mil', '')}
                     disabled={isLoading}
                     sx={{ fontSize: '0.70rem', py: 0.3, px: 1, mr: 1 }}
                   >
@@ -324,7 +330,7 @@ const LoginPage: React.FC = () => {
                     size="small"
                     variant="outlined"
                     color="primary"
-                    onClick={() => quickLogin('ao2@airforce.mil', 'testpass123')}
+                    onClick={() => quickLogin('ao2@airforce.mil', '')}
                     disabled={isLoading}
                     sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
                   >
@@ -342,7 +348,7 @@ const LoginPage: React.FC = () => {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => quickLogin('pcm@airforce.mil', 'testpass123')}
+                onClick={() => quickLogin('pcm@airforce.mil', '')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >
@@ -363,7 +369,7 @@ const LoginPage: React.FC = () => {
                 size="small"
                 variant="outlined"
                 color="secondary"
-                onClick={() => quickLogin('coordinator1@airforce.mil', 'testpass123')}
+                onClick={() => quickLogin('coordinator1@airforce.mil', '')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1, mb: 2 }}
               >
@@ -377,7 +383,7 @@ const LoginPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => quickLogin('ops.frontoffice@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('ops.frontoffice@airforce.mil', '')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
                 >
@@ -386,7 +392,7 @@ const LoginPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => quickLogin('log.frontoffice@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('log.frontoffice@airforce.mil', '')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
                 >
@@ -395,7 +401,7 @@ const LoginPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => quickLogin('fin.frontoffice@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('fin.frontoffice@airforce.mil', '')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
                 >
@@ -404,7 +410,7 @@ const LoginPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => quickLogin('per.frontoffice@airforce.mil', 'testpass123')}
+                  onClick={() => quickLogin('per.frontoffice@airforce.mil', '')}
                   disabled={isLoading}
                   sx={{ fontSize: '0.65rem', py: 0.2, px: 0.5 }}
                 >
@@ -499,7 +505,7 @@ const LoginPage: React.FC = () => {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => quickLogin('legal.reviewer@airforce.mil', 'testpass123')}
+                onClick={() => quickLogin('legal.reviewer@airforce.mil', '')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >
@@ -515,7 +521,7 @@ const LoginPage: React.FC = () => {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => quickLogin('opr.leadership@airforce.mil', 'testpass123')}
+                onClick={() => quickLogin('opr.leadership@airforce.mil', '')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >
@@ -531,7 +537,7 @@ const LoginPage: React.FC = () => {
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => quickLogin('afdpo.publisher@airforce.mil', 'testpass123')}
+                onClick={() => quickLogin('afdpo.publisher@airforce.mil', '')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >
@@ -548,7 +554,7 @@ const LoginPage: React.FC = () => {
                 size="small"
                 variant="outlined"
                 color="error"
-                onClick={() => quickLogin('admin@airforce.mil', 'testpass123')}
+                onClick={() => quickLogin('admin@airforce.mil', '')}
                 disabled={isLoading}
                 sx={{ fontSize: '0.70rem', py: 0.3, px: 1 }}
               >

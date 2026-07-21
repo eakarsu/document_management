@@ -13,6 +13,7 @@ coverage/
 database-backup/
 *.sql
 *.dump
+!prisma/migrations/**/*.sql
 
 # Prisma
 prisma/migrations/dev/

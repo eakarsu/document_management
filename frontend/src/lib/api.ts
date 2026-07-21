@@ -4,21 +4,10 @@ export class ApiClient {
     // Use relative paths that go through Next.js proxy
     const url = endpoint;
 
-    // Get token from localStorage for Bearer authentication
-    let token: string | null = null;
-    if (typeof window !== 'undefined') {
-      token = localStorage.getItem('accessToken');
-      // Debug log for authentication issues
-      if (!token) {
-        console.warn('No accessToken found in localStorage');
-      }
-    }
-    
     // Check if body is FormData - don't set Content-Type for FormData
     const isFormData = options.body instanceof FormData;
     
     const defaultHeaders: Record<string, string> = {
-      ...(token && { 'Authorization': `Bearer ${token}` }),
       // Only set Content-Type for non-FormData requests
       ...(!isFormData && { 'Content-Type': 'application/json' }),
     };

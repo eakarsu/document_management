@@ -4,10 +4,15 @@
   "description": "Enterprise-grade Document Management System with AI capabilities",
   "private": true,
   "scripts": {
-    "start": "./start.sh",
-    "stop": "./start.sh --stop",
+    "start": "./start.sh production",
+    "dev": "./start.sh development",
+    "stop": "./start.sh stop",
     "restart": "npm run stop && npm run start",
-    "help": "./start.sh --help",
+    "help": "./start.sh help",
+    "migrate": "./start.sh migrate",
+    "demo:seed": "./start.sh seed-demo",
+    "backup": "./start.sh backup",
+    "restore:verify": "./start.sh restore-verify",
     "logs:backend": "tail -f backend.log",
     "logs:frontend": "tail -f frontend.log"
   },
@@ -33,5 +38,11 @@
   "dependencies": {
     "node-fetch": "^2.7.0",
     "puppeteer": "^24.18.0"
+  },
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7"
   }
 }

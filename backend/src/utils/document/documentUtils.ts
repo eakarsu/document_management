@@ -47,9 +47,9 @@ export function validateMimeType(mimeType: string, allowedTypes: string[]): bool
   return allowedTypes.includes(mimeType);
 }
 
-export async function checkDuplicateDocument(checksum: string) {
-  return await prisma.document.findUnique({
-    where: { checksum }
+export async function checkDuplicateDocument(checksum: string, organizationId: string) {
+  return await prisma.document.findFirst({
+    where: { checksum, organizationId }
   });
 }
 

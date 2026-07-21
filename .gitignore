@@ -61,6 +61,18 @@ Thumbs.db
 *.db
 data/
 uploads/
+backend/database-backup/
+backend/database-backup-lite/
+database-backup/
+database-backup-lite/
+PRODUCTION_CREDENTIALS.txt
+open_router_key.txt
+*.dump
+*.backup
+.runtime/
+playwright-report/
+*.tsbuildinfo
+test-results/
 tmp/
 .cache/
 

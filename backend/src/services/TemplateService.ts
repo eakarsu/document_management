@@ -217,7 +217,7 @@ export class TemplateService {
         throw new Error('Document not found or access denied');
       }
 
-      const documentContent = await documentService.getDocumentContent(input.documentId);
+      const documentContent = await documentService.getDocumentContent(input.documentId, organizationId);
       
       if (!documentContent) {
         throw new Error('Could not retrieve document content');

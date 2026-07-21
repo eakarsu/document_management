@@ -31,6 +31,8 @@ model User {
   language                                                         String                        @default("en")
   roleId                                                           String
   organizationId                                                   String
+  clearanceLevel                                                   ClassificationLevel           @default(INTERNAL)
+  accessAttributes                                                 Json                          @default("{}")
   approval_step_reviewers                                          approval_step_reviewers[]
   approvalStepUsers                                                ApprovalStepUser[]            @relation("ApprovalStepUsers")
   uploadedAttachments                                              Attachment[]
@@ -75,18 +77,23 @@ model User {
   csvExports                                                       CsvExport[]
   pdfExports                                                       PdfExport[]
   emailVerifications                                               EmailVerification[]
+  externalIdentities                                               ExternalIdentity[]
+  delegationsGranted                                               ApprovalDelegation[]          @relation("DelegationGrantor")
+  delegationsReceived                                              ApprovalDelegation[]          @relation("DelegationDelegate")
+  aiReviewsCreated                                                 AIReviewArtifact[]            @relation("AIReviewCreator")
+  aiReviewsDecided                                                 AIReviewArtifact[]            @relation("AIReviewReviewer")
 
   @@map("users")
 }
 
 model Organization {
-  id                  String               @id @default(cuid())
+  id                  String                  @id @default(cuid())
   name                String
-  domain              String               @unique
-  settings            Json                 @default("{}")
-  isActive            Boolean              @default(true)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  domain              String                  @unique
+  settings            Json                    @default("{}")
+  isActive            Boolean                 @default(true)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
   document_publishing DocumentPublishing[]
   documents           Document[]
   folders             Folder[]
@@ -96,6 +103,13 @@ model Organization {
   users               User[]
   workflow_instances  workflow_instances[]
   workflows           Workflow[]
+  authPolicy          OrganizationAuthPolicy?
+  externalIdentities  ExternalIdentity[]
+  approvalDelegations ApprovalDelegation[]
+  aiReviewArtifacts   AIReviewArtifact[]
+  signedAuditEvents   SignedAuditEvent[]
+  legalHolds          LegalHold[]
+  deletionJobs        ObjectDeletionJob[]
 
   @@map("organizations")
 }
@@ -119,16 +133,21 @@ model Role {
 }
 
 model UserSession {
-  id        String   @id @default(cuid())
-  sessionId String   @unique
-  userId    String
-  ipAddress String
-  userAgent String
-  isActive  Boolean  @default(true)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  sessionId        String    @unique
+  userId           String
+  ipAddress        String
+  userAgent        String
+  authMethod       String
+  refreshTokenHash String
+  isActive         Boolean   @default(true)
+  mfaVerifiedAt    DateTime?
+  lastSeenAt       DateTime  @default(now())
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, isActive, expiresAt])
   @@map("user_sessions")
 }
 
@@ -172,6 +191,13 @@ model Document {
   supplementOrganization    String?
   supplementType            String?
   content                   String?
+  classification            ClassificationLevel         @default(INTERNAL)
+  handlingCaveats           String[]                    @default([])
+  retentionUntil            DateTime?
+  legalHoldActive           Boolean                     @default(false)
+  objectVersionId           String?
+  deletionRequestedAt       DateTime?
+  storageDeletedAt          DateTime?
   attachments               Attachment[]
   collaboration_sessions    collaboration_sessions[]
   comment_resolution_matrix comment_resolution_matrix[]
@@ -192,6 +218,9 @@ model Document {
   sequential_workflows      sequential_workflows?
   supplementalSections      SupplementalSection[]
   workflow_instances        workflow_instances[]
+  aiReviewArtifacts         AIReviewArtifact[]
+  legalHolds                LegalHold[]
+  deletionJobs              ObjectDeletionJob[]
 
   @@map("documents")
 }
@@ -218,6 +247,9 @@ model DocumentVersion {
   patchAlgorithm   String?
   percentChanged   Float?
   similarity       Float?
+  objectVersionId  String?
+  malwareScan      MalwareScanStatus @default(PENDING)
+  encryptedAtRest  Boolean           @default(true)
   createdBy        User              @relation("DocumentModifier", fields: [createdById], references: [id])
   document         Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
@@ -318,6 +350,7 @@ model JsonWorkflowInstance {
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   completedAt    DateTime?
+  version        Int                   @default(0)
   history        JsonWorkflowHistory[]
   document       Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
@@ -397,6 +430,140 @@ model AuditLog {
   @@index([resource, resourceId])
   @@index([userId, createdAt])
   @@map("audit_logs")
+}
+
+model OrganizationAuthPolicy {
+  id                   String       @id @default(cuid())
+  organizationId       String       @unique
+  oidcIssuer           String?
+  oidcClientId         String?
+  oidcJwksUri          String?
+  requireSso           Boolean      @default(false)
+  requireMfa           Boolean      @default(true)
+  accessTokenMinutes   Int          @default(15)
+  idleTimeoutMinutes   Int          @default(15)
+  absoluteSessionHours Int          @default(8)
+  maxActiveSessions    Int          @default(3)
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model ExternalIdentity {
+  id                  String       @id @default(cuid())
+  organizationId      String
+  userId              String
+  issuer              String
+  subject             String
+  lastAuthenticatedAt DateTime?
+  createdAt           DateTime     @default(now())
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issuer, subject])
+  @@index([organizationId, userId])
+}
+
+model ApprovalDelegation {
+  id             String           @id @default(cuid())
+  organizationId String
+  documentId     String?
+  stepId         String?
+  grantorId      String
+  delegateId     String
+  reason         String
+  status         DelegationStatus @default(PENDING)
+  startsAt       DateTime
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  grantor        User             @relation("DelegationGrantor", fields: [grantorId], references: [id])
+  delegate       User             @relation("DelegationDelegate", fields: [delegateId], references: [id])
+
+  @@index([organizationId, delegateId, status, expiresAt])
+}
+
+model AIReviewArtifact {
+  id                String         @id @default(cuid())
+  organizationId    String
+  documentId        String
+  documentVersion   Int
+  provider          String
+  model             String
+  modelVersion      String
+  promptDigest      String
+  sourceChecksums   String[]
+  outputChecksum    String
+  feature           String
+  output            Json
+  promptDefense     Json
+  status            AIReviewStatus @default(PENDING)
+  createdById       String
+  reviewedById      String?
+  reviewerRationale String?
+  createdAt         DateTime       @default(now())
+  reviewedAt        DateTime?
+  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  document          Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy         User           @relation("AIReviewCreator", fields: [createdById], references: [id])
+  reviewedBy        User?          @relation("AIReviewReviewer", fields: [reviewedById], references: [id])
+
+  @@unique([documentId, documentVersion, outputChecksum])
+  @@index([organizationId, documentId, status])
+}
+
+model SignedAuditEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  actorId        String
+  action         String
+  entityType     String
+  entityId       String
+  payload        Json
+  previousHash   String?
+  eventHash      String
+  signature      String
+  signingKeyId   String
+  retentionUntil DateTime
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, eventHash])
+  @@index([organizationId, entityType, entityId, createdAt])
+}
+
+model LegalHold {
+  id             String       @id @default(cuid())
+  organizationId String
+  documentId     String
+  matter         String
+  reason         String
+  placedById     String
+  releasedById   String?
+  placedAt       DateTime     @default(now())
+  releasedAt     DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, documentId, releasedAt])
+}
+
+model ObjectDeletionJob {
+  id             String            @id @default(cuid())
+  organizationId String
+  documentId     String
+  objectKeys     String[]
+  status         DeletionJobStatus @default(PENDING)
+  attempts       Int               @default(0)
+  lastError      String?
+  requestedById  String
+  requestedAt    DateTime          @default(now())
+  completedAt    DateTime?
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  document       Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, requestedAt])
 }
 
 model SearchIndex {
@@ -1136,21 +1303,26 @@ model SupplementalSection {
 }
 
 model Attachment {
-  id              String   @id @default(cuid())
+  id              String            @id @default(cuid())
   documentId      String
   fileName        String
   originalName    String
   mimeType        String
   fileSize        Int
   storagePath     String
-  storageProvider String   @default("minio")
+  storageProvider String            @default("minio")
   description     String?
   attachmentType  String?
   attachmentOrder Int?
-  uploadedAt      DateTime @default(now())
+  uploadedAt      DateTime          @default(now())
   uploadedById    String
-  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  uploadedBy      User     @relation(fields: [uploadedById], references: [id])
+  checksum        String?
+  objectVersionId String?
+  malwareScan     MalwareScanStatus @default(PENDING)
+  retentionUntil  DateTime?
+  deletedAt       DateTime?
+  document        Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy      User              @relation(fields: [uploadedById], references: [id])
 
   @@map("attachments")
 }
@@ -1210,6 +1382,42 @@ enum DocumentStatus {
   PUBLISHED
   ARCHIVED
   DELETED
+}
+
+enum ClassificationLevel {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+enum MalwareScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  ERROR
+}
+
+enum DelegationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum AIReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ESCALATED
+}
+
+enum DeletionJobStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  BLOCKED_LEGAL_HOLD
 }
 
 enum VersionChangeType {
@@ -1664,21 +1872,21 @@ model PasswordChange {
 }
 
 model CsvExport {
-  id          String       @id @default(cuid())
-  fileName    String
-  exportType  String
-  recordCount Int          @default(0)
-  fileSize    Int          @default(0)
-  filePath    String?
-  status      ExportStatus @default(PENDING)
-  filters     Json         @default("{}")
+  id           String       @id @default(cuid())
+  fileName     String
+  exportType   String
+  recordCount  Int          @default(0)
+  fileSize     Int          @default(0)
+  filePath     String?
+  status       ExportStatus @default(PENDING)
+  filters      Json         @default("{}")
   errorMessage String?
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  userId      String
-  user        User         @relation(fields: [userId], references: [id])
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@map("csv_exports")
@@ -1727,19 +1935,19 @@ model ConfirmationDialog {
 }
 
 model EmailVerification {
-  id        String                  @id @default(cuid())
-  email     String
-  token     String                  @unique
-  status    EmailVerificationStatus @default(PENDING)
-  attempts  Int                     @default(0)
-  maxAttempts Int                   @default(3)
-  ipAddress String?
-  expiresAt DateTime
-  verifiedAt DateTime?
-  createdAt DateTime                @default(now())
-  updatedAt DateTime                @updatedAt
-  userId    String?
-  user      User?                   @relation(fields: [userId], references: [id])
+  id          String                  @id @default(cuid())
+  email       String
+  token       String                  @unique
+  status      EmailVerificationStatus @default(PENDING)
+  attempts    Int                     @default(0)
+  maxAttempts Int                     @default(3)
+  ipAddress   String?
+  expiresAt   DateTime
+  verifiedAt  DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  userId      String?
+  user        User?                   @relation(fields: [userId], references: [id])
 
   @@index([email])
   @@index([token])

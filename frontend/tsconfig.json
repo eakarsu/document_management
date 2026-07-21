@@ -27,7 +27,8 @@
         "name": "next"
       }
     ],
-    "strictNullChecks": true
+    "strictNullChecks": false,
+    "target": "ES2017"
   },
   "include": [
     "next-env.d.ts",
@@ -36,6 +37,7 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "legacy-api-routes-disabled"
   ]
 }

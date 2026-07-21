@@ -13,6 +13,8 @@ interface AuthenticatedRequest extends Request {
       permissions: string[];
     };
     organizationId: string;
+    clearanceLevel: 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL' | 'RESTRICTED';
+    accessAttributes: unknown;
   };
 }
 
@@ -32,17 +34,12 @@ export const authMiddleware = async (
       token = authHeader.split(' ')[1];
       console.log('Token found, proceeding with verification...');
     }
+    if (token === 'null' || token === 'undefined') token = '';
 
     // If no header token, try cookies (for browser requests)
     if (!token && req.cookies && req.cookies.accessToken) {
       token = req.cookies.accessToken;
       console.log('Using cookie token');
-    }
-
-    // If no cookie token, try query parameter for iframe/image requests
-    if (!token && req.query.token) {
-      token = req.query.token as string;
-      console.log('Using query parameter token for document view:', token.substring(0, 20) + '...');
     }
 
     if (!token) {

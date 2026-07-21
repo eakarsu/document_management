@@ -17,6 +17,7 @@ import axios from 'axios';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/authenticateToken';
 import { aiRateLimiter } from '../middleware/aiRateLimit';
 import { parseAIJson } from '../utils/parseAIJson';
+import { defendAIInput, stageAIResult } from '../security/aiGovernance';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -115,7 +116,8 @@ router.post('/preview', authenticateToken, aiRateLimiter, async (req: Authentica
     if (!OPENROUTER_API_KEY) {
       return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'OPENROUTER_API_KEY not set.' });
     }
-    const report = await scanText(title || 'Untitled', String(content));
+    const defended = defendAIInput(String(content));
+    const report = await scanText(title || 'Untitled', defended.content);
     res.json(report);
   } catch (err: any) {
     console.error('redact-suggestions preview failed', err?.response?.data || err.message);
@@ -138,20 +140,11 @@ router.post('/:documentId', authenticateToken, aiRateLimiter, async (req: Authen
       return res.status(503).json({ error: 'AI_NOT_CONFIGURED', message: 'OPENROUTER_API_KEY not set.' });
     }
 
-    const report = await scanText(doc.title, content);
+    const defended = defendAIInput(content);
+    const report = await scanText(doc.title, defended.content);
     const persisted: RedactionReport = { ...report, documentId: doc.id };
-
-    await prisma.document.update({
-      where: { id: doc.id },
-      data: {
-        aiResults: {
-          ...((doc as any).aiResults || {}),
-          redactSuggestions: persisted,
-        },
-      } as any,
-    });
-
-    res.json(persisted);
+    const artifact = await stageAIResult({ prisma, document: doc, actorId: req.user.id, feature: 'redactSuggestions', output: persisted, promptDigest: defended.digest, model: MODEL });
+    res.status(202).json({ result: persisted, artifactId: artifact.id, reviewStatus: artifact.status, persisted: false });
   } catch (err: any) {
     console.error('redact-suggestions failed', err?.response?.data || err.message);
     res.status(500).json({ error: err.message });

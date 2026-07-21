@@ -9,25 +9,15 @@ import { RetryLink } from '@apollo/client/link/retry';
 function createApolloClient() {
   // Create HTTP link
   const httpLink = createHttpLink({
-    uri: process.env.NEXT_PUBLIC_API_URL
-      ? `${process.env.NEXT_PUBLIC_API_URL}/graphql`
-      : 'http://localhost:4000/graphql',
+    uri: '/graphql',
     credentials: 'include',
   });
 
-  // Auth link to add JWT token to headers
+  // Authentication is carried only by HttpOnly cookies.
   const authLink = setContext((_, { headers }) => {
-    // Get token from localStorage
-    let token: string | null = null;
-
-    if (typeof window !== 'undefined') {
-      token = localStorage.getItem('accessToken');
-    }
-
     return {
       headers: {
         ...headers,
-        authorization: token ? `Bearer ${token}` : '',
         'Content-Type': 'application/json',
       },
     };
@@ -42,8 +32,6 @@ function createApolloClient() {
         // Handle authentication errors
         if (extensions?.code === 'UNAUTHENTICATED' || extensions?.code === 'UNAUTHORIZED') {
           if (typeof window !== 'undefined') {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
             window.location.href = '/login';
           }
         }
@@ -59,7 +47,6 @@ function createApolloClient() {
 
         if (statusCode === 401) {
           if (typeof window !== 'undefined') {
-            localStorage.removeItem('accessToken');
             window.location.href = '/login';
           }
         }

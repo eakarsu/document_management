@@ -2,7 +2,6 @@ import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthenticatedRequest } from '../../middleware/authenticateToken';
 import { DocumentService } from '../../services/DocumentService';
-import fs from 'fs';
 
 const prisma = new PrismaClient();
 const documentService = new DocumentService();
@@ -21,12 +20,9 @@ export class VersionController {
 
       const { title, description, changeNotes, changeType } = req.body;
 
-      // Read file from disk since we're using disk storage
-      const fileBuffer = fs.readFileSync(req.file.path);
-
       const newVersion = await documentService.createDocumentVersion(
         documentId,
-        fileBuffer,
+        req.file.buffer,
         {
           title,
           description,

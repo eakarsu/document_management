@@ -10,32 +10,12 @@ const publicRoutes = ['/login', '/register', '/forgot-password', '/verify-email'
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow preview, draft, and export routes without authentication
-  if (pathname.includes('/api/documents/') && (pathname.endsWith('/preview') || pathname.includes('/draft') || pathname.includes('/export'))) {
-    const response = NextResponse.next();
-    // Add CORS headers for API routes
-    response.headers.set('Access-Control-Allow-Origin', process.env.FRONTEND_URL || `http://localhost:${process.env.PORT || 3000}`);
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
-    return response;
-  }
-
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
 
   // Get authentication token from cookies
   const accessToken = request.cookies.get('accessToken')?.value;
   const hasValidToken = Boolean(accessToken);
-
-  // Debug logging
-  if (pathname === '/dashboard') {
-    console.log('[Middleware] Dashboard access:', {
-      hasToken: hasValidToken,
-      tokenPreview: accessToken ? accessToken.substring(0, 20) + '...' : 'none',
-      cookies: request.cookies.getAll().map(c => c.name)
-    });
-  }
 
   // Prevent redirect loops - don't redirect if already on login with redirect param
   const hasRedirectParam = request.nextUrl.searchParams.has('redirect');

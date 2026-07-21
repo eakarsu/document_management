@@ -40,13 +40,15 @@ docker run -d \
 sleep 5
 
 # Run the app container
+export DMS_TEST_JWT_SECRET="$(openssl rand -hex 32)"
+export DMS_TEST_REFRESH_SECRET="$(openssl rand -hex 32)"
 docker run -d \
   --name test-richmond-dms \
   -p 3000:3000 \
   -p 4000:4000 \
   -e DATABASE_URL=postgresql://dms_user:dms_password@host.docker.internal:5432/dms_metadata \
-  -e JWT_SECRET=test_jwt_secret_key_12345 \
-  -e JWT_REFRESH_SECRET=test_jwt_refresh_secret_12345 \
+  -e JWT_SECRET="$DMS_TEST_JWT_SECRET" \
+  -e JWT_REFRESH_SECRET="$DMS_TEST_REFRESH_SECRET" \
   richmond-dms:latest
 
 # Watch the logs

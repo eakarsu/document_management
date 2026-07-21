@@ -9,12 +9,12 @@ export class DocumentController {
   async updateStatus(req: AuthenticatedRequest, res: Response) {
     try {
       const { id, status } = req.params;
-      const validStatuses = ['DRAFT', 'IN_REVIEW', 'APPROVED', 'PUBLISHED', 'ARCHIVED'];
+      const validStatuses = ['DRAFT', 'IN_REVIEW', 'ARCHIVED'];
 
       if (!validStatuses.includes(status)) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid status. Must be one of: ' + validStatuses.join(', ')
+          error: 'Status is workflow-governed. This endpoint only permits: ' + validStatuses.join(', ')
         });
       }
 
@@ -47,8 +47,8 @@ export class DocumentController {
 
   async viewDocument(req: AuthenticatedRequest, res: Response) {
     try {
-      const document = await prisma.document.findUnique({
-        where: { id: req.params.id },
+      const document = await prisma.document.findFirst({
+        where: { id: req.params.id, organizationId: req.user.organizationId, status: { not: 'DELETED' } },
         include: {
           createdBy: true,
           permissions: {
@@ -73,7 +73,7 @@ export class DocumentController {
 
       // Get file content from storage
       const storageService = new StorageService();
-      const fileContent = await storageService.downloadDocument(document.storagePath);
+      const fileContent = await storageService.downloadDocument(document.storagePath, req.user.organizationId);
 
       if (!fileContent) {
         return res.status(404).json({ error: 'File not found in storage' });

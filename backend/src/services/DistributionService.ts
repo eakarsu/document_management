@@ -258,7 +258,8 @@ export class DistributionService {
 
     // Get document content
     const documentContent = await this.documentService.getDocumentContent(
-      publishing.documentId
+      publishing.documentId,
+      organizationId
     );
 
     if (!documentContent) {
@@ -412,7 +413,8 @@ export class DistributionService {
 
     // Get document content
     const documentContent = await this.documentService.getDocumentContent(
-      publishing.documentId
+      publishing.documentId,
+      organizationId
     );
 
     if (!documentContent) {

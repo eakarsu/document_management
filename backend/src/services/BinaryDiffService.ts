@@ -119,11 +119,12 @@ export class BinaryDiffService {
    */
   async applyBinaryDiff(
     baseBuffer: Buffer,
-    diffPath: string
+    diffPath: string,
+    organizationId: string
   ): Promise<Buffer> {
     try {
       // Download diff file from storage
-      const diffBuffer = await this.storageService.downloadDocument(diffPath);
+      const diffBuffer = await this.storageService.downloadDocument(diffPath, organizationId);
       
       if (!diffBuffer) {
         throw new Error('Could not download diff file');
@@ -148,12 +149,13 @@ export class BinaryDiffService {
    */
   async reconstructVersion(
     baseBuffer: Buffer,
-    diffPaths: string[]
+    diffPaths: string[],
+    organizationId: string
   ): Promise<Buffer> {
     let currentBuffer = baseBuffer;
 
     for (const diffPath of diffPaths) {
-      currentBuffer = await this.applyBinaryDiff(currentBuffer, diffPath);
+      currentBuffer = await this.applyBinaryDiff(currentBuffer, diffPath, organizationId);
     }
 
     return currentBuffer;
@@ -162,12 +164,12 @@ export class BinaryDiffService {
   /**
    * Get diff statistics for a document version
    */
-  async getDiffStatistics(diffPath: string): Promise<{
+  async getDiffStatistics(diffPath: string, organizationId: string): Promise<{
     diffSize: number;
     checksum: string;
   }> {
     try {
-      const diffBuffer = await this.storageService.downloadDocument(diffPath);
+      const diffBuffer = await this.storageService.downloadDocument(diffPath, organizationId);
       
       if (!diffBuffer) {
         throw new Error('Could not download diff file for statistics');
@@ -191,10 +193,11 @@ export class BinaryDiffService {
   async validateDiff(
     oldBuffer: Buffer,
     newBuffer: Buffer,
-    diffPath: string
+    diffPath: string,
+    organizationId: string
   ): Promise<boolean> {
     try {
-      const reconstructedBuffer = await this.applyBinaryDiff(oldBuffer, diffPath);
+      const reconstructedBuffer = await this.applyBinaryDiff(oldBuffer, diffPath, organizationId);
       const reconstructedChecksum = crypto.createHash('sha256').update(reconstructedBuffer).digest('hex');
       const originalChecksum = crypto.createHash('sha256').update(newBuffer).digest('hex');
       
@@ -249,7 +252,7 @@ export class BinaryDiffService {
       {
         filename: diffFileName,
         originalName: diffFileName,
-        mimeType: 'application/octet-stream',
+        mimeType: 'application/x-bsdiff',
         size: diffBuffer.length,
         checksum: crypto.createHash('sha256').update(diffBuffer).digest('hex')
       },
