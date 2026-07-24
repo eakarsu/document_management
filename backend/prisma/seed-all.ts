@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -7,6 +8,9 @@ const seedToken = (prefix: string): string =>
   `${prefix}-${randomBytes(24).toString('base64url')}`;
 
 async function main() {
+  const demoPassword = process.env.DEMO_SEED_PASSWORD || '';
+  if (demoPassword.length < 12) throw new Error('DEMO_SEED_PASSWORD must contain at least 12 characters');
+  const passwordHash = await bcrypt.hash(demoPassword, 12);
   console.log('🌱 Starting comprehensive database seeding...');
 
   try {
@@ -122,8 +126,9 @@ async function main() {
     // Richmond DMS Admin Users
     const admin = await prisma.user.upsert({
       where: { email: 'admin@richmond-dms.com' },
-      update: {},
+      update: { passwordHash },
       create: {
+        passwordHash,
         email: 'admin@richmond-dms.com',
         firstName: 'System',
         lastName: 'Administrator',
@@ -138,8 +143,9 @@ async function main() {
 
     await prisma.user.upsert({
       where: { email: 'manager@richmond-dms.com' },
-      update: {},
+      update: { passwordHash },
       create: {
+        passwordHash,
         email: 'manager@richmond-dms.com',
         firstName: 'John',
         lastName: 'Manager',
@@ -154,8 +160,9 @@ async function main() {
 
     await prisma.user.upsert({
       where: { email: 'user@richmond-dms.com' },
-      update: {},
+      update: { passwordHash },
       create: {
+        passwordHash,
         email: 'user@richmond-dms.com',
         firstName: 'Jane',
         lastName: 'User',
@@ -215,8 +222,9 @@ async function main() {
     for (const userData of airforceUsers) {
       await prisma.user.upsert({
         where: { email: userData.email },
-        update: {},
+        update: { passwordHash },
         create: {
+          passwordHash,
           email: userData.email,
           firstName: userData.firstName,
           lastName: userData.lastName,
@@ -246,8 +254,9 @@ async function main() {
     for (const reviewer of subReviewers) {
       await prisma.user.upsert({
         where: { email: reviewer.email },
-        update: {},
+        update: { passwordHash },
         create: {
+          passwordHash,
           email: reviewer.email,
           firstName: reviewer.firstName,
           lastName: reviewer.lastName,

@@ -3,6 +3,12 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+function requireDemoPassword() {
+  const password = process.env.DEMO_PASSWORD || process.env.SEED_DEMO_PASSWORD || process.env.DEMO_SEED_PASSWORD || '';
+  if (password.length < 12 || password.length > 1024) throw new Error('DEMO_PASSWORD must contain 12-1024 characters');
+  return password;
+}
+
 async function main() {
   console.log('🌱 Starting comprehensive database seeding...');
 
@@ -147,11 +153,11 @@ async function main() {
     // ========================================
     // PASSWORD HASHING
     // ========================================
-    const testPassword = await bcrypt.hash('testpass123', 12);
-    const reviewerPassword = await bcrypt.hash('reviewer123', 12);
-    const adminPassword = await bcrypt.hash('admin123', 12);
-    const managerPassword = await bcrypt.hash('manager123', 12);
-    const userPassword = await bcrypt.hash('user123', 12);
+    const testPassword = await bcrypt.hash(requireDemoPassword(), 12);
+    const reviewerPassword = await bcrypt.hash(requireDemoPassword(), 12);
+    const adminPassword = await bcrypt.hash(requireDemoPassword(), 12);
+    const managerPassword = await bcrypt.hash(requireDemoPassword(), 12);
+    const userPassword = await bcrypt.hash(requireDemoPassword(), 12);
 
     // ========================================
     // RICHMOND DMS USERS (from database/seed.js)
@@ -794,7 +800,7 @@ async function main() {
     console.log('===========================================');
     console.log('\n📋 Login Credentials:');
     console.log('\nRichmond DMS Admins:');
-    console.log('  admin@richmond-dms.com / admin123');
+    console.log('Demo login users provisioned from the local environment.');
     console.log('  manager@richmond-dms.com / manager123');
     console.log('  user@richmond-dms.com / user123');
     console.log('\nAir Force Users (Password: testpass123):');

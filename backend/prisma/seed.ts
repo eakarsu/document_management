@@ -3,13 +3,19 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+function requireDemoPassword() {
+  const password = process.env.DEMO_PASSWORD || process.env.SEED_DEMO_PASSWORD || process.env.DEMO_SEED_PASSWORD || '';
+  if (password.length < 12 || password.length > 1024) throw new Error('DEMO_PASSWORD must contain 12-1024 characters');
+  return password;
+}
+
 async function main() {
   console.log('Seeding database...');
 
   // Hash passwords
-  const testPassword = await bcrypt.hash('testpass123', 10);
-  const reviewerPassword = await bcrypt.hash('reviewer123', 10);
-  const adminPassword = await bcrypt.hash('admin123', 10);
+  const testPassword = await bcrypt.hash(requireDemoPassword(), 10);
+  const reviewerPassword = await bcrypt.hash(requireDemoPassword(), 10);
+  const adminPassword = await bcrypt.hash(requireDemoPassword(), 10);
 
   // Create original demo users (keeping for backward compatibility)
   const admin = await prisma.user.upsert({
@@ -345,7 +351,7 @@ async function main() {
   console.log('- mike.johnson.fin@airforce.mil');
   console.log('- sarah.williams.per@airforce.mil');
   console.log('... and more!');
-  console.log('\nAdmin Account (Password: admin123):');
+  console.log('Demo login users provisioned from the local environment.');
   console.log('- admin@richmond-dms.com');
   console.log('===========================================\n');
 }

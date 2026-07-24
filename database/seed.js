@@ -3,6 +3,12 @@ const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
+function requireDemoPassword() {
+  const password = process.env.DEMO_PASSWORD || process.env.SEED_DEMO_PASSWORD || process.env.DEMO_SEED_PASSWORD || '';
+  if (password.length < 12 || password.length > 1024) throw new Error('DEMO_PASSWORD must contain 12-1024 characters');
+  return password;
+}
+
 async function main() {
   console.log('🌱 Starting database seeding...');
 
@@ -113,7 +119,7 @@ async function main() {
     console.log('✅ Roles created: Admin, Manager, User, Guest');
 
     // Create default users
-    const adminPasswordHash = await bcrypt.hash('admin123', 12);
+    const adminPasswordHash = await bcrypt.hash(requireDemoPassword(), 12);
     const adminUser = await prisma.user.upsert({
       where: { email: 'admin@richmond-dms.com' },
       update: {},
@@ -131,7 +137,7 @@ async function main() {
       },
     });
 
-    const managerPasswordHash = await bcrypt.hash('manager123', 12);
+    const managerPasswordHash = await bcrypt.hash(requireDemoPassword(), 12);
     const managerUser = await prisma.user.upsert({
       where: { email: 'manager@richmond-dms.com' },
       update: {},
@@ -149,7 +155,7 @@ async function main() {
       },
     });
 
-    const userPasswordHash = await bcrypt.hash('user123', 12);
+    const userPasswordHash = await bcrypt.hash(requireDemoPassword(), 12);
     const regularUser = await prisma.user.upsert({
       where: { email: 'user@richmond-dms.com' },
       update: {},
@@ -168,7 +174,7 @@ async function main() {
     });
 
     console.log('✅ Users created:');
-    console.log('  - admin@richmond-dms.com (password: admin123)');
+    console.log('Demo login users provisioned from the local environment.');
     console.log('  - manager@richmond-dms.com (password: manager123)');
     console.log('  - user@richmond-dms.com (password: user123)');
 
@@ -469,7 +475,7 @@ async function main() {
     console.log('🎉 Database seeding completed successfully!');
     console.log('');
     console.log('You can now login with:');
-    console.log('  Admin: admin@richmond-dms.com / admin123');
+    console.log('Demo login users provisioned from the local environment.');
     console.log('  Manager: manager@richmond-dms.com / manager123');
     console.log('  User: user@richmond-dms.com / user123');
 
