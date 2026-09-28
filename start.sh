@@ -19,6 +19,7 @@ for assigned_port in "$BACKEND_PORT" "$FRONTEND_PORT";do [[ "$assigned_port" =~ 
 [ -d "$PROJECT_DIR/frontend/node_modules" ]||{ echo "Dependencies are missing" >&2;exit 1; }
 export RUNTIME_PROJECT_NAME=document_management RUNTIME_AI_ENDPOINT=/api/ai/document-governance-review RUNTIME_AI_FEATURE=document-governance-review
 export RUNTIME_AI_SYSTEM_PROMPT='You are a document-governance assistant. Identify classification, retention, access, audit, verification, and human-approval requirements without inventing evidence.'
+export BACKEND_INTERNAL_URL="http://127.0.0.1:$BACKEND_PORT"
 node "$PROJECT_DIR/runtime/setup.mjs"
 CHILD_PIDS=()
 (cd "$PROJECT_DIR"&&exec node runtime/api.mjs)&CHILD_PIDS+=("$!")

@@ -36,6 +36,7 @@ const LoginPage: React.FC = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
   // Middleware handles auth redirect - no need to check here
@@ -64,6 +65,21 @@ const LoginPage: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (error) setError(''); // Clear error when user starts typing
+  };
+
+  const fillDemoCredentials = async () => {
+    setError('');
+    setIsDemoLoading(true);
+    try {
+      const response = await fetch('/api/auth/demo-credentials', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Demo credentials are unavailable');
+      const credentials = await response.json();
+      setFormData({ email: credentials.email, password: credentials.password, mfaCode: '' });
+    } catch (demoError) {
+      setError(demoError instanceof Error ? demoError.message : 'Demo credentials are unavailable');
+    } finally {
+      setIsDemoLoading(false);
+    }
   };
 
   const quickLogin = (email: string, password: string) => {
@@ -273,6 +289,17 @@ const LoginPage: React.FC = () => {
             />
 
             <Button
+              type="button"
+              fullWidth
+              variant="outlined"
+              size="large"
+              disabled={isLoading || isDemoLoading}
+              onClick={fillDemoCredentials}
+            >
+              {isDemoLoading ? 'Loading Demo Credentials...' : 'Auto Fill Demo Credentials'}
+            </Button>
+
+            <Button
               type="submit"
               fullWidth
               variant="contained"
@@ -289,7 +316,7 @@ const LoginPage: React.FC = () => {
                 }
               }}
             >
-              {isLoading ? 'Signing In...' : (formData.email && formData.password ? 'Proceed to Login' : 'Sign In')}
+              {isLoading ? 'Signing In...' : 'Sign In'}
             </Button>
           </Stack>
         </Box>

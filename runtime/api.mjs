@@ -8,7 +8,7 @@ const selectedEndpoint=String(process.env.RUNTIME_AI_ENDPOINT||'');
 const feature=String(process.env.RUNTIME_AI_FEATURE||'application-assistant');
 const project=String(process.env.RUNTIME_PROJECT_NAME||'Application');
 const systemPrompt=String(process.env.RUNTIME_AI_SYSTEM_PROMPT||'Provide a concise, practical, evidence-aware answer for this application workflow.');
-const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Access-Control-Allow-Origin':frontendOrigin,'Access-Control-Allow-Headers':'Authorization, Content-Type'});res.end(JSON.stringify(body));};
+const json=(res,status,body,headers={})=>{res.writeHead(status,{'Content-Type':'application/json','Access-Control-Allow-Origin':frontendOrigin,'Access-Control-Allow-Headers':'Authorization, Content-Type',...headers});res.end(JSON.stringify(body));};
 const readBody=req=>new Promise((resolve,reject)=>{let value='';req.on('data',chunk=>{value+=chunk;if(value.length>1_000_000)reject(new Error('request too large'));});req.on('end',()=>{try{resolve(value?JSON.parse(value):{});}catch(error){reject(error);}});req.on('error',reject);});
 const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 const cachedUsers=new Map();
@@ -16,19 +16,25 @@ const runtimeSessions=new Map();
 const initialUsers=query(`SELECT id,email,password_hash,display_name,role FROM runtime_app_users WHERE active=TRUE`,{rows:true});
 for(const row of initialUsers?initialUsers.split('\n'):[]){const [id,email,passwordHash,displayName,role]=row.split('\t');cachedUsers.set(email,{id,email,passwordHash,displayName,role});}
 function verify(password,stored){const [kind,salt,digest]=String(stored).split('$');if(kind!=='scrypt'||!salt||!digest)return false;const candidate=crypto.scryptSync(password,salt,32);const expected=Buffer.from(digest,'hex');return candidate.length===expected.length&&crypto.timingSafeEqual(candidate,expected);}
-function actor(req){const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');if(!token)return null;const cached=runtimeSessions.get(token);if(cached&&cached.expiresAt>Date.now())return cached.user;const row=query(`SELECT u.id,u.email,u.display_name,u.role FROM runtime_app_sessions s JOIN runtime_app_users u ON u.id=s.user_id WHERE s.token_hash=${literal(sha(token))} AND s.expires_at>NOW() AND u.active=TRUE LIMIT 1`,{rows:true});if(!row)return null;const [id,email,displayName,role]=row.split('\t');return{id,email,displayName,role};}
+function actor(req){const bearer=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');const cookie=String(req.headers.cookie||'').split(';').map(value=>value.trim()).find(value=>value.startsWith('accessToken='));const token=bearer||(cookie?decodeURIComponent(cookie.slice('accessToken='.length)):'');if(!token)return null;const cached=runtimeSessions.get(token);if(cached&&cached.expiresAt>Date.now())return cached.user;const row=query(`SELECT u.id,u.email,u.display_name,u.role FROM runtime_app_sessions s JOIN runtime_app_users u ON u.id=s.user_id WHERE s.token_hash=${literal(sha(token))} AND s.expires_at>NOW() AND u.active=TRUE LIMIT 1`,{rows:true});if(!row)return null;const [id,email,displayName,role]=row.split('\t');return{id,email,displayName,role};}
 const server=http.createServer(async(req,res)=>{
   if(req.method==='OPTIONS'){res.writeHead(204,{'Access-Control-Allow-Origin':frontendOrigin,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'GET,POST,OPTIONS'});return res.end();}
   const url=new URL(req.url||'/',`http://127.0.0.1:${port}`);
   try{
     if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',project});
+    if(req.method==='GET'&&url.pathname==='/api/auth/demo-credentials'){
+      if(process.env.NODE_ENV==='production')return json(res,404,{error:'Not found'});
+      const email=process.env.DEMO_EMAIL||process.env.PROVISION_ADMIN_EMAIL||process.env.ADMIN_EMAIL;const password=process.env.DEMO_PASSWORD||process.env.PROVISION_ADMIN_PASSWORD||process.env.ADMIN_PASSWORD;
+      return email&&password?json(res,200,{email,password},{'Cache-Control':'no-store'}):json(res,503,{error:'Demo credentials are not configured'});
+    }
     if(req.method==='POST'&&url.pathname==='/api/auth/login'){
       const body=await readBody(req);const email=String(body.email||'').trim().toLowerCase();const password=String(body.password||'');
       const record=cachedUsers.get(email);if(!record||!verify(password,record.passwordHash))return json(res,401,{error:'Invalid credentials'});
       const {id,email:userEmail,displayName,role}=record;const token=crypto.randomBytes(32).toString('hex');const user={id,email:userEmail,displayName,role};
       runtimeSessions.set(token,{user,expiresAt:Date.now()+86_400_000});
       persist(`INSERT INTO runtime_app_sessions(token_hash,user_id,expires_at) VALUES(${literal(sha(token))},${literal(id)}::uuid,NOW()+INTERVAL '24 hours')`).catch(error=>console.error(`session persistence: ${error.message}`));
-      return json(res,200,{token,user:{id,email:userEmail,name:displayName,role}});
+      const secure=process.env.NODE_ENV==='production'?'; Secure':'';
+      return json(res,200,{token,user:{id,email:userEmail,name:displayName,role}},{'Set-Cookie':`accessToken=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400${secure}`,'Cache-Control':'no-store'});
     }
     if(req.method==='GET'&&url.pathname==='/api/auth/me'){const user=actor(req);return user?json(res,200,{user}):json(res,401,{error:'Authentication required'});}
     if(req.method==='GET'&&url.pathname==='/api/ai/history'){
