@@ -75,6 +75,9 @@ const LoginPage: React.FC = () => {
       if (!response.ok) throw new Error('Demo credentials are unavailable');
       const credentials = await response.json();
       setFormData({ email: credentials.email, password: credentials.password, mfaCode: '' });
+
+      // Sign in immediately with the fetched values (state has not flushed yet).
+      await performLogin(credentials.email, credentials.password, '');
     } catch (demoError) {
       setError(demoError instanceof Error ? demoError.message : 'Demo credentials are unavailable');
     } finally {
@@ -123,24 +126,17 @@ const LoginPage: React.FC = () => {
     window.location.reload();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
+  const performLogin = async (email: string, password: string, mfaCode: string) => {
     // Prevent multiple submissions using ref
     if (submitRef.current || isLoading) {
       console.log(`🚫 [${new Date().toISOString()}] Login already in progress, blocking duplicate submission`);
       return;
     }
 
-    if (!validateForm()) {
-      return;
-    }
-
     // Set both ref and state to prevent any double submission
     submitRef.current = true;
     setIsLoading(true);
-    console.log(`✅ [${new Date().toISOString()}] Starting login for: ${formData.email}`);
+    console.log(`✅ [${new Date().toISOString()}] Starting login for: ${email}`);
 
     // Clear ALL cached data before login
     localStorage.clear();
@@ -152,7 +148,7 @@ const LoginPage: React.FC = () => {
     });
 
     try {
-      console.log('🔍 LOGIN DEBUG: Submitting login ONCE with:', formData);
+      console.log('🔍 LOGIN DEBUG: Submitting login ONCE with:', { email });
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -161,7 +157,7 @@ const LoginPage: React.FC = () => {
           'Pragma': 'no-cache'
         },
         cache: 'no-store',
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ email, password, mfaCode }),
       });
 
       console.log('📡 Response received:', { status: response.status, ok: response.ok, statusText: response.statusText });
@@ -177,8 +173,8 @@ const LoginPage: React.FC = () => {
         localStorage.setItem('user', JSON.stringify(userData));
 
         // Also store email and username separately for easy access
-        localStorage.setItem('userEmail', data.user.email || formData.email);
-        localStorage.setItem('username', data.user.username || data.user.email || formData.email);
+        localStorage.setItem('userEmail', data.user.email || email);
+        localStorage.setItem('username', data.user.username || data.user.email || email);
 
         console.log('💾 Stored in localStorage');
         console.log('🍪 Cookies should be set by API response');
@@ -203,6 +199,17 @@ const LoginPage: React.FC = () => {
       setIsLoading(false);
       submitRef.current = false;
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!validateForm()) {
+      return;
+    }
+
+    await performLogin(formData.email, formData.password, formData.mfaCode);
   };
 
   return (

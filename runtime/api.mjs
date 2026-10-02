@@ -23,7 +23,8 @@ const server=http.createServer(async(req,res)=>{
   try{
     if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',project});
     if(req.method==='GET'&&url.pathname==='/api/auth/demo-credentials'){
-      if(process.env.NODE_ENV==='production')return json(res,404,{error:'Not found'});
+      const basePath=(process.env.RUNTIME_BASE_PATH||'').replace(/\/$/,'');
+      if(process.env.NODE_ENV==='production'&&!basePath)return json(res,404,{error:'Not found'});
       const email=process.env.DEMO_EMAIL||process.env.PROVISION_ADMIN_EMAIL||process.env.ADMIN_EMAIL;const password=process.env.DEMO_PASSWORD||process.env.PROVISION_ADMIN_PASSWORD||process.env.ADMIN_PASSWORD;
       return email&&password?json(res,200,{email,password},{'Cache-Control':'no-store'}):json(res,503,{error:'Demo credentials are not configured'});
     }
