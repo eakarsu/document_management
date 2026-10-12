@@ -15,6 +15,13 @@ import {
 } from '@mui/material';
 import { Block, Visibility, PlayArrow } from '@mui/icons-material';
 import { api } from '@/lib/api';
+import AIResponseReport from '@/components/AIResponseReport';
+
+const previewExamples = [
+  { label: 'Personnel memo', title: 'Illustrative personnel memo', content: 'The personnel office is preparing a public release copy of a staffing memo. The draft includes a personal phone number, an employee home address, and a staffing decision that still needs approval.' },
+  { label: 'Incident report', title: 'Illustrative incident report', content: 'A facilities incident report includes a witness contact number, a badge identifier, and a location description. Review each excerpt before deciding what the public version should include.' },
+  { label: 'Vendor agreement', title: 'Illustrative vendor agreement', content: 'A sample vendor agreement contains a named contact, direct email address, and pricing schedule. The records team needs a proposed redaction review before external release.' },
+];
 
 interface Suggestion {
   category: string;
@@ -121,6 +128,7 @@ export default function RedactSuggestionsPage() {
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>Ad-hoc Preview (no persistence)</Typography>
           <Stack spacing={2}>
+            <Stack direction="row" spacing={1} flexWrap="wrap">{previewExamples.map(example => <Button key={example.label} type="button" variant="outlined" disabled={busy} onClick={() => { setPreviewTitle(example.title); setPreviewContent(example.content); setReport(null); setErr(''); }}>{example.label}</Button>)}</Stack>
             <TextField
               label="Title"
               value={previewTitle}
@@ -149,48 +157,8 @@ export default function RedactSuggestionsPage() {
         </CardContent>
       </Card>
 
-      {report && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Suggestions ({report.totalFound ?? report.suggestions?.length ?? 0})
-            </Typography>
-            {!report.suggestions?.length ? (
-              <Typography color="text.secondary">No redactions suggested.</Typography>
-            ) : (
-              <Stack spacing={1.5}>
-                {report.suggestions.map((s, idx) => (
-                  <Box
-                    key={idx}
-                    sx={{
-                      p: 1.5,
-                      borderLeft: '4px solid',
-                      borderColor: s.severity === 'CRITICAL' ? 'error.main'
-                        : s.severity === 'MAJOR' ? 'warning.main' : 'grey.400',
-                      bgcolor: '#fafafa',
-                    }}
-                  >
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                      <Chip label={s.severity} size="small" color={sevColor(s.severity)} />
-                      <Chip label={s.category} size="small" variant="outlined" />
-                    </Stack>
-                    <Typography variant="body2"><em>Excerpt:</em> {s.excerpt}</Typography>
-                    <Typography variant="body2"><em>Reason:</em> {s.reason}</Typography>
-                    {s.replacement && (
-                      <Typography variant="body2"><em>Suggested replacement:</em> {s.replacement}</Typography>
-                    )}
-                  </Box>
-                ))}
-              </Stack>
-            )}
-            {report.model && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-                Model: {report.model}{report.generatedAt ? ` · ${report.generatedAt}` : ''}
-              </Typography>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {report && <AIResponseReport value={report} title="Redaction suggestions" />}
+
     </Container>
   );
 }

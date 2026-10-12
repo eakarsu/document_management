@@ -67,6 +67,16 @@ async function startServer() {
     // Setup GraphQL
     await setupGraphQL(app, httpServer);
 
+
+    // Reviewable AI reports retain the document platform's verified session and organization.
+    const reportSupport = require('../aiWorkspaceAdapters.cjs');
+    app.use('/api/report-workspace',require('../aiWorkspace.cjs').createAIWorkspaceRouter({
+      pool:reportSupport.prismaQueryClient(require('./config/database').getPrismaClient()),
+      features:require('../aiWorkspaceFeatures.json'),
+      authenticateToken:reportSupport.verifiedActorAuth(require('./middleware/authenticateToken').authenticateToken),
+      aiRateLimiter:reportSupport.createWorkspaceLimiter(),
+    }));
+
     // Error handling middleware
     app.use(errorHandler);
 

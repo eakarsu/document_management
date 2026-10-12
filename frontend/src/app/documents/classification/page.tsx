@@ -11,10 +11,17 @@
 import React, { useState } from 'react';
 import {
   Container, Typography, Card, CardContent, TextField, Button,
-  Stack, Chip, Alert, LinearProgress, Box, Divider,
+  Stack, Alert, LinearProgress, Box,
 } from '@mui/material';
 import { Category, Visibility, PlayArrow } from '@mui/icons-material';
 import { api } from '@/lib/api';
+import AIResponseReport from '@/components/AIResponseReport';
+
+const previewExamples = [
+  { label: 'Policy memo', title: 'Quarterly records retention policy', content: 'This policy memo sets retention responsibilities for the records office. Owners review schedules quarterly, document exceptions, and send unresolved questions to the compliance lead before archiving.' },
+  { label: 'Meeting minutes', title: 'Operations review meeting minutes', content: 'The operations team reviewed open requests on Tuesday. Three items need owner approval, two have missing attachments, and the coordinator will circulate an updated action list by Friday.' },
+  { label: 'Technical report', title: 'Network equipment inspection report', content: 'The inspection found two switches with outdated firmware and one failed backup test. The engineering lead will verify the remediation plan and schedule a follow-up inspection.' },
+];
 
 interface Classification {
   primaryType: string;
@@ -91,6 +98,7 @@ export default function ClassificationPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>Classify by Document ID</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Enter an existing document ID. Examples cannot select a document for you.</Typography>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <TextField
               fullWidth
@@ -113,6 +121,7 @@ export default function ClassificationPage() {
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>Ad-hoc Preview (no persistence)</Typography>
           <Stack spacing={2}>
+            <Stack direction="row" spacing={1} flexWrap="wrap">{previewExamples.map((example) => <Button key={example.label} type="button" variant="outlined" disabled={busy} onClick={() => { setPreviewTitle(example.title); setPreviewContent(example.content); setResult(null); setErr(''); }}>{example.label}</Button>)}</Stack>
             <TextField
               label="Title"
               value={previewTitle}
@@ -140,49 +149,7 @@ export default function ClassificationPage() {
         </CardContent>
       </Card>
 
-      {result && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>Result</Typography>
-            <Stack spacing={1}>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                <Chip label={result.primaryType} color="primary" />
-                {result.subType && <Chip label={result.subType} variant="outlined" />}
-                <Typography variant="caption" color="text.secondary">
-                  Confidence: {(result.confidence * 100).toFixed(0)}%
-                </Typography>
-              </Box>
-              {result.topics?.length ? (
-                <Box>
-                  <Typography variant="subtitle2">Topics</Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                    {result.topics.map((t, i) => <Chip key={i} label={t} size="small" />)}
-                  </Stack>
-                </Box>
-              ) : null}
-              {result.tags?.length ? (
-                <Box>
-                  <Typography variant="subtitle2">Tags</Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                    {result.tags.map((t, i) => <Chip key={i} label={t} size="small" variant="outlined" />)}
-                  </Stack>
-                </Box>
-              ) : null}
-              {result.rationale && (
-                <>
-                  <Divider />
-                  <Typography variant="body2"><em>Rationale:</em> {result.rationale}</Typography>
-                </>
-              )}
-              {result.model && (
-                <Typography variant="caption" color="text.secondary">
-                  Model: {result.model}{result.generatedAt ? ` · ${result.generatedAt}` : ''}
-                </Typography>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
+      {result && <AIResponseReport value={result} title="Document classification" />}
     </Container>
   );
 }

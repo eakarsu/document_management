@@ -1,4 +1,6 @@
 'use client';
+import AIReportLibrary from "../../components/AIReportLibrary";
+
 
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
@@ -198,18 +200,18 @@ const DashboardPage: React.FC = () => {
           const statsData = await statsResponse.json();
 
           // Fetch recent documents (token will be read from HTTP-only cookies server-side)
-          const docsResponse = await api.get('/api/documents/search?limit=5');
+          const docsResponse = await api.get('/api/documents/search?limit=15');
 
           let recentDocuments = [];
           if (docsResponse.ok) {
             const docsData = await docsResponse.json();
-            recentDocuments = docsData.documents || [];
+            recentDocuments = Array.isArray(docsData.documents) ? docsData.documents : [];
           }
 
           setDashboardData({
             totalDocuments: statsData.stats?.totalDocuments || 0,
             totalUsers: statsData.stats?.totalUsers || 0,
-            recentDocuments: recentDocuments.slice(0, 5)
+            recentDocuments: recentDocuments.slice(0, 15)
           });
         } else {
           console.error('Failed to fetch dashboard stats:', statsResponse.status);
@@ -325,18 +327,18 @@ const DashboardPage: React.FC = () => {
             if (statsResponse.ok) {
               const statsData = await statsResponse.json();
               
-              const docsResponse = await api.get('/api/documents/search?limit=5');
+              const docsResponse = await api.get('/api/documents/search?limit=15');
 
               let recentDocuments = [];
               if (docsResponse.ok) {
                 const docsData = await docsResponse.json();
-                recentDocuments = docsData.documents || [];
+                recentDocuments = Array.isArray(docsData.documents) ? docsData.documents : [];
               }
 
               setDashboardData({
                 totalDocuments: statsData.stats?.totalDocuments || 0,
                 totalUsers: statsData.stats?.totalUsers || 0,
-                recentDocuments: recentDocuments.slice(0, 5)
+                recentDocuments: recentDocuments.slice(0, 15)
               });
             }
           } catch (error) {
@@ -391,18 +393,18 @@ const DashboardPage: React.FC = () => {
       const fetchDashboardData = async () => {
         try {
           const statsResponse = await api.get('/api/dashboard/stats');
-          const docsResponse = await api.get('/api/documents/search?limit=5');
+          const docsResponse = await api.get('/api/documents/search?limit=15');
 
           if (statsResponse.ok && docsResponse.ok) {
             const statsData = await statsResponse.json();
             const docsData = await docsResponse.json();
 
-            const recentDocuments = docsData.documents || [];
+            const recentDocuments = Array.isArray(docsData.documents) ? docsData.documents : [];
 
             setDashboardData({
               totalDocuments: statsData.stats?.totalDocuments || 0,
               totalUsers: statsData.stats?.totalUsers || 0,
-              recentDocuments: recentDocuments.slice(0, 5)
+              recentDocuments: recentDocuments.slice(0, 15)
             });
           }
         } catch (error) {
@@ -443,7 +445,7 @@ const DashboardPage: React.FC = () => {
       const response = await api.get('/api/documents/search?limit=1000');
       if (response.ok) {
         const data = await response.json();
-        setAllDocuments(data.documents || []);
+        setAllDocuments(Array.isArray(data.documents) ? data.documents : []);
       }
     } catch (error) {
       console.error('Failed to fetch all documents:', error);
@@ -979,7 +981,7 @@ const DashboardPage: React.FC = () => {
                 <CreateIcon />
                 Quick Actions
               </Typography>
-              <Stack spacing={2}>
+              <Stack spacing={2}><AIReportLibrary />
                 <Button
                   fullWidth
                   variant="outlined"

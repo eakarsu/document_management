@@ -50,6 +50,33 @@ interface DocumentInfo {
   allowImplementingOrSupplementingStatement: string;
 }
 
+export const documentExamples = [
+  { label: 'Readiness manual', template: 'af-manual', organization: 'AMC', title: 'Illustrative Readiness Manual 01', subject: 'Equipment readiness review', category: 'OPERATIONS READINESS', opr: 'Operations office', certifiedBy: 'Designated approving official', pages: 6, contentPages: 5, feedback: 10 },
+  { label: 'Training instruction', template: 'afi', organization: 'AETC', title: 'Illustrative Training Instruction 02', subject: 'Training record review', category: 'TRAINING', opr: 'Training office', certifiedBy: 'Designated training authority', pages: 8, contentPages: 7, feedback: 8 },
+  { label: 'Records policy', template: 'afpd', organization: 'DAF', title: 'Illustrative Records Policy 03', subject: 'Records stewardship and review', category: 'RECORDS MANAGEMENT', opr: 'Records office', certifiedBy: 'Designated policy authority', pages: 4, contentPages: 3, feedback: 6 },
+];
+
+export function exampleDocumentInfo(example: typeof documentExamples[number]): DocumentInfo {
+  return {
+    instructionTitle: example.title, date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    subject: example.subject, responsibilities: example.category, byOrderText: 'BY ORDER OF THE APPROVING AUTHORITY',
+    complianceStatement: 'DRAFT FOR REVIEW — confirm applicability before publication', opr: example.opr,
+    certifiedBy: example.certifiedBy, pages: example.pages, releasabilityStatement: 'Release determination pending review.',
+    oprOfficeName: example.opr, certifiedByOrganization: example.organization, serviceAuthorityOrganization: example.organization,
+    supersedes: 'Confirm whether a prior publication is superseded.', pageNumber: '1',
+    antecedentPublicationStatement: 'Check the publication register for antecedent guidance.',
+    applicabilityStatement: `Applies to ${example.organization} personnel assigned to ${example.subject.toLowerCase()}.`,
+    privacyActStatement: 'Review any personal information collection under the applicable Privacy Act notice.',
+    copyrightStatement: 'Confirm rights for third-party material before publication.',
+    paperworkReductionActStatement: 'Review reporting requirements before issuing this draft.',
+    punitiveLanguageStatement: 'No punitive authority is asserted by this illustrative draft.',
+    otherStatuaryRequirements: 'Legal office to confirm applicable statutory requirements.',
+    recordsManagementStatement: 'Retain records under the approved records schedule.',
+    recommendedChangesStatement: `Send proposed changes to the ${example.opr}.`,
+    allowImplementingOrSupplementingStatement: 'Local implementing guidance requires review and approval.',
+  };
+}
+
 const AIDocumentGenerator: React.FC = () => {
   const searchParams = useSearchParams();
   const templateFromUrl = searchParams.get('template');
@@ -695,6 +722,18 @@ const AIDocumentGenerator: React.FC = () => {
             <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Upload /> Document Setup
             </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Fill every editable field with an illustrative draft. Your uploaded seal and any selected parent document stay in place; review all text before generating.</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
+              {documentExamples.map((example) => <Button key={example.label} type="button" variant="outlined" disabled={isGenerating} onClick={() => {
+                setDocumentInfo(exampleDocumentInfo(example));
+                if (isSupplementMode) setSupplementOrganization(example.organization);
+                else setDocumentTemplate(example.template);
+                setDocumentPages(example.contentPages);
+                setFeedbackCount(example.feedback);
+                setFieldErrors({});
+                setError('');
+              }}>{example.label}</Button>)}
+            </Box>
 
             {/* Seal Upload */}
             <Box sx={{ mb: 3 }}>

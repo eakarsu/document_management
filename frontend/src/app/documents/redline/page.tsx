@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { Compare, Psychology } from '@mui/icons-material';
 import { api } from '@/lib/api';
+import AIResponseReport from '@/components/AIResponseReport';
 
 interface DiffLine { type: 'add' | 'remove' | 'context'; line: string }
 interface Diff { stats: { added: number; removed: number }; diff: DiffLine[] }
@@ -67,6 +68,7 @@ export default function RedlineDiffPage() {
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Choose an existing document and two real version numbers; examples cannot supply record references.</Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: '4fr 1fr 1fr 1fr 1fr', gap: 2, alignItems: 'center' }}>
             <TextField label="Document ID" value={docId} onChange={(e) => setDocId(e.target.value)} />
             <TextField label="From v#" type="number" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -100,33 +102,7 @@ export default function RedlineDiffPage() {
         </Card>
       )}
 
-      {summary && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 1 }}>AI Summary</Typography>
-            <Typography paragraph>{summary.summary}</Typography>
-            <Stack spacing={2}>
-              {summary.categories?.map((c, i) => (
-                <Box key={i}>
-                  <Typography variant="subtitle2">{c.label}</Typography>
-                  <Box component="ul" sx={{ pl: 3 }}>
-                    {c.changes.map((x, j) => <Typography component="li" key={j} variant="body2">{x}</Typography>)}
-                  </Box>
-                </Box>
-              ))}
-            </Stack>
-            {summary.riskFlags?.length ? (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" color="error">Risk Flags</Typography>
-                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                  {summary.riskFlags.map((rf, i) => <Chip key={i} label={rf} color="error" size="small" />)}
-                </Stack>
-              </Box>
-            ) : null}
-            {summary.model && <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>Model: {summary.model}</Typography>}
-          </CardContent>
-        </Card>
-      )}
+      {summary && <AIResponseReport value={summary} title="Redline summary" />}
     </Container>
   );
 }

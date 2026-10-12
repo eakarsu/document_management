@@ -168,7 +168,7 @@ const SearchPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setResults(data.documents || []);
+        setResults(Array.isArray(data.documents) ? data.documents : []);
         setHasSearched(true);
       } else if (response.status === 401) {
         router.push('/login');
@@ -197,7 +197,7 @@ const SearchPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setResults(data.documents || []);
+        setResults(Array.isArray(data.documents) ? data.documents : []);
         setHasSearched(true);
       } else if (response.status === 401) {
         router.push('/login');

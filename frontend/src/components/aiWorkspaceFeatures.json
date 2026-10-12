@@ -1,0 +1,51 @@
+[
+  {
+    "name": "AiBottleneckPredictionAcrossWorkflowInstancesPage",
+    "id": "gap-ai-document_management/ai-bottleneck-prediction-across-workflow-instances",
+    "title": "AI bottleneck prediction across workflow instances",
+    "description": "Prepare a professional advisory report for ai bottleneck prediction across workflow instances using the brief and evidence you provide. Review the findings, assumptions, and action plan before applying changes.",
+    "samples": []
+  },
+  {
+    "name": "AiContractClauseLevelRiskScoringPage",
+    "id": "gap-ai-document_management/ai-contract-clause-level-risk-scoring",
+    "title": "AI contract clause-level risk scoring",
+    "description": "Prepare a professional advisory report for ai contract clause-level risk scoring using the brief and evidence you provide. Review the findings, assumptions, and action plan before applying changes.",
+    "samples": []
+  },
+  {
+    "name": "BulkImportFromScannersNetworkFoldersPage",
+    "id": "gap-nonai-document_management/bulk-import-from-scanners-network-folders",
+    "title": "Bulk import from scanners / network folders",
+    "description": "Prepare a professional advisory report for bulk import from scanners / network folders using the brief and evidence you provide. Review the findings, assumptions, and action plan before applying changes.",
+    "samples": []
+  },
+  {
+    "name": "ESignatureIntegrationDocusignadobeSignPage",
+    "id": "gap-nonai-document_management/e-signature-integration-docusignadobe-sign",
+    "title": "E-signature integration (DocuSign/Adobe Sign)",
+    "description": "Prepare a professional advisory report for e-signature integration (docusign/adobe sign) using the brief and evidence you provide. Review the findings, assumptions, and action plan before applying changes.",
+    "samples": []
+  },
+  {
+    "name": "MobileAppEndpointsPage",
+    "id": "gap-nonai-document_management/mobile-app-endpoints",
+    "title": "Mobile app endpoints",
+    "description": "Prepare a professional advisory report for mobile app endpoints using the brief and evidence you provide. Review the findings, assumptions, and action plan before applying changes.",
+    "samples": []
+  },
+  {
+    "name": "OcrForScannedUploadsNoDedicatedRouteDetectedPage",
+    "id": "gap-ai-document_management/ocr-for-scanned-uploads-no-dedicated-route-detected",
+    "title": "OCR for scanned uploads (no dedicated route detected)",
+    "description": "Prepare a professional advisory report for ocr for scanned uploads (no dedicated route detected) using the brief and evidence you provide. Review the findings, assumptions, and action plan before applying changes.",
+    "samples": []
+  },
+  {
+    "name": "PublicReadOnlyShareLinksWithWatermarkingPage",
+    "id": "gap-nonai-document_management/public-read-only-share-links-with-watermarking",
+    "title": "Public read-only share links with watermarking",
+    "description": "Prepare a professional advisory report for public read-only share links with watermarking using the brief and evidence you provide. Review the findings, assumptions, and action plan before applying changes.",
+    "samples": []
+  }
+]

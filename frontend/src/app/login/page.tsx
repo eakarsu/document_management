@@ -75,9 +75,6 @@ const LoginPage: React.FC = () => {
       if (!response.ok) throw new Error('Demo credentials are unavailable');
       const credentials = await response.json();
       setFormData({ email: credentials.email, password: credentials.password, mfaCode: '' });
-
-      // Sign in immediately with the fetched values (state has not flushed yet).
-      await performLogin(credentials.email, credentials.password, '');
     } catch (demoError) {
       setError(demoError instanceof Error ? demoError.message : 'Demo credentials are unavailable');
     } finally {
@@ -303,7 +300,7 @@ const LoginPage: React.FC = () => {
               disabled={isLoading || isDemoLoading}
               onClick={fillDemoCredentials}
             >
-              {isDemoLoading ? 'Loading Demo Credentials...' : 'Auto Fill Demo Credentials'}
+              {isDemoLoading ? 'Loading Demo Credentials...' : 'Fill Demo Credentials'}
             </Button>
 
             <Button

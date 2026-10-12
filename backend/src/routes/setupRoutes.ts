@@ -31,6 +31,8 @@ import classificationRouter from './classification';
 import redactSuggestionsRouter from './redactSuggestions';
 import versionSummaryRouter from './versionSummary';
 import governedWorkflowRouter from './governed-workflow';
+import { aiWorkflowRouter } from './aiWorkflow';
+import aiDocumentGeneratorRouter from './ai-document-generator';
 
 export function setupRoutes(app: Express) {
   // Health check route
@@ -124,4 +126,10 @@ export function setupRoutes(app: Express) {
   app.get('/api/search/stats', authenticateToken, searchController.getStats);
   app.get('/api/search/health', searchController.healthCheck);
   app.post('/api/search/reindex', authenticateToken, searchController.reindex);
+
+  // AI workflow analysis / optimization routers used by the AI dashboards.
+  // These files existed but were never mounted, so every /api/ai-workflow/*
+  // and /api/ai-document-generator call from the frontend fell through to a 404.
+  app.use('/api/ai-workflow', aiWorkflowRouter);
+  app.use('/api/ai-document-generator', aiDocumentGeneratorRouter);
 }

@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import { Delete, PlayArrow } from '@mui/icons-material';
 import { api } from '@/lib/api';
+import AIResponseReport from '@/components/AIResponseReport';
 
 interface Rule {
   id: string;
@@ -71,7 +72,7 @@ export default function ComplianceCheckerPage() {
     try {
       const r = await api.get(`/api/compliance/rules?limit=${PAGE_SIZE}&offset=${offset}`);
       const j = await r.json();
-      setRules(j.items || []);
+      setRules(Array.isArray(j.items) ? j.items : []);
       setTotal(j.total || 0);
     } catch (e: any) { setErr(e.message); }
   }
@@ -175,25 +176,7 @@ export default function ComplianceCheckerPage() {
             </Button>
           </Box>
           {busy && <LinearProgress sx={{ mb: 2 }} />}
-          {report && (
-            <Box>
-              <Typography variant="subtitle1">
-                Score: {report.score} ({report.passedRules}/{report.totalRules} rules passed)
-              </Typography>
-              {report.model && <Typography variant="caption" color="text.secondary">Model: {report.model}</Typography>}
-              <Stack spacing={1} sx={{ mt: 2 }}>
-                {report.findings.map((f, idx) => (
-                  <Box key={idx} sx={{ p: 1.5, borderLeft: '4px solid', borderColor: f.passed ? 'success.main' : 'error.main', bgcolor: '#fafafa' }}>
-                    <Typography variant="subtitle2">
-                      {f.passed ? '✓' : '✗'} {f.ruleName} [{f.severity}]
-                    </Typography>
-                    {f.excerpt && <Typography variant="body2"><em>Excerpt:</em> {f.excerpt}</Typography>}
-                    {f.suggestion && <Typography variant="body2"><em>Suggestion:</em> {f.suggestion}</Typography>}
-                  </Box>
-                ))}
-              </Stack>
-            </Box>
-          )}
+          {report && <AIResponseReport value={report} title="Compliance check" />}
         </CardContent>
       </Card>
     </Container>

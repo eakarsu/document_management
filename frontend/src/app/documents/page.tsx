@@ -77,7 +77,7 @@ const DocumentsPage: React.FC = () => {
 
         if (response.ok) {
           const data = await response.json();
-          setDocuments(data.documents || []);
+          setDocuments(Array.isArray(data.documents) ? data.documents : []);
         } else if (response.status === 401) {
           router.push('/login');
         }
@@ -154,7 +154,7 @@ const DocumentsPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        const filteredDocs = (data.documents || []).filter((doc: Document) => !deletedIds.includes(doc.id));
+        const filteredDocs = (Array.isArray(data.documents) ? data.documents : []).filter((doc: Document) => !deletedIds.includes(doc.id));
         setDocuments(filteredDocs);
       }
 

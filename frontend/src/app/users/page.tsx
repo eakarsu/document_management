@@ -124,11 +124,11 @@ const UsersManagementPage: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/users');
+      const response = await api.get('/api/users?limit=15');
 
       if (response.ok) {
         const data = await response.json();
-        setUsers(data.users || []);
+        setUsers(Array.isArray(data.users) ? data.users : []);
 
         // Use stats from backend instead of calculating from paginated list
         if (data.stats) {
@@ -140,7 +140,7 @@ const UsersManagementPage: React.FC = () => {
           });
         } else {
           // Fallback to calculating from current page (not accurate for totals)
-          calculateStats(data.users || []);
+          calculateStats(Array.isArray(data.users) ? data.users : []);
         }
       } else {
         setError('Failed to fetch users');
@@ -159,7 +159,7 @@ const UsersManagementPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setRoles(data.roles || []);
+        setRoles(Array.isArray(data.roles) ? data.roles : []);
       }
     } catch (error) {
       console.error('Error fetching roles:', error);

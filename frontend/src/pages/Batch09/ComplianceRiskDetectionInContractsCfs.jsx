@@ -1,4 +1,6 @@
 // // === Batch 09 Gaps & Frontend Mounts ===
+import AIResponseReport from "../../components/AIResponseReport";
+import PromptWorkspaceFields from "../../components/PromptWorkspaceFields";
 import React, { useState } from 'react';
 
 export default function ComplianceRiskDetectionInContractsPage() {
@@ -27,13 +29,7 @@ export default function ComplianceRiskDetectionInContractsPage() {
     <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Compliance risk detection in contracts</h1>
       <p style={{ color: '#666', marginBottom: 16 }}>Generated gap feature for document_management.</p>
-      <textarea
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        placeholder="Describe what you need..."
-        rows={6}
-        style={{ width: '100%', padding: 12, border: '1px solid #ccc', borderRadius: 6, marginBottom: 12 }}
-      />
+      <PromptWorkspaceFields feature={"Compliance risk detection in contracts"} value={input} onChange={setInput} disabled={loading}/>
       <button
         onClick={run}
         disabled={loading}
@@ -43,9 +39,7 @@ export default function ComplianceRiskDetectionInContractsPage() {
       </button>
       {error && <div style={{ color: 'red', marginTop: 12 }}>{error}</div>}
       {result && (
-        <pre style={{ marginTop: 16, padding: 12, background: '#f4f4f4', borderRadius: 6, overflow: 'auto', maxHeight: 500 }}>
-{JSON.stringify(result, null, 2)}
-        </pre>
+        <AIResponseReport value={result}/>
       )}
     </div>
   );

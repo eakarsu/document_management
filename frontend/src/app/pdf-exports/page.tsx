@@ -110,12 +110,12 @@ const PdfExportsPage: React.FC = () => {
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/pdf-exports');
+      const response = await api.get('/api/pdf-exports?limit=15');
       if (response.ok) {
         const data = await response.json();
-        const records = data.data || [];
+        const records = Array.isArray(data.data) ? data.data : [];
         setItems(records);
-        setTotalCount(data.pagination?.total || records.length);
+        setTotalCount(data.pagination?.totalCount ?? records.length);
         calculateStats(records);
       } else {
         setError('Failed to fetch PDF exports');

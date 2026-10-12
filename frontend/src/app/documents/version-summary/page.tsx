@@ -11,10 +11,11 @@
 import React, { useState } from 'react';
 import {
   Container, Typography, Card, CardContent, TextField, Button,
-  Stack, Chip, Alert, LinearProgress, Box,
+  Alert, LinearProgress, Box,
 } from '@mui/material';
-import { History, Visibility, PlayArrow, Warning } from '@mui/icons-material';
+import { History, Visibility, PlayArrow } from '@mui/icons-material';
 import { api } from '@/lib/api';
+import AIResponseReport from '@/components/AIResponseReport';
 
 interface Theme { label: string; description: string; firstSeenVersion: number }
 
@@ -76,6 +77,7 @@ export default function VersionSummaryPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>Summarize Versions</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Enter an existing document ID with version history. No sample can supply a real record.</Typography>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <TextField
               fullWidth
@@ -94,59 +96,7 @@ export default function VersionSummaryPage() {
         </CardContent>
       </Card>
 
-      {summary && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>Narrative</Typography>
-            {summary.versionsConsidered?.length ? (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                Versions considered: {summary.versionsConsidered.join(', ')}
-              </Typography>
-            ) : null}
-            <Typography variant="body1" sx={{ mb: 3, whiteSpace: 'pre-wrap' }}>
-              {summary.narrative || '(no narrative returned)'}
-            </Typography>
-
-            {summary.themes?.length ? (
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1 }}>Themes</Typography>
-                <Stack spacing={1}>
-                  {summary.themes.map((t, i) => (
-                    <Box key={i} sx={{ p: 1.5, borderLeft: '4px solid', borderColor: 'primary.main', bgcolor: '#fafafa' }}>
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                        <Chip label={t.label} size="small" color="primary" />
-                        <Typography variant="caption" color="text.secondary">
-                          first seen v{t.firstSeenVersion}
-                        </Typography>
-                      </Stack>
-                      <Typography variant="body2">{t.description}</Typography>
-                    </Box>
-                  ))}
-                </Stack>
-              </Box>
-            ) : null}
-
-            {summary.riskFlags?.length ? (
-              <Box>
-                <Typography variant="subtitle1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Warning fontSize="small" color="warning" /> Risk Flags
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  {summary.riskFlags.map((f, i) => (
-                    <Chip key={i} label={f} size="small" color="warning" />
-                  ))}
-                </Stack>
-              </Box>
-            ) : null}
-
-            {summary.model && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-                Model: {summary.model}{summary.generatedAt ? ` · ${summary.generatedAt}` : ''}
-              </Typography>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {summary && <AIResponseReport value={summary} title="Version change summary" />}
     </Container>
   );
 }
