@@ -35,7 +35,8 @@ import { aiWorkflowRouter } from './aiWorkflow';
 import aiDocumentGeneratorRouter from './ai-document-generator';
 
 export function setupRoutes(app: Express) {
-  // Health check route
+  // Health check routes
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/health', healthRouter);
 
   // Public session-establishment routes must be registered before any router

@@ -26,10 +26,15 @@ router.get('/dev-token', (req, res) => {
     }
   };
 
-  // Generate token (valid for 1 hour)
+  // Generate token (valid for 1 hour). Fail closed: never fall back to a
+  // hard-coded secret.
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    return res.status(503).json({ error: 'JWT_SECRET must be configured with at least 32 characters' });
+  }
   const token = jwt.sign(
     testUser,
-    process.env.JWT_SECRET || 'your-secret-key',
+    secret,
     { expiresIn: '1h' }
   );
 

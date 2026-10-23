@@ -40,6 +40,7 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body className={inter.className}>
+<script src="/feature-pack/feature-pack.js" defer />
         <ApolloWrapper>
           <MuiThemeProvider>
             <AuthProvider>
